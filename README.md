@@ -1,35 +1,16 @@
+<h1 align="center">I'll add description for this fork soon</h1>
+
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
 
-<h1 align="center">MpvRx</h1>
+<h1 align="center">MpvRxN</h1>
 
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
-
-> [!IMPORTANT]
-> ## MPV RX — Final Release Notice (Jun 04 2026)
->
-> **MPV RX has reached its final stage of development.**
->
-> Version **1.4.1** marks the **last and final release** of this project. From this point onward, there will be **no new features, major additions, or active development**.
->
-> I know that a few things may still be partially implemented, but most of the major features have already reached their final stage and are working properly. The player has grown a lot, and at this point, MPV RX is in the best shape it was meant to be.
->
-> Future updates will only happen when something important breaks, such as API endpoints, compatibility issues, or critical fixes. Even then, updates will only be handled if I have the time.
->
-> Also, sometimes watching the video normally is necessary too — not every tiny bug needs a courtroom case, a 40-line issue report, and emotional damage. 😭  
-> Enjoy the player, enjoy your movies, and let MPV RX do what it was made for.
->
-> Thank you so much for all the support, feedback, issue reports, suggestions, and love throughout this journey. You helped this project become **<ins>one of the most feature-packed video players on the internet.</ins>**
->
-> I hope this repository reaches an even greater audience someday.
->
-> **Thank you for everything! ❤️**
-
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
