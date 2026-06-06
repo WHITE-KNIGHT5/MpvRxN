@@ -38,20 +38,20 @@ jobs:
           set -e
           STANDARD_RELEASE_DIR="app/build/outputs/apk/standard/release"
           
-          if [ -z "${{ secrets.SIGNING_KEYSTORE }}" ]; then
-            echo "SIGNING_KEYSTORE secret is not available. Skipping signing step."
+          if [ -z "${{ secrets.MPVRXN_KEYSTORE_BASE64 }}" ]; then
+            echo "MPVRXN_KEYSTORE_BASE64 secret is not available. Skipping signing step."
             exit 0
           fi
           
-          echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore
+          echo "${{ secrets.MPVRXN_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
           
           find "$STANDARD_RELEASE_DIR" -name "app-standard-*-release-unsigned.apk" -type f | while read -r apk; do
             signed_apk="${apk/-unsigned/}"
           
             $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
               --ks release.keystore \
-              --ks-key-alias "${{ secrets.SIGNING_KEY_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.SIGNING_STORE_PASSWORD }}" \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --ks-pass "pass:${{ secrets.STORE_PASSWORD }}" \
               --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
               --out "$signed_apk" \
               "$apk"
@@ -75,25 +75,4 @@ jobs:
         with:
           name: app-standard-armeabi-v7a-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/standard/release/app-standard-armeabi-v7a-release*.apk
-          if-no-files-found: warn
-
-      - name: Upload app-universal Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-standard-universal-release-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/standard/release/app-standard-universal-release*.apk
-          if-no-files-found: warn
-
-      - name: Upload app-x86 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-standard-x86-release-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/standard/release/app-standard-x86-release*.apk
-          if-no-files-found: warn
-
-      - name: Upload app-x86_64 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-standard-x86_64-release-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/standard/release/app-standard-x86_64-release*.apk
           if-no-files-found: warn
