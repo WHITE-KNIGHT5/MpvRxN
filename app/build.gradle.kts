@@ -17,7 +17,7 @@ android {
   compileSdk = 37
 
   defaultConfig {
-    applicationId = "app.gyrolet.mpvrx"
+    applicationId = "app.gyrolet.mpvrxn"
     minSdk = 26
     targetSdk = 36
     versionCode = 141
