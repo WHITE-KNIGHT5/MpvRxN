@@ -1,4 +1,4 @@
-<h1 align="center">I'll add description for this fork soon</h1>
+<h1 align="center">Working hard on it, I'll add description for this fork within 7 days</h1>
 
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
