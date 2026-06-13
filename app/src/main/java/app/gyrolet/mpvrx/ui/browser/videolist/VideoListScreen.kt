@@ -120,12 +120,16 @@ data class VideoListScreen(
   private val bucketId: String,
   private val folderName: String,
 ) : Screen {
+
+  companion object {
+    var scrollToTopCallback: (() -> Unit)? = null
+  }
+
   @OptIn(ExperimentalMaterial3ExpressiveApi::class)
   @Composable
   override fun Content() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val listStateHolder = remember { mutableStateOf<LazyListState?>(null) }
     val backstack = LocalBackStack.current
     val browserPreferences = koinInject<BrowserPreferences>()
     val playerPreferences = koinInject<PlayerPreferences>()
@@ -279,7 +283,7 @@ data class VideoListScreen(
           isInSelectionMode = selectionManager.isInSelectionMode,
           selectedCount = selectionManager.selectedCount,
           totalCount = sortedVideosWithInfo.size,
-          onTitleLongPress = { coroutineScope.launch { listStateHolder.value?.animateScrollToItem(0) } },
+          onTitleLongPress = { coroutineScope.launch { scrollToTopCallback?.invoke() } },
           onBackClick = {
             if (selectionManager.isInSelectionMode) {
               selectionManager.clear()
@@ -743,9 +747,9 @@ internal fun VideoListContent(
           initialFirstVisibleItemScrollOffset = rememberedListOffset.intValue
       )
 
-      // Link to holder so title long press can scroll to top
+      // Link listState to companion object so title long press can scroll to top
       LaunchedEffect(listState) {
-        listStateHolder.value = listState
+        scrollToTopCallback = { coroutineScope.launch { listState.animateScrollToItem(0) } }
       }
       
       val gridState = rememberLazyGridState(
