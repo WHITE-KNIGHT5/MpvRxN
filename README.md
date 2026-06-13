@@ -273,8 +273,8 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
 
 ---
 
-## Support
 <details close>
+## Support
 If you find MpvRxN useful and would like to support its development, consider buying Ritesh a coffee! Your support keeps the project alive and helps push new features.
 
 <div align="center">
@@ -296,7 +296,6 @@ Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
 
 </div>
 </details>
----
 
 ## Acknowledgments
 
