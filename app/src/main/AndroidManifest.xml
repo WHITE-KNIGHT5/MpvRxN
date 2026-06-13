@@ -53,7 +53,7 @@
 
         <activity
             android:name=".ui.player.PlayerActivity"
-            android:enableOnBackInvokedCallback="true"
+            android:enableOnBackInvokedCallback="false"
             android:autoRemoveFromRecents="true"
             android:noHistory="false"
             android:excludeFromRecents="false"
