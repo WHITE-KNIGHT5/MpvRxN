@@ -193,6 +193,7 @@ fun PlayerControls(
   val aiEnabled by aiPreferences.enabled.collectAsState()
   val realtimeSubsEnabled by aiPreferences.realtimeSubsEnabled.collectAsState()
   val hideBackground by appearancePreferences.hidePlayerButtonsBackground.collectAsState()
+  val easyUnlock by appearancePreferences.easyUnlock.collectAsState()
   val playerPreferences = koinInject<PlayerPreferences>()
   val audioPreferences = koinInject<AudioPreferences>()
   val showSystemStatusBar by playerPreferences.showSystemStatusBar.collectAsState()
@@ -400,6 +401,7 @@ fun PlayerControls(
         val (topLeftControls, topRightControls) = createRefs()
         val (volumeSlider, brightnessSlider) = createRefs()
         val unlockControlsButton = createRef()
+        val (unlockLeftRef, unlockRightRef) = createRefs()
         val (bottomRightControls, bottomLeftControls) = createRefs()
         val playerPauseButton = createRef()
         val skipSegmentChip = createRef()
@@ -995,6 +997,44 @@ fun PlayerControls(
           )
         }
 
+        // Left unlock icon
+        AnimatedVisibility(
+          visible = controlsShown && areControlsLocked && easyUnlock,
+          enter = fadeIn(),
+          exit = fadeOut(),
+          modifier = Modifier.constrainAs(unlockLeftRef) {
+            start.linkTo(parent.start, spacing.large)
+            top.linkTo(parent.top)
+            bottom.linkTo(parent.bottom)
+          },
+        ) {
+          ControlsButton(
+            icon = Icons.Default.Lock,
+            onClick = { viewModel.unlockControls() },
+            color = if (hideBackground) Color.White else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(40.dp),
+          )
+        }
+
+        // Right unlock icon
+        AnimatedVisibility(
+          visible = controlsShown && areControlsLocked && easyUnlock,
+          enter = fadeIn(),
+          exit = fadeOut(),
+          modifier = Modifier.constrainAs(unlockRightRef) {
+            end.linkTo(parent.end, spacing.large)
+            top.linkTo(parent.top)
+            bottom.linkTo(parent.bottom)
+          },
+        ) {
+          ControlsButton(
+            icon = Icons.Default.Lock,
+            onClick = { viewModel.unlockControls() },
+            color = if (hideBackground) Color.White else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(40.dp),
+          )
+        }
+
         val skipChipVisible =
           currentSkippableSegment != null &&
             ((controlsShown && !areControlsLocked) || showSkipChipAuto)
@@ -1431,7 +1471,7 @@ fun PlayerControls(
         }
 
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked && !isPortrait,
+          visible = controlsShown && (!areControlsLocked || (easyUnlock && topRightButtons.contains(PlayerButton.LOCK_CONTROLS))) && !isPortrait,
           enter = buildControlsEnterH(controlsAnimStyle, reduceMotion, enterMs) { it },
           exit  = buildControlsExitH(controlsAnimStyle, reduceMotion, exitMs) { it },
           modifier =
@@ -1475,11 +1515,14 @@ fun PlayerControls(
             onOpenPanel = onOpenPanel,
             viewModel = viewModel,
             activity = activity,
+            areControlsLocked = areControlsLocked,
+            easyUnlock = easyUnlock,
+            onUnlock = { viewModel.unlockControls() },
           )
         }
 
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked && !areSlidersShown,
+          visible = controlsShown && (!areControlsLocked || (easyUnlock && (if (isPortrait) portraitBottomButtons else bottomRightButtons).contains(PlayerButton.LOCK_CONTROLS))) && !areSlidersShown,
           enter = buildControlsEnterH(controlsAnimStyle, reduceMotion, enterMs) { it },
           exit  = buildControlsExitH(controlsAnimStyle, reduceMotion, exitMs) { it },
           modifier =
@@ -1527,6 +1570,9 @@ fun PlayerControls(
               onOpenPanel = onOpenPanel,
               viewModel = viewModel,
               activity = activity,
+              areControlsLocked = areControlsLocked,
+              easyUnlock = easyUnlock,
+              onUnlock = { viewModel.unlockControls() },
             )
           } else {
             BottomRightPlayerControlsLandscape(
@@ -1545,12 +1591,15 @@ fun PlayerControls(
               onOpenPanel = onOpenPanel,
               viewModel = viewModel,
               activity = activity,
+              areControlsLocked = areControlsLocked,
+              easyUnlock = easyUnlock,
+              onUnlock = { viewModel.unlockControls() },
             )
           }
         }
 
         AnimatedVisibility(
-          visible = controlsShown && !areControlsLocked && !isPortrait && !areSlidersShown,
+          visible = controlsShown && (!areControlsLocked || (easyUnlock && bottomLeftButtons.contains(PlayerButton.LOCK_CONTROLS))) && !isPortrait && !areSlidersShown,
           enter = buildControlsEnterH(controlsAnimStyle, reduceMotion, enterMs) { -it },
           exit  = buildControlsExitH(controlsAnimStyle, reduceMotion, exitMs) { -it },
           modifier =
@@ -1589,6 +1638,9 @@ fun PlayerControls(
             onOpenPanel = onOpenPanel,
             viewModel = viewModel,
             activity = activity,
+            areControlsLocked = areControlsLocked,
+            easyUnlock = easyUnlock,
+            onUnlock = { viewModel.unlockControls() },
           )
         }
 
