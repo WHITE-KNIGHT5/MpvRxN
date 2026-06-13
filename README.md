@@ -230,7 +230,7 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 ## 🔋 Battery Optimization guide for Mpv
 
 <details close>
-<summary><b>⚙️ Guide</b></summary>
+<summary><b>📜 Guide</b></summary>
 
 First Pro Tip Keep Mpv Conf empty if you are newbie
 
@@ -271,7 +271,7 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
 
 ---
 
-## Support
+## Support💝
 <details close>
 If you find MpvRxN useful and would like to support its development, consider buying Ritesh a coffee! Your support keeps the project alive and helps push new features.
 
