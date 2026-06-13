@@ -248,29 +248,6 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
 
 ---
 
-<div align="center">
-  <a href="https://github.com/Riteshp2001/mpvRx/releases">
-    <img src="https://img.shields.io/badge/Download-Stable_Release-blue?style=for-the-badge&logo=github" alt="Stable Release">
-  </a>
-  <!-- <a href="https://riteshp2001.github.io/mpvRx/">
-    <img src="https://img.shields.io/badge/Download-Preview_Build-orange?style=for-the-badge&logo=github" alt="Preview Build">
-  </a> -->
-</div>
-
-<!-- <div align="center">
-  <i>Note: Previews may be unstable and are intended for testing purposes only.</i>
-</div> -->
-
-
-### APK Variants
-
-| Variant | Description |
-|---|---|
-| `arm64-v8a` | Recommended for most current Android devices |
-| `armeabi-v7a` | For older devices
-
----
-
 ## Support💝
 <details close>
 If you find MpvRxN useful and would like to support its development, consider buying Ritesh a coffee! Your support keeps the project alive and helps push new features.
