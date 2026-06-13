@@ -642,6 +642,24 @@ object AppearancePreferencesScreen : Screen {
                                     )
                                 },
                             )
+
+                            PreferenceDivider()
+
+                            val easyUnlock by preferences.easyUnlock.collectAsState()
+                            SwitchPreference(
+                                value = easyUnlock,
+                                onValueChange = preferences.easyUnlock::set,
+                                title = { Text("Easy Unlock") },
+                                summary = {
+                                    Text(
+                                        text = if (easyUnlock)
+                                            "Unlock controls with single tap or swipe"
+                                        else
+                                            "Unlock controls with swipe only",
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                },
+                            )
                         }
                     }
                 }
