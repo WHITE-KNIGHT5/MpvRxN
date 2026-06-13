@@ -281,9 +281,3 @@ If you find MpvRxN useful and would like to support its development, consider bu
 - [Gramophone](https://github.com/FoedusProgramme/Gramophone)
 - [hdr-toys](https://github.com/natural-harmonia-gropius/hdr-toys)
 - [**SunnyVishnu3**](https://github.com/SunnyVishnu3) for the `yt-dlp` native integration and SDK 29+ bypass logic.
-
----
-
-## License
-
-Distributed under the **Apache License 2.0**. See `LICENSE` for more information.
