@@ -294,33 +294,6 @@ Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
 
 ---
 
-## Release Notes For Maintainers
-
-To cut a signed GitHub release through Actions, configure these repository secrets:
-
-| Secret Name | Description |
-|---|---|
-| `SIGNING_KEYSTORE` | Base64-encoded keystore file (`.jks` or `.keystore`) |
-| `SIGNING_KEY_ALIAS` | Key alias inside the keystore |
-| `SIGNING_STORE_PASSWORD` | Password for the keystore |
-| `KEY_PASSWORD` | Password for the signing key |
-
-Then bump `versionCode` and `versionName` in `app/build.gradle.kts`, create a tag, and push it:
-
-```bash
-git tag -a v1.3.1 -m "Release version 1.3.1"
-git push origin v1.3.1
-```
-
-Preview releases use the same flow with preview tags such as:
-
-```bash
-git tag -a v1.3.1-preview.1 -m "Preview release"
-git push origin v1.3.1-preview.1
-```
-
----
-
 ## Acknowledgments
 
 - Fork of
