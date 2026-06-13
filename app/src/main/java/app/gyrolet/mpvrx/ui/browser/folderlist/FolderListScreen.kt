@@ -203,6 +203,15 @@ object FolderListScreen : Screen {
     val focusRequester = remember { FocusRequester() }
     val foldersBlacklistedMessage = stringResource(app.gyrolet.mpvrx.R.string.pref_folders_blacklisted)
 
+    // Auto open keyboard when search activated — delay lets TextField enter composition first
+    LaunchedEffect(isSearching) {
+      if (isSearching) {
+        delay(100)
+        focusRequester.requestFocus()
+        keyboardController?.show()
+      }
+    }
+
     // Auto-open keyboard when search is activated
     LaunchedEffect(searchQuery, isSearching) {
       if (isSearching && searchQuery.isNotBlank()) {
@@ -419,13 +428,7 @@ object FolderListScreen : Screen {
             onBackClick = null,
             onCancelSelection = { selectionManager.clear() },
             onSortClick = { sortDialogOpen.value = true },
-            onSearchClick = {
-              isSearching = !isSearching
-              if (isSearching) {
-                focusRequester.requestFocus()
-                keyboardController?.show()
-              }
-            },
+            onSearchClick = { isSearching = !isSearching },
             onSettingsClick = {
               backstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
             },
