@@ -258,18 +258,7 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
   <i>Note: Previews may be unstable and are intended for testing purposes only.</i>
 </div> -->
 
-If something breaks, feels off, or deserves another pass, _don't be Dumb and ask for Trash Features which only you require it wll be auto deleted_, 
-report it in the [Issues](https://github.com/Riteshp2001/mpvRx/issues).
-
 ---
-
-## Build
-
-### Requirements
-
-- JDK 17
-- Android SDK with modern build tools installed
-- Git
 
 ### Debug Build
 
@@ -289,19 +278,17 @@ report it in the [Issues](https://github.com/Riteshp2001/mpvRx/issues).
 |---|---|
 | `universal` | Works on all supported devices |
 | `arm64-v8a` | Recommended for most current Android devices |
-| `armeabi-v7a` | For older 32-bit ARM devices |
-| `x86` | For 32-bit Intel and AMD Android devices |
-| `x86_64` | For 64-bit Intel and AMD Android devices |
+| `armeabi-v7a` | For older devices
 
 ---
 
 ## Support
 
-If you find MpvRx useful and would like to support its development, consider buying me a coffee! Your support keeps the project alive and helps push new features.
+If you find MpvRxN useful and would like to support its development, consider buying Ritesh a coffee! Your support keeps the project alive and helps push new features.
 
 <div align="center">
 
-### ☕ Buy Me a Coffee
+### ☕ Buy a Coffee
 
 <a href="https://www.buymeacoffee.com/riteshp2001">
   <img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee">
