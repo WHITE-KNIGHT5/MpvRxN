@@ -91,6 +91,14 @@ class VideoListViewModel(
   private val tag = "VideoListViewModel"
 
   init {
+    // Check cache immediately — hide loading indicator if cached data exists
+    val cached = videoCache[bucketId] ?: loadFromDiskCache(bucketId)
+    if (cached != null) {
+      videoCache[bucketId] = cached
+      _videos.value = cached
+      _isLoading.value = false
+    }
+
     loadVideos()
 
     // Listen for global media library changes and refresh this list when they occur
@@ -364,7 +372,7 @@ class VideoListViewModel(
       prefs.edit()
         .putString("videos_$bucketId", array.toString())
         .putInt("version_$bucketId", CACHE_VERSION)
-        .apply()
+        .commit()
     } catch (e: Exception) {
       // Cache write failed — not critical
     }
