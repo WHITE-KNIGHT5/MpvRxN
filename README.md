@@ -227,7 +227,7 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 
 ---
 
-## 🔋 Battery Optimization guide for Mpv
+## 🔋 Battery Optimization guide for Mpv Players
 
 <details close>
 <summary><b>📜 Guide</b></summary>
