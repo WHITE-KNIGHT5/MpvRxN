@@ -87,7 +87,7 @@ object AboutScreen : Screen {
     val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
     val versionName = packageInfo.versionName?.substringBefore('-') ?: packageInfo.versionName ?: BuildConfig.VERSION_NAME
     val buildType = BuildConfig.BUILD_TYPE
-    val githubRepoUrl = stringResource(R.string.github_repo_url)
+    val githubRepoUrl = "https://github.com/WHITE-KNIGHT5/MpvRxN"
 
     // Conditionally initialize update feature based on build config
     val updateViewModel: UpdateViewModel? = if (BuildConfig.ENABLE_UPDATE_FEATURE) {
@@ -194,14 +194,14 @@ object AboutScreen : Screen {
 
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
-                    text = "MpvRx",
+                    text = "MpvRxN",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = cs.onPrimaryContainer,
                   )
                   Spacer(Modifier.height(4.dp))
                   Text(
-                    text = "v$versionName $buildType",
+                    text = "v1.5.0",
                     style = MaterialTheme.typography.bodyMedium,
                     color = cs.onPrimaryContainer.copy(alpha = 0.85f),
                   )
@@ -211,7 +211,7 @@ object AboutScreen : Screen {
                     color = cs.primary.copy(alpha = 0.16f),
                   ) {
                     Text(
-                      text = "By Ritesh Pandit",
+                      text = "By WHITE-KNIGHT5",
                       modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                       style = MaterialTheme.typography.titleSmall,
                       fontWeight = FontWeight.SemiBold,
