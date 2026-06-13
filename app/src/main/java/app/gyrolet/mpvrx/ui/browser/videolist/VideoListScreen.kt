@@ -122,7 +122,7 @@ data class VideoListScreen(
 ) : Screen {
 
   companion object {
-    var scrollToTopCallback: (() -> Unit)? = null
+    var currentListState: LazyListState? = null
   }
 
   @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -283,7 +283,7 @@ data class VideoListScreen(
           isInSelectionMode = selectionManager.isInSelectionMode,
           selectedCount = selectionManager.selectedCount,
           totalCount = sortedVideosWithInfo.size,
-          onTitleLongPress = { coroutineScope.launch { scrollToTopCallback?.invoke() } },
+          onTitleLongPress = { coroutineScope.launch { currentListState?.animateScrollToItem(0) } },
           onBackClick = {
             if (selectionManager.isInSelectionMode) {
               selectionManager.clear()
@@ -747,9 +747,9 @@ internal fun VideoListContent(
           initialFirstVisibleItemScrollOffset = rememberedListOffset.intValue
       )
 
-      // Link listState to companion object so title long press can scroll to top
+      // Store listState so title long press can scroll to top
       LaunchedEffect(listState) {
-        scrollToTopCallback = { coroutineScope.launch { listState.animateScrollToItem(0) } }
+        VideoListScreen.currentListState = listState
       }
       
       val gridState = rememberLazyGridState(
