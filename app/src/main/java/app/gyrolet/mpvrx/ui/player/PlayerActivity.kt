@@ -669,24 +669,35 @@ class PlayerActivity :
     // Separate always-enabled callback to fix landscape rotation flash with gesture navigation
     val landscapeGestureFixCallback = object : OnBackPressedCallback(true) {
       override fun handleOnBackStarted(backEvent: BackEventCompat) {
+        // Not called when enableOnBackInvokedCallback=false
+      }
+      override fun handleOnBackCancelled() {
+        window.decorView.alpha = 1f
+      }
+      override fun handleOnBackPressed() {
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val navMode = android.provider.Settings.Secure.getInt(contentResolver, "navigation_mode", 0)
         val isGestureNav = navMode == 2
         val smoothBackEnabled = appearancePreferences.smoothBackAnimation.get()
-        // Toggle OFF + landscape + gesture nav: instantly hide window to prevent rotation flash
+
         if (isLandscape && isGestureNav && !smoothBackEnabled) {
-          window.decorView.alpha = 0f
+          // Toggle OFF: fade to black first, THEN go back — hides rotation flash completely
+          window.decorView.animate()
+            .alpha(0f)
+            .setDuration(150)
+            .withEndAction {
+              window.decorView.alpha = 1f
+              isEnabled = false
+              onBackPressedDispatcher.onBackPressed()
+              isEnabled = true
+            }.start()
+        } else {
+          // Toggle ON or portrait: go back immediately
+          window.decorView.alpha = 1f
+          isEnabled = false
+          onBackPressedDispatcher.onBackPressed()
+          isEnabled = true
         }
-      }
-      override fun handleOnBackCancelled() {
-        // Restore alpha if back was cancelled
-        window.decorView.alpha = 1f
-      }
-      override fun handleOnBackPressed() {
-        window.decorView.alpha = 1f
-        isEnabled = false
-        onBackPressedDispatcher.onBackPressed()
-        isEnabled = true
       }
     }
     onBackPressedDispatcher.addCallback(this, landscapeGestureFixCallback)
