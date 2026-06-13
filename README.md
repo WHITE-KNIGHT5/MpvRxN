@@ -258,25 +258,11 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
   <i>Note: Previews may be unstable and are intended for testing purposes only.</i>
 </div> -->
 
----
-
-### Debug Build
-
-```powershell
-./gradlew.bat :app:assembleStandardDebug
-```
-
-### Release Variants
-
-| Variant | Description |
-|---|---|
-| `standard` | Main release with in-app update support |
 
 ### APK Variants
 
 | Variant | Description |
 |---|---|
-| `universal` | Works on all supported devices |
 | `arm64-v8a` | Recommended for most current Android devices |
 | `armeabi-v7a` | For older devices
 
