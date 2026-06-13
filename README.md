@@ -248,8 +248,6 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
 
 </details>
 
-<details close>
-
 ---
 
 <div align="center">
