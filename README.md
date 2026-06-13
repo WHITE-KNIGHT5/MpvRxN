@@ -323,6 +323,9 @@ git push origin v1.3.1-preview.1
 
 ## Acknowledgments
 
+- Fork of
+[MpvRx](https://github.com/Riteshp2001/mpvRx)
+
 - [mpv-android](https://github.com/mpv-android)
 - [mpvExtended](https://github.com/marlboro-advance/mpvEx)
 - [mpvKt](https://github.com/abdallahmehiz/mpvKt)
