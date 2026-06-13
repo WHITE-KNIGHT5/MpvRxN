@@ -113,6 +113,7 @@ import app.gyrolet.mpvrx.preferences.AdvancedPreferences
 import app.gyrolet.mpvrx.preferences.AiPreferences
 import app.gyrolet.mpvrx.preferences.AppearancePreferences
 import app.gyrolet.mpvrx.preferences.AudioPreferences
+import app.gyrolet.mpvrx.preferences.PlayerButton
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.preferences.preference.deleteAndGet
@@ -1009,7 +1010,7 @@ fun PlayerControls(
           },
         ) {
           ControlsButton(
-            icon = Icons.Default.Lock,
+            icon = androidx.compose.material.icons.Icons.Default.Lock,
             onClick = { viewModel.unlockControls() },
             color = if (hideBackground) Color.White else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(40.dp),
@@ -1028,7 +1029,7 @@ fun PlayerControls(
           },
         ) {
           ControlsButton(
-            icon = Icons.Default.Lock,
+            icon = androidx.compose.material.icons.Icons.Default.Lock,
             onClick = { viewModel.unlockControls() },
             color = if (hideBackground) Color.White else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(40.dp),

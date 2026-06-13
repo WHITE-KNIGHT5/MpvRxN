@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.rotate
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -556,7 +557,7 @@ fun RenderPlayerButton(
     PlayerButton.LOCK_CONTROLS -> {
       if (areControlsLocked && easyUnlock) {
         ControlsButton(
-          icon = Icons.Default.Lock,
+          icon = androidx.compose.material.icons.Icons.Default.Lock,
           onClick = onUnlock,
           color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
           modifier = Modifier.size(buttonSize),
