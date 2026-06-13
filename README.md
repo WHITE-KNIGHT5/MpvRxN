@@ -292,8 +292,6 @@ If you find MpvRxN useful and would like to support its development, consider bu
 <a href="upi://pay?pa=panditritesh2001@okhdfcbank&pn=Ritesh%20Pandit&cu=INR">
 </a>
 
-Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
-
 </div>
 </details>
 
@@ -314,5 +312,3 @@ Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
 ## License
 
 Distributed under the **Apache License 2.0**. See `LICENSE` for more information.
-
----
