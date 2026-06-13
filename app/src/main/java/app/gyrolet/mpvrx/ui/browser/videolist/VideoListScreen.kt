@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -124,6 +125,7 @@ data class VideoListScreen(
   override fun Content() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val listStateHolder = remember { mutableStateOf<LazyListState?>(null) }
     val backstack = LocalBackStack.current
     val browserPreferences = koinInject<BrowserPreferences>()
     val playerPreferences = koinInject<PlayerPreferences>()
@@ -277,6 +279,7 @@ data class VideoListScreen(
           isInSelectionMode = selectionManager.isInSelectionMode,
           selectedCount = selectionManager.selectedCount,
           totalCount = sortedVideosWithInfo.size,
+          onTitleLongPress = { coroutineScope.launch { listStateHolder.value?.animateScrollToItem(0) } },
           onBackClick = {
             if (selectionManager.isInSelectionMode) {
               selectionManager.clear()
@@ -739,6 +742,11 @@ internal fun VideoListContent(
           initialFirstVisibleItemIndex = initialListIndex,
           initialFirstVisibleItemScrollOffset = rememberedListOffset.intValue
       )
+
+      // Link to holder so title long press can scroll to top
+      LaunchedEffect(listState) {
+        listStateHolder.value = listState
+      }
       
       val gridState = rememberLazyGridState(
           initialFirstVisibleItemIndex = initialGridIndex,
