@@ -250,11 +250,11 @@ _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W 
 
 ## Support💝
 <details close>
-If you find MpvRxN useful and would like to support its development, consider buying Ritesh a coffee! Your support keeps the project alive and helps push new features.
+If you find MpvRxN useful and would like to support its development, consider buying me a coffee! Your support keeps the project alive and helps push new features.
 
 <div align="center">
 
-### ☕ Buy a Coffee
+### ☕ Buy Me a Coffee
 
 <a href="https://www.buymeacoffee.com/riteshp2001">
   <img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee">
@@ -265,9 +265,14 @@ If you find MpvRxN useful and would like to support its development, consider bu
 `panditritesh2001@okhdfcbank`
 
 <a href="upi://pay?pa=panditritesh2001@okhdfcbank&pn=Ritesh%20Pandit&cu=INR">
+  <img src="fastlane/metadata/android/en-US/images/upiqr-code.svg" width="250" height="250" alt="UPI QR Code">
 </a>
 
+Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
+
 </div>
+
+---
 </details>
 
 ## Acknowledgments
