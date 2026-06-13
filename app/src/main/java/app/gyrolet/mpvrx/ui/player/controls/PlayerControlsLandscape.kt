@@ -191,12 +191,18 @@ fun TopRightPlayerControlsLandscape(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
+  areControlsLocked: Boolean = false,
+  easyUnlock: Boolean = false,
+  onUnlock: () -> Unit = {},
 ) {
+  val visibleButtons = if (areControlsLocked && easyUnlock) {
+    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
+  } else buttons
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
-    buttons.forEach { button ->
+    visibleButtons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -215,6 +221,9 @@ fun TopRightPlayerControlsLandscape(
         viewModel = viewModel,
         activity = activity,
         buttonSize = 45.dp,
+        areControlsLocked = areControlsLocked,
+        easyUnlock = easyUnlock,
+        onUnlock = onUnlock,
       )
     }
   }
@@ -237,12 +246,18 @@ fun BottomRightPlayerControlsLandscape(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
+  areControlsLocked: Boolean = false,
+  easyUnlock: Boolean = false,
+  onUnlock: () -> Unit = {},
 ) {
+  val visibleButtons = if (areControlsLocked && easyUnlock) {
+    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
+  } else buttons
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
-    buttons.forEach { button ->
+    visibleButtons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -261,6 +276,9 @@ fun BottomRightPlayerControlsLandscape(
         viewModel = viewModel,
         activity = activity,
         buttonSize = 45.dp,
+        areControlsLocked = areControlsLocked,
+        easyUnlock = easyUnlock,
+        onUnlock = onUnlock,
       )
     }
   }
@@ -283,12 +301,18 @@ fun BottomLeftPlayerControlsLandscape(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
+  areControlsLocked: Boolean = false,
+  easyUnlock: Boolean = false,
+  onUnlock: () -> Unit = {},
 ) {
+  val visibleButtons = if (areControlsLocked && easyUnlock) {
+    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
+  } else buttons
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
-    buttons.forEach { button ->
+    visibleButtons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -307,6 +331,9 @@ fun BottomLeftPlayerControlsLandscape(
         viewModel = viewModel,
         activity = activity,
         buttonSize = 45.dp,
+        areControlsLocked = areControlsLocked,
+        easyUnlock = easyUnlock,
+        onUnlock = onUnlock,
       )
     }
   }

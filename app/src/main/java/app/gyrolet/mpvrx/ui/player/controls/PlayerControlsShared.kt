@@ -91,6 +91,9 @@ fun RenderPlayerButton(
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
   buttonSize: Dp = 40.dp,
+  areControlsLocked: Boolean = false,
+  easyUnlock: Boolean = false,
+  onUnlock: () -> Unit = {},
 ) {
   val clickEvent = LocalPlayerButtonsClickEvent.current
   val advancedPreferences = koinInject<AdvancedPreferences>()
@@ -551,12 +554,21 @@ fun RenderPlayerButton(
     }
 
     PlayerButton.LOCK_CONTROLS -> {
-      ControlsButton(
-        Icons.Default.LockOpen,
-        onClick = viewModel::lockControls,
-        color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.size(buttonSize),
-      )
+      if (areControlsLocked && easyUnlock) {
+        ControlsButton(
+          icon = Icons.Default.Lock,
+          onClick = onUnlock,
+          color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(buttonSize),
+        )
+      } else if (!areControlsLocked) {
+        ControlsButton(
+          Icons.Default.LockOpen,
+          onClick = viewModel::lockControls,
+          color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(buttonSize),
+        )
+      }
     }
 
     PlayerButton.AUDIO_TRACK -> {

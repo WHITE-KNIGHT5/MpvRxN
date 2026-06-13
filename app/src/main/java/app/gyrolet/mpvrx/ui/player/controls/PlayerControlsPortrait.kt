@@ -166,7 +166,13 @@ fun BottomPlayerControlsPortrait(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
+  areControlsLocked: Boolean = false,
+  easyUnlock: Boolean = false,
+  onUnlock: () -> Unit = {},
 ) {
+  val visibleButtons = if (areControlsLocked && easyUnlock) {
+    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
+  } else buttons
   Row(
     modifier = Modifier
       .fillMaxWidth()
@@ -175,7 +181,7 @@ fun BottomPlayerControlsPortrait(
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium, Alignment.CenterHorizontally),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    buttons.forEach { button ->
+    visibleButtons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -193,7 +199,10 @@ fun BottomPlayerControlsPortrait(
         activity = activity,
         decoder = decoder,
         playbackSpeed = playbackSpeed,
-        buttonSize = 44.dp, // Slightly more compact size
+        buttonSize = 44.dp,
+        areControlsLocked = areControlsLocked,
+        easyUnlock = easyUnlock,
+        onUnlock = onUnlock,
       )
     }
   }
