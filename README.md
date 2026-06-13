@@ -231,6 +231,9 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 
 ## 🔋 Battery Optimization guide for Mpv
 
+<details close>
+<summary><b>⚙️ Utilities</b></summary>
+
 First Pro Tip Keep Mpv Conf empty if you are newbie
 
 - **Use `gpu` not `gpu-next`** — gpu-next is a Vulkan-based renderer that keeps the GPU awake for no reason when playing normal video. The classic `gpu` backend is lighter and uses the OpenGL driver stack, which on most Android devices has better power characteristics.
@@ -242,6 +245,10 @@ First Pro Tip Keep Mpv Conf empty if you are newbie
 **My POV:** mpv's default config with `profile=fast` and the `gpu` backend plays video with negligible battery impact — often **less** than OEM players because mpv doesn't have a billion proprietary DRM modules, analytics SDKs, and ad frameworks burning CPU in the background. The next time your battery drops more than 20-25% watching a 2-hour movie, don't blame mpv. Blame the 14 shaders you blindly copy-pasted.
 
 _Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W ( See Page 6 of MpvRx - video player More Settings -> Page6) useage than ur Mpv Conf are Proper for Video watching thats what i have experimented and telling rest all i don't know About in detail technicality's if anyone wanna tell me In depth guide then keep it to yourself i dont wanna listen_
+
+</details>
+
+<details close>
 
 ---
 
