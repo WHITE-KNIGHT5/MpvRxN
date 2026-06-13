@@ -295,13 +295,12 @@ If you find MpvRxN useful and would like to support its development, consider bu
 Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
 
 </div>
-</details>
+</support details>
 
 ## Acknowledgments
 
 - Fork of
 [MpvRx](https://github.com/Riteshp2001/mpvRx)
-
 - [mpv-android](https://github.com/mpv-android)
 - [mpvExtended](https://github.com/marlboro-advance/mpvEx)
 - [mpvKt](https://github.com/abdallahmehiz/mpvKt)
