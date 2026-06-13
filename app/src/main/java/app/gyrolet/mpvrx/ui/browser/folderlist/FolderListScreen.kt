@@ -429,6 +429,7 @@ object FolderListScreen : Screen {
             onCancelSelection = { selectionManager.clear() },
             onSortClick = { sortDialogOpen.value = true },
             onSearchClick = { isSearching = !isSearching },
+            onTitleLongPress = { coroutineScope.launch { listState.animateScrollToItem(0) } },
             onSettingsClick = {
               backstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
             },
