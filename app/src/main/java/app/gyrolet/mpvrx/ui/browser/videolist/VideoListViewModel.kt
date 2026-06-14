@@ -154,6 +154,11 @@ class VideoListViewModel(
           forceFileSystemCheck = forceFileSystemCheck,
         )
 
+        // Keep only video files — removes images, audio, docs that may appear in camera/downloads folders
+        videoList = videoList.filter { video ->
+          video.mimeType.isBlank() || video.mimeType.startsWith("video/")
+        }
+
         // Enrich with metadata only if chips are enabled
         if (MetadataRetrieval.isVideoMetadataNeeded(browserPreferences)) {
           Log.d(tag, "Metadata chips enabled, enriching ${videoList.size} videos")
