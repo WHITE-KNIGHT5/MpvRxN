@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +52,7 @@ import app.gyrolet.mpvrx.preferences.ThumbnailMode
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
 import app.gyrolet.mpvrx.presentation.components.ConfirmDialog
+import app.gyrolet.mpvrx.ui.preferences.SettingsScrollManager
 import app.gyrolet.mpvrx.ui.preferences.components.ThemePicker
 import app.gyrolet.mpvrx.ui.theme.DarkMode
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
@@ -163,7 +165,14 @@ object AppearancePreferencesScreen : Screen {
             },
         ) { padding ->
             ProvidePreferenceLocals {
-                LazyColumn(
+                val listState = rememberLazyListState()
+        LaunchedEffect(Unit) {
+            SettingsScrollManager.consumeScrollIndex()?.let { index ->
+                listState.animateScrollToItem(index)
+            }
+        }
+        LazyColumn(
+            state = listState,
                     modifier =
                     Modifier
                         .fillMaxSize()

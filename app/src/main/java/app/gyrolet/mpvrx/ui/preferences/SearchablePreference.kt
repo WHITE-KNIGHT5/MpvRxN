@@ -16,6 +16,7 @@ data class SearchablePreference(
     val keywords: List<String> = emptyList(),
     val category: String,
     val screen: Screen,
+    val scrollIndex: Int = 0,
 )
 
 /**
@@ -59,12 +60,14 @@ object SearchablePreferences {
                 keywords = listOf("unplayed", "old", "label", "video", "new", "indicator"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_appearance_unplayed_old_video_days_title,
                 keywords = listOf("days", "old", "video", "threshold", "time"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_appearance_auto_scroll_title,
@@ -72,6 +75,7 @@ object SearchablePreferences {
                 keywords = listOf("scroll", "auto", "last played", "resume", "position"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_appearance_show_video_thumbnails_title,
@@ -79,6 +83,7 @@ object SearchablePreferences {
                 keywords = listOf("thumbnail", "thumbnails", "preview", "poster", "video"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_appearance_thumbnail_generation_title,
@@ -86,6 +91,7 @@ object SearchablePreferences {
                 keywords = listOf("thumbnail", "generation", "frame", "hybrid", "first frame", "embedded", "slider", "percentage", "preview"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_gesture_tap_thumbnail_to_select_title,
@@ -93,6 +99,7 @@ object SearchablePreferences {
                 keywords = listOf("thumbnail", "selection", "select", "tap", "gesture"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_appearance_show_network_thumbnails_title,
@@ -100,6 +107,7 @@ object SearchablePreferences {
                 keywords = listOf("network", "thumbnail", "stream", "preview", "images"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_clear_thumbnail_cache_title,
@@ -107,6 +115,7 @@ object SearchablePreferences {
                 keywords = listOf("thumbnail", "cache", "clear", "delete", "reset"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 4,
             ))
 
             // Layout preferences
@@ -239,6 +248,7 @@ object SearchablePreferences {
                 keywords = listOf("precise", "seek", "keyframes", "accurate", "navigation"),
                 category = "Player",
                 screen = PlayerPreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_player_seek_preview_thumbfast_title,
@@ -246,6 +256,7 @@ object SearchablePreferences {
                 keywords = listOf("thumbfast", "seek", "preview", "thumbnail", "scrub", "legacy"),
                 category = "Player",
                 screen = PlayerPreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_player_custom_skip_duration_title,
@@ -253,6 +264,7 @@ object SearchablePreferences {
                 keywords = listOf("custom skip", "skip duration", "forward", "seek", "seconds", "jump"),
                 category = "Player",
                 screen = PlayerPreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 title = "Use online skip markers",
@@ -294,6 +306,7 @@ object SearchablePreferences {
                 keywords = listOf("brightness", "gesture", "swipe", "display", "control"),
                 category = "Player",
                 screen = PlayerPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_player_gestures_volume,
@@ -440,6 +453,7 @@ object SearchablePreferences {
                 keywords = listOf("thumbnail", "tap", "select", "play", "preview"),
                 category = "Appearance",
                 screen = AppearancePreferencesScreen,
+                scrollIndex = 4,
             ))
 
             // Storage / Folder preferences
@@ -547,6 +561,7 @@ object SearchablePreferences {
                 keywords = listOf("subtitle", "search", "online", "download", "wyzie", "subs"),
                 category = "Subtitles",
                 screen = SubtitlesPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_preferred_languages,
@@ -581,6 +596,7 @@ object SearchablePreferences {
                 keywords = listOf("fonts", "directory", "subtitle", "custom", "folder"),
                 category = "Subtitles",
                 screen = SubtitlesPreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_subtitles_font_title,
@@ -588,6 +604,7 @@ object SearchablePreferences {
                 keywords = listOf("font", "fonts", "family", "subtitle", "typography", "custom"),
                 category = "Subtitles",
                 screen = SubtitlesPreferencesScreen,
+                scrollIndex = 2,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_subtitles_save_location,
@@ -606,6 +623,7 @@ object SearchablePreferences {
                 keywords = listOf("subtitle", "languages", "search", "preferred"),
                 category = "Subtitles",
                 screen = SubtitlesPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 title = "Hearing-impaired friendly",
@@ -631,6 +649,7 @@ object SearchablePreferences {
                 keywords = listOf("subtitle", "downloads", "clear", "delete", "cache"),
                 category = "Subtitles",
                 screen = SubtitlesPreferencesScreen,
+                scrollIndex = 4,
             ))
 
             // Audio preferences
@@ -721,18 +740,21 @@ object SearchablePreferences {
                 keywords = listOf("storage", "location", "directory", "folder", "config"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_mpv_conf,
                 keywords = listOf("mpv", "conf", "config", "configuration", "settings"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_input_conf,
                 keywords = listOf("input", "conf", "keybindings", "shortcuts", "keys", "controls"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_enable_lua_scripts_title,
@@ -740,6 +762,7 @@ object SearchablePreferences {
                 keywords = listOf("scripts", "lua", "js", "javascript", "enable", "load", "plugin"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 6,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_manage_lua_scripts_title,
@@ -747,6 +770,7 @@ object SearchablePreferences {
                 keywords = listOf("scripts", "lua", "js", "javascript", "manage", "select", "plugin"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 6,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_enable_recently_played_title,
@@ -754,12 +778,14 @@ object SearchablePreferences {
                 keywords = listOf("recently", "played", "history", "enable", "track"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 8,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_clear_playback_history,
                 keywords = listOf("clear", "history", "playback", "reset", "delete"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 8,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_clear_config_cache_title,
@@ -767,6 +793,7 @@ object SearchablePreferences {
                 keywords = listOf("clear", "config", "cache", "mpv", "settings"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 8,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_clear_thumbnail_cache_title,
@@ -774,12 +801,14 @@ object SearchablePreferences {
                 keywords = listOf("clear", "thumbnail", "cache", "preview", "images"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 4,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_clear_fonts_cache,
                 keywords = listOf("clear", "fonts", "cache", "reset"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 8,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_notification_style,
@@ -787,6 +816,7 @@ object SearchablePreferences {
                 keywords = listOf("notification", "media controls", "progress", "chapters", "no notification", "hide notification", "background playback"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 10,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_verbose_logging_title,
@@ -794,6 +824,7 @@ object SearchablePreferences {
                 keywords = listOf("verbose", "logging", "debug", "output"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 12,
             ))
             add(SearchablePreference(
                 titleRes = R.string.pref_advanced_dump_logs_title,
@@ -801,6 +832,7 @@ object SearchablePreferences {
                 keywords = listOf("logs", "debug", "dump", "share", "export"),
                 category = "Advanced",
                 screen = AdvancedPreferencesScreen,
+                scrollIndex = 12,
             ))
 
             // AI / Intelligence

@@ -239,6 +239,7 @@ object SettingsSearchScreen : Screen {
                                 preference = preference,
                                 onClick = {
                                     keyboardController?.hide()
+                                    SettingsScrollManager.pendingScrollIndex = preference.scrollIndex
                                     backstack.add(preference.screen)
                                 }
                             )

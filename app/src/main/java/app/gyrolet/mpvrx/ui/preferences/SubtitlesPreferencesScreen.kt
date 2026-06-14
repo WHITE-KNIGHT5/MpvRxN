@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import app.gyrolet.mpvrx.repository.wyzie.WyzieEncodings
 import app.gyrolet.mpvrx.repository.wyzie.WyzieFormats
@@ -68,6 +69,7 @@ import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import me.zhanghai.compose.preference.ListPreference
+import app.gyrolet.mpvrx.ui.preferences.SettingsScrollManager
 import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
 import me.zhanghai.compose.preference.TextFieldPreference
 import androidx.compose.material3.AlertDialog
@@ -200,7 +202,14 @@ object SubtitlesPreferencesScreen : Screen {
           }
         }
 
+        val listState = rememberLazyListState()
+        LaunchedEffect(Unit) {
+            SettingsScrollManager.consumeScrollIndex()?.let { index ->
+                listState.animateScrollToItem(index)
+            }
+        }
         LazyColumn(
+            state = listState,
           modifier =
             Modifier
               .fillMaxSize()

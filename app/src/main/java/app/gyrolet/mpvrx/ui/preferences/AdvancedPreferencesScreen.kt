@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -67,6 +68,7 @@ import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
+import app.gyrolet.mpvrx.ui.preferences.SettingsScrollManager
 import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
 import me.zhanghai.compose.preference.TwoTargetIconButtonPreference
 import org.koin.compose.koinInject
@@ -239,7 +241,14 @@ object AdvancedPreferencesScreen : Screen {
     ) { padding ->
       ProvidePreferenceLocals {
         val mpvConfStorageLocation by preferences.mpvConfStorageUri.collectAsState()
+        val listState = rememberLazyListState()
+        LaunchedEffect(Unit) {
+            SettingsScrollManager.consumeScrollIndex()?.let { index ->
+                listState.animateScrollToItem(index)
+            }
+        }
         LazyColumn(
+            state = listState,
           modifier = Modifier
             .fillMaxSize()
             .padding(padding),
