@@ -22,11 +22,10 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 private const val PIP_INTENTS_FILTER = "pip_action"
-private const val PIP_INTENT_ACTION = "pip_action_code"
-private const val PIP_PLAY = 1
-private const val PIP_PAUSE = 2
-private const val PIP_REWIND = 3
-private const val PIP_FORWARD = 4
+private const val PIP_ACTION_PLAY    = "pip_action_play"
+private const val PIP_ACTION_PAUSE   = "pip_action_pause"
+private const val PIP_ACTION_REWIND  = "pip_action_rewind"
+private const val PIP_ACTION_FORWARD = "pip_action_forward"
 
 class MPVPipHelper(
   private val activity: AppCompatActivity,
@@ -51,21 +50,25 @@ class MPVPipHelper(
           context: Context?,
           intent: Intent?,
         ) {
-          // Use precise seeking for videos shorter than 2 minutes (120 seconds) or if preference is enabled
           val duration = MPVLib.getPropertyInt("duration") ?: 0
           val shouldUsePreciseSeeking = playerPreferences.usePreciseSeeking.get() || duration < 120
           val seekMode = if (shouldUsePreciseSeeking) "relative+exact" else "relative+keyframes"
-          when (intent?.getIntExtra(PIP_INTENT_ACTION, 0)) {
-            PIP_PLAY -> MPVLib.setPropertyBoolean("pause", false)
-            PIP_PAUSE -> MPVLib.setPropertyBoolean("pause", true)
-            PIP_REWIND -> MPVLib.command("seek", "-10", seekMode)
-            PIP_FORWARD -> MPVLib.command("seek", "10", seekMode)
+          when (intent?.action) {
+            PIP_ACTION_PLAY    -> MPVLib.setPropertyBoolean("pause", false)
+            PIP_ACTION_PAUSE   -> MPVLib.setPropertyBoolean("pause", true)
+            PIP_ACTION_REWIND  -> MPVLib.command("seek", "-10", seekMode)
+            PIP_ACTION_FORWARD -> MPVLib.command("seek", "10", seekMode)
           }
           updatePictureInPictureParams()
         }
       }
 
-    val filter = IntentFilter(PIP_INTENTS_FILTER)
+    val filter = IntentFilter().apply {
+      addAction(PIP_ACTION_PLAY)
+      addAction(PIP_ACTION_PAUSE)
+      addAction(PIP_ACTION_REWIND)
+      addAction(PIP_ACTION_FORWARD)
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       activity.registerReceiver(pipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
     } else {
@@ -135,31 +138,29 @@ class MPVPipHelper(
     val isPlaying = MPVLib.getPropertyBoolean("pause") == false
 
     return listOf(
-      createRemoteAction("rewind", android.R.drawable.ic_media_rew, PIP_REWIND),
+      createRemoteAction("rewind", android.R.drawable.ic_media_rew, PIP_ACTION_REWIND),
       if (isPlaying) {
-        createRemoteAction("pause", MaterialSymbolsR.drawable.materialsymbols_ic_pause_rounded_filled, PIP_PAUSE)
+        createRemoteAction("pause", MaterialSymbolsR.drawable.materialsymbols_ic_pause_rounded_filled, PIP_ACTION_PAUSE)
       } else {
-        createRemoteAction("play", MaterialSymbolsR.drawable.materialsymbols_ic_play_arrow_rounded_filled, PIP_PLAY)
+        createRemoteAction("play", MaterialSymbolsR.drawable.materialsymbols_ic_play_arrow_rounded_filled, PIP_ACTION_PLAY)
       },
-      createRemoteAction("forward", android.R.drawable.ic_media_ff, PIP_FORWARD),
+      createRemoteAction("forward", android.R.drawable.ic_media_ff, PIP_ACTION_FORWARD),
     )
   }
 
   private fun createRemoteAction(
     title: String,
     @DrawableRes icon: Int,
-    actionCode: Int,
+    action: String,
   ): RemoteAction {
-    val intent =
-      Intent(PIP_INTENTS_FILTER).apply {
-        putExtra(PIP_INTENT_ACTION, actionCode)
-        setPackage(activity.packageName)
-      }
+    val intent = Intent(action).apply {
+      setPackage(activity.packageName)
+    }
 
     val pendingIntent =
       PendingIntent.getBroadcast(
         activity,
-        actionCode,
+        action.hashCode(),
         intent,
         PendingIntent.FLAG_IMMUTABLE,
       )
