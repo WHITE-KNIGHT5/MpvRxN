@@ -666,23 +666,31 @@ class PlayerActivity :
   }
 
   private fun setupBackPressHandler() {
+    val smoothBackAnimation = appearancePreferences.smoothBackAnimation
     // Separate always-enabled callback to fix landscape rotation flash with gesture navigation
     val landscapeGestureFixCallback = object : OnBackPressedCallback(true) {
+      var didFade = false
+
       override fun handleOnBackStarted(backEvent: BackEventCompat) {
+        didFade = false
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val navMode = android.provider.Settings.Secure.getInt(contentResolver, "navigation_mode", 0)
         val isGestureNav = navMode == 2
-        val smoothBackEnabled = appearancePreferences.smoothBackAnimation.get()
-        // Toggle OFF: fade starts immediately when gesture begins — window is black before rotation
+        val smoothBackEnabled = smoothBackAnimation.get()
         if (isLandscape && isGestureNav && !smoothBackEnabled) {
           window.decorView.animate().alpha(0f).setDuration(150).start()
+          didFade = true
         }
       }
       override fun handleOnBackCancelled() {
-        window.decorView.animate().alpha(1f).setDuration(100).start()
+        if (didFade) {
+          window.decorView.animate().alpha(1f).setDuration(100).start()
+          didFade = false
+        }
       }
       override fun handleOnBackPressed() {
         window.decorView.alpha = 1f
+        didFade = false
         isEnabled = false
         onBackPressedDispatcher.onBackPressed()
         isEnabled = true
