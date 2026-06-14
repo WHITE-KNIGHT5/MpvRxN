@@ -35,15 +35,13 @@ class MPVPipHelper(
   private var pipReceiver: BroadcastReceiver? = null
 
   fun onPictureInPictureModeChanged(isInPipMode: Boolean) {
-    if (isInPipMode) {
-      registerPipReceiver()
-    } else {
-      unregisterPipReceiver()
-    }
+    // Receiver stays registered for full lifecycle — don't unregister on PiP exit
+    // This prevents missing button presses when mode changes happen mid-action
   }
 
   @Suppress("UnspecifiedRegisterReceiverFlag")
-  private fun registerPipReceiver() {
+  fun registerPipReceiver() {
+    if (pipReceiver != null) return // already registered
     pipReceiver =
       object : BroadcastReceiver() {
         override fun onReceive(
@@ -76,7 +74,7 @@ class MPVPipHelper(
     }
   }
 
-  private fun unregisterPipReceiver() {
+  fun unregisterPipReceiver() {
     pipReceiver?.let {
       runCatching { activity.unregisterReceiver(it) }
       pipReceiver = null
@@ -162,7 +160,10 @@ class MPVPipHelper(
         activity,
         action.hashCode(),
         intent,
-        PendingIntent.FLAG_IMMUTABLE,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+          PendingIntent.FLAG_MUTABLE
+        else
+          PendingIntent.FLAG_UPDATE_CURRENT,
       )
 
     return RemoteAction(

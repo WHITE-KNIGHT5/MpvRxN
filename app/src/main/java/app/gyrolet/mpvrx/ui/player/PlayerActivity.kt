@@ -681,18 +681,15 @@ class PlayerActivity :
         val smoothBackEnabled = appearancePreferences.smoothBackAnimation.get()
 
         if (isLandscape && isGestureNav && !smoothBackEnabled) {
-          // Toggle OFF: fade to black first, THEN go back — hides rotation flash completely
-          window.decorView.animate()
-            .alpha(0f)
-            .setDuration(150)
-            .withEndAction {
-              window.decorView.alpha = 1f
-              isEnabled = false
-              onBackPressedDispatcher.onBackPressed()
-              isEnabled = true
-            }.start()
+          // Lock orientation to prevent rotation flash, then go back
+          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+          window.decorView.alpha = 0f
+          isEnabled = false
+          onBackPressedDispatcher.onBackPressed()
+          isEnabled = true
+          overridePendingTransition(0, 0)
         } else {
-          // Toggle ON or portrait: go back immediately
+          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
           window.decorView.alpha = 1f
           isEnabled = false
           onBackPressedDispatcher.onBackPressed()
@@ -822,6 +819,7 @@ class PlayerActivity :
    */
   private fun setupPipHelper() {
     pipHelper = MPVPipHelper(activity = this, mpvView = player)
+    pipHelper.registerPipReceiver()
   }
 
   private fun setupAudio() {
@@ -1111,6 +1109,7 @@ class PlayerActivity :
   override fun onStop() {
     runCatching {
       pipHelper.onStop()
+      pipHelper.unregisterPipReceiver()
 
       if (noisyReceiverRegistered) {
         unregisterReceiver(noisyReceiver)
@@ -1180,6 +1179,7 @@ class PlayerActivity :
     super.onStart()
 
     runCatching {
+      pipHelper.registerPipReceiver()
       setupWindowFlags()
       setupSystemUI()
 
