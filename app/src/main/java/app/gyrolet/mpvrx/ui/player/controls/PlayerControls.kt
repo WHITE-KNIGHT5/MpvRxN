@@ -1010,7 +1010,7 @@ fun PlayerControls(
           },
         ) {
           ControlsButton(
-            icon = androidx.compose.material.icons.Icons.Default.Lock,
+            icon = Icons.Default.LockOpen,
             onClick = { viewModel.unlockControls() },
             color = if (hideBackground) Color.White else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(40.dp),
@@ -1029,7 +1029,7 @@ fun PlayerControls(
           },
         ) {
           ControlsButton(
-            icon = androidx.compose.material.icons.Icons.Default.Lock,
+            icon = Icons.Default.LockOpen,
             onClick = { viewModel.unlockControls() },
             color = if (hideBackground) Color.White else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(40.dp),
