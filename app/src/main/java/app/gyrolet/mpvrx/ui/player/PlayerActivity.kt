@@ -669,32 +669,23 @@ class PlayerActivity :
     // Separate always-enabled callback to fix landscape rotation flash with gesture navigation
     val landscapeGestureFixCallback = object : OnBackPressedCallback(true) {
       override fun handleOnBackStarted(backEvent: BackEventCompat) {
-        // Not called when enableOnBackInvokedCallback=false
-      }
-      override fun handleOnBackCancelled() {
-        window.decorView.alpha = 1f
-      }
-      override fun handleOnBackPressed() {
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val navMode = android.provider.Settings.Secure.getInt(contentResolver, "navigation_mode", 0)
         val isGestureNav = navMode == 2
         val smoothBackEnabled = appearancePreferences.smoothBackAnimation.get()
-
+        // Toggle OFF: fade starts immediately when gesture begins — window is black before rotation
         if (isLandscape && isGestureNav && !smoothBackEnabled) {
-          // Lock orientation to prevent rotation flash, then go back
-          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
-          window.decorView.alpha = 0f
-          isEnabled = false
-          onBackPressedDispatcher.onBackPressed()
-          isEnabled = true
-          overridePendingTransition(0, 0)
-        } else {
-          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-          window.decorView.alpha = 1f
-          isEnabled = false
-          onBackPressedDispatcher.onBackPressed()
-          isEnabled = true
+          window.decorView.animate().alpha(0f).setDuration(150).start()
         }
+      }
+      override fun handleOnBackCancelled() {
+        window.decorView.animate().alpha(1f).setDuration(100).start()
+      }
+      override fun handleOnBackPressed() {
+        window.decorView.alpha = 1f
+        isEnabled = false
+        onBackPressedDispatcher.onBackPressed()
+        isEnabled = true
       }
     }
     onBackPressedDispatcher.addCallback(this, landscapeGestureFixCallback)
@@ -4006,12 +3997,18 @@ class PlayerActivity :
   private fun finishForManualBackgroundPlayback() {
     // Restore system UI before going to background
     restoreSystemUI()
-
-    // Keep this activity and MPV instance alive in the task. Finishing here detaches
-    // the observer that owns repeat/playlist EOF handling and forces streams to
-    // reload when the user opens the player again from the notification.
     disableVideoForBackground()
-    moveTaskToBack(true)
+
+    // Bring the previous screen (folder/location) to front
+    // PlayerActivity stays alive in back stack — tapping notification resumes without reload
+    val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+      addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+    }
+    if (intent != null) {
+      startActivity(intent)
+    } else {
+      moveTaskToBack(true)
+    }
   }
 
   // ==================== PlayerHost ====================
