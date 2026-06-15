@@ -666,10 +666,24 @@ class PlayerActivity :
   }
 
   private fun setupBackPressHandler() {
+    val smoothBackAnimation = appearancePreferences.smoothBackAnimation
     val callback =
       object : OnBackPressedCallback(shouldInterceptBackPress()) {
+        override fun handleOnBackStarted(backEvent: BackEventCompat) {
+          if (smoothBackAnimation.get()) applyPredictiveBackProgress(backEvent)
+        }
+
+        override fun handleOnBackProgressed(backEvent: BackEventCompat) {
+          if (smoothBackAnimation.get()) applyPredictiveBackProgress(backEvent)
+        }
+
+        override fun handleOnBackCancelled() {
+          if (smoothBackAnimation.get()) resetPredictiveBackProgress()
+        }
+
         override fun handleOnBackPressed() {
           handleBackPress()
+          if (smoothBackAnimation.get()) resetPredictiveBackProgress()
         }
       }
 
@@ -695,6 +709,38 @@ class PlayerActivity :
     viewModel.sheetShown.value != Sheets.None ||
       viewModel.panelShown.value != Panels.None ||
       playerPreferences.autoPiPOnNavigation.get()
+
+  private fun applyPredictiveBackProgress(backEvent: BackEventCompat) {
+    val root = binding.root
+    val width = root.width
+    val height = root.height
+    if (width == 0 || height == 0) return
+    val progress = backEvent.progress.coerceIn(0f, 1f)
+    val fromRightEdge = backEvent.swipeEdge == BackEventCompat.EDGE_RIGHT
+    val direction = if (fromRightEdge) -1f else 1f
+    val scale = 1f - (0.045f * progress)
+    root.animate().cancel()
+    binding.controls.animate().cancel()
+    root.pivotX = if (fromRightEdge) width.toFloat() else 0f
+    root.pivotY = backEvent.touchY.coerceIn(0f, height.toFloat())
+    root.scaleX = scale
+    root.scaleY = scale
+    root.translationX = direction * width * 0.04f * progress
+    binding.controls.alpha = 1f - (0.2f * progress)
+  }
+
+  private fun resetPredictiveBackProgress() {
+    binding.root.animate()
+      .scaleX(1f)
+      .scaleY(1f)
+      .translationX(0f)
+      .setDuration(140L)
+      .start()
+    binding.controls.animate()
+      .alpha(1f)
+      .setDuration(140L)
+      .start()
+  }
   }
 
   private fun handleBackPress() {
