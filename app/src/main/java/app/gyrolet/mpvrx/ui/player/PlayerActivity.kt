@@ -666,54 +666,10 @@ class PlayerActivity :
   }
 
   private fun setupBackPressHandler() {
-    val smoothBackAnimation = appearancePreferences.smoothBackAnimation
-    // Separate always-enabled callback to fix landscape rotation flash with gesture navigation
-    val landscapeGestureFixCallback = object : OnBackPressedCallback(true) {
-      var didFade = false
-
-      override fun handleOnBackStarted(backEvent: BackEventCompat) {
-        didFade = false
-        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        val navMode = android.provider.Settings.Secure.getInt(contentResolver, "navigation_mode", 0)
-        val isGestureNav = navMode == 2
-        val smoothBackEnabled = smoothBackAnimation.get()
-        if (isLandscape && isGestureNav && !smoothBackEnabled) {
-          window.decorView.animate().alpha(0f).setDuration(150).start()
-          didFade = true
-        }
-      }
-      override fun handleOnBackCancelled() {
-        if (didFade) {
-          window.decorView.animate().alpha(1f).setDuration(100).start()
-          didFade = false
-        }
-      }
-      override fun handleOnBackPressed() {
-        window.decorView.alpha = 1f
-        didFade = false
-        isEnabled = false
-        onBackPressedDispatcher.onBackPressed()
-        isEnabled = true
-      }
-    }
-    onBackPressedDispatcher.addCallback(this, landscapeGestureFixCallback)
     val callback =
       object : OnBackPressedCallback(shouldInterceptBackPress()) {
-        override fun handleOnBackStarted(backEvent: BackEventCompat) {
-          applyPredictiveBackProgress(backEvent)
-        }
-
-        override fun handleOnBackProgressed(backEvent: BackEventCompat) {
-          applyPredictiveBackProgress(backEvent)
-        }
-
-        override fun handleOnBackCancelled() {
-          resetPredictiveBackProgress()
-        }
-
         override fun handleOnBackPressed() {
           handleBackPress()
-          resetPredictiveBackProgress()
         }
       }
 
@@ -739,39 +695,6 @@ class PlayerActivity :
     viewModel.sheetShown.value != Sheets.None ||
       viewModel.panelShown.value != Panels.None ||
       playerPreferences.autoPiPOnNavigation.get()
-
-  private fun applyPredictiveBackProgress(backEvent: BackEventCompat) {
-    val root = binding.root
-    val width = root.width
-    val height = root.height
-    if (width == 0 || height == 0) return
-
-    val progress = backEvent.progress.coerceIn(0f, 1f)
-    val fromRightEdge = backEvent.swipeEdge == BackEventCompat.EDGE_RIGHT
-    val direction = if (fromRightEdge) -1f else 1f
-    val scale = 1f - (0.045f * progress)
-
-    root.animate().cancel()
-    binding.controls.animate().cancel()
-    root.pivotX = if (fromRightEdge) width.toFloat() else 0f
-    root.pivotY = backEvent.touchY.coerceIn(0f, height.toFloat())
-    root.scaleX = scale
-    root.scaleY = scale
-    root.translationX = direction * width * 0.04f * progress
-    binding.controls.alpha = 1f - (0.2f * progress)
-  }
-
-  private fun resetPredictiveBackProgress() {
-    binding.root.animate()
-      .scaleX(1f)
-      .scaleY(1f)
-      .translationX(0f)
-      .setDuration(140L)
-      .start()
-    binding.controls.animate()
-      .alpha(1f)
-      .setDuration(140L)
-      .start()
   }
 
   private fun handleBackPress() {
@@ -1082,6 +1005,10 @@ class PlayerActivity :
     }
 
     super.finish()
+    // Toggle OFF → suppress exit transition → no rotation animation → no flash
+    if (!appearancePreferences.smoothBackAnimation.get()) {
+      overridePendingTransition(0, 0)
+    }
   }
 
   override fun finishAndRemoveTask() {
