@@ -715,10 +715,12 @@ class PlayerActivity :
     val width = root.width
     val height = root.height
     if (width == 0 || height == 0) return
+
     val progress = backEvent.progress.coerceIn(0f, 1f)
     val fromRightEdge = backEvent.swipeEdge == BackEventCompat.EDGE_RIGHT
     val direction = if (fromRightEdge) -1f else 1f
     val scale = 1f - (0.045f * progress)
+
     root.animate().cancel()
     binding.controls.animate().cancel()
     root.pivotX = if (fromRightEdge) width.toFloat() else 0f
@@ -740,7 +742,6 @@ class PlayerActivity :
       .alpha(1f)
       .setDuration(140L)
       .start()
-  }
   }
 
   private fun handleBackPress() {
@@ -787,7 +788,6 @@ class PlayerActivity :
    */
   private fun setupPipHelper() {
     pipHelper = MPVPipHelper(activity = this, mpvView = player)
-    pipHelper.registerPipReceiver()
   }
 
   private fun setupAudio() {
@@ -1051,7 +1051,6 @@ class PlayerActivity :
     }
 
     super.finish()
-    // Toggle OFF → suppress exit transition → no rotation animation → no flash
     if (!appearancePreferences.smoothBackAnimation.get()) {
       overridePendingTransition(0, 0)
     }
@@ -1081,7 +1080,6 @@ class PlayerActivity :
   override fun onStop() {
     runCatching {
       pipHelper.onStop()
-      pipHelper.unregisterPipReceiver()
 
       if (noisyReceiverRegistered) {
         unregisterReceiver(noisyReceiver)
@@ -1151,7 +1149,6 @@ class PlayerActivity :
     super.onStart()
 
     runCatching {
-      pipHelper.registerPipReceiver()
       setupWindowFlags()
       setupSystemUI()
 
@@ -3978,18 +3975,12 @@ class PlayerActivity :
   private fun finishForManualBackgroundPlayback() {
     // Restore system UI before going to background
     restoreSystemUI()
-    disableVideoForBackground()
 
-    // Bring the previous screen (folder/location) to front
-    // PlayerActivity stays alive in back stack — tapping notification resumes without reload
-    val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-      addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-    }
-    if (intent != null) {
-      startActivity(intent)
-    } else {
-      moveTaskToBack(true)
-    }
+    // Keep this activity and MPV instance alive in the task. Finishing here detaches
+    // the observer that owns repeat/playlist EOF handling and forces streams to
+    // reload when the user opens the player again from the notification.
+    disableVideoForBackground()
+    moveTaskToBack(true)
   }
 
   // ==================== PlayerHost ====================
