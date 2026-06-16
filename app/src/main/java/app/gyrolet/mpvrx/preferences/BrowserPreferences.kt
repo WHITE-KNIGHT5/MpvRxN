@@ -57,6 +57,9 @@ class BrowserPreferences(
 
   // Watched threshold preference (percentage 1-100)
   val watchedThreshold = preferenceStore.getInt("watched_threshold", 95)
+
+  // Audio files visibility toggle
+  val showAudioFiles = preferenceStore.getBoolean("show_audio_files", false)
 }
 
 /**
