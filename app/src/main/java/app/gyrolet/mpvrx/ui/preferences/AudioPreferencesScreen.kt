@@ -28,10 +28,12 @@ import androidx.compose.ui.text.font.FontWeight
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.AudioChannels
 import app.gyrolet.mpvrx.preferences.AudioPreferences
+import app.gyrolet.mpvrx.preferences.BrowserPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import app.gyrolet.mpvrx.ui.utils.popSafely
+import app.gyrolet.mpvrx.utils.media.MediaLibraryEvents
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
@@ -49,6 +51,7 @@ object AudioPreferencesScreen : Screen {
     val resources = LocalResources.current
     val backstack = LocalBackStack.current
     val preferences = koinInject<AudioPreferences>()
+    val browserPreferences = koinInject<BrowserPreferences>()
 
     Scaffold(
       topBar = {
@@ -87,6 +90,33 @@ object AudioPreferencesScreen : Screen {
               .fillMaxSize()
               .padding(padding),
         ) {
+          // ── Audio Player section ──────────────────────────────────────
+          item {
+            PreferenceSectionHeader(title = "Audio Player")
+          }
+
+          item {
+            PreferenceCard {
+              val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
+              SwitchPreference(
+                value = showAudioFiles,
+                onValueChange = { enabled ->
+                  browserPreferences.showAudioFiles.set(enabled)
+                  app.gyrolet.mpvrx.repository.MediaFileRepository.clearCache()
+                  MediaLibraryEvents.notifyChanged()
+                },
+                title = { Text("Audio Player") },
+                summary = {
+                  Text(
+                    "Show audio files in MpvRxN",
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+            }
+          }
+
+          // ── Audio settings section ────────────────────────────────────
           item {
             PreferenceSectionHeader(title = stringResource(R.string.pref_audio))
           }
@@ -203,4 +233,3 @@ object AudioPreferencesScreen : Screen {
     }
   }
 }
-
