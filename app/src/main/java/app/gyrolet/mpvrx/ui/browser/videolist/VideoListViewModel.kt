@@ -110,16 +110,6 @@ class VideoListViewModel(
         }
       }
 
-    // Refresh videos when audio toggle changes
-    viewModelScope.launch(Dispatchers.IO) {
-      browserPreferences.showAudioFiles.changes().drop(1).collectLatest {
-        // Clear cache and reload when audio toggle changes
-        MediaFileRepository.clearCache()
-        videoCache.remove(bucketId)
-        loadVideos()
-      }
-    }
-
     viewModelScope.launch(Dispatchers.IO) {
       PlaybackStateEvents.changes.collectLatest {
         if (_videos.value.isNotEmpty()) {
