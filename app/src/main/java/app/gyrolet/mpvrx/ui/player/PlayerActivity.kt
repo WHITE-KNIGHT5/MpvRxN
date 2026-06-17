@@ -1035,6 +1035,9 @@ class PlayerActivity :
 
   override fun finish() {
     runCatching {
+      // Lock orientation to current state to prevent rotation flash during exit
+      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+      
       // Don't restore UI during normal finish to prevent flickering
       // System will handle UI restoration automatically
       isReady = false
@@ -1058,6 +1061,9 @@ class PlayerActivity :
 
   override fun finishAndRemoveTask() {
     runCatching {
+      // Lock orientation to current state to prevent rotation flash during exit
+      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+      
       // Don't restore UI during normal finish to prevent flickering
       // System will handle UI restoration automatically
       isReady = false
@@ -1190,6 +1196,13 @@ class PlayerActivity :
     )
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    // Handle configuration changes (like theme/uiMode) without restarting the activity
+    // The manifest declares configChanges="uiMode" so this method is called instead of recreating
+    Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
   }
 
   private fun setLayoutInDisplayCutoutModeIfSupported(shortEdges: Boolean) {
@@ -3976,11 +3989,11 @@ class PlayerActivity :
     // Restore system UI before going to background
     restoreSystemUI()
 
-    // Keep this activity and MPV instance alive in the task. Finishing here detaches
-    // the observer that owns repeat/playlist EOF handling and forces streams to
-    // reload when the user opens the player again from the notification.
+    // Finish the activity to return to the folder/video list
+    // The background playback service will keep the audio playing
     disableVideoForBackground()
-    moveTaskToBack(true)
+    isUserFinishing = true
+    finish()
   }
 
   // ==================== PlayerHost ====================
