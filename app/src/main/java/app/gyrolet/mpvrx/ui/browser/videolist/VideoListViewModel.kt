@@ -110,6 +110,16 @@ class VideoListViewModel(
         }
       }
 
+    // Refresh videos when audio toggle changes
+    viewModelScope.launch(Dispatchers.IO) {
+      browserPreferences.showAudioFiles.changes().drop(1).collectLatest {
+        // Clear cache and reload when audio toggle changes
+        MediaFileRepository.clearCache()
+        videoCache.remove(bucketId)
+        loadVideos()
+      }
+    }
+
     viewModelScope.launch(Dispatchers.IO) {
       PlaybackStateEvents.changes.collectLatest {
         if (_videos.value.isNotEmpty()) {
@@ -154,9 +164,11 @@ class VideoListViewModel(
           forceFileSystemCheck = forceFileSystemCheck,
         )
 
-        // Keep only video files — removes images, audio, docs that may appear in camera/downloads folders
+        // Keep only video files (and audio if enabled) — removes images, docs that may appear in camera/downloads folders
         videoList = videoList.filter { video ->
-          video.mimeType.isBlank() || video.mimeType.startsWith("video/")
+          video.mimeType.isBlank() || 
+          video.mimeType.startsWith("video/") ||
+          (browserPreferences.showAudioFiles.get() && video.mimeType.startsWith("audio/"))
         }
 
         // Enrich with metadata only if chips are enabled
@@ -285,11 +297,17 @@ class VideoListViewModel(
       val folder = File(bucketId)
       
       if (folder.exists() && folder.isDirectory) {
-        // Scan all video files in the folder
+        // Scan all video files (and audio if enabled) in the folder
+        val allowedExtensions = mutableSetOf(
+          "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "mpg", "mpeg", "ts", "m2ts"
+        )
+        if (browserPreferences.showAudioFiles.get()) {
+          allowedExtensions.addAll(listOf(
+            "mp3", "flac", "aac", "ogg", "m4a", "opus", "wav", "wma", "ape", "aiff", "aif", "mka", "oga"
+          ))
+        }
         val videoFiles = folder.listFiles { file ->
-          file.isFile && file.extension.lowercase() in listOf(
-            "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "mpg", "mpeg", "ts", "m2ts"
-          )
+          file.isFile && file.extension.lowercase() in allowedExtensions
         }
         
         if (!videoFiles.isNullOrEmpty()) {
