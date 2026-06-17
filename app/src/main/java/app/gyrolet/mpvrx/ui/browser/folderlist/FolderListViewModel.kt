@@ -108,6 +108,15 @@ class FolderListViewModel(
       }
     }
 
+    // Refresh folders when audio toggle changes
+    viewModelScope.launch(Dispatchers.IO) {
+      browserPreferences.showAudioFiles.changes().drop(1).collectLatest {
+        // Clear cache and reload when audio toggle changes
+        MediaFileRepository.clearCache()
+        loadVideoFolders()
+      }
+    }
+
     // Filter folders based on blacklist
     viewModelScope.launch {
       combine(_allVideoFolders, foldersPreferences.blacklistedFolders.changes()) { folders, blacklist ->
@@ -175,8 +184,11 @@ class FolderListViewModel(
     }
   }
 
-  private fun currentFolderCacheKey(): String =
-    "folders_${if (foldersPreferences.includeNoMediaFolders.get()) "with_nomedia" else "exclude_nomedia"}"
+  private fun currentFolderCacheKey(): String {
+    val noMediaSuffix = if (foldersPreferences.includeNoMediaFolders.get()) "with_nomedia" else "exclude_nomedia"
+    val audioSuffix = if (browserPreferences.showAudioFiles.get()) "with_audio" else "exclude_audio"
+    return "folders_${noMediaSuffix}_${audioSuffix}"
+  }
 
   private fun serializeFoldersToJson(folders: List<VideoFolder>): String {
     // Simple JSON serialization
