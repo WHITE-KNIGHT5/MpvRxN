@@ -1198,13 +1198,6 @@ class PlayerActivity :
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
   }
 
-  override fun onConfigurationChanged(newConfig: Configuration) {
-    super.onConfigurationChanged(newConfig)
-    // Handle configuration changes (like theme/uiMode) without restarting the activity
-    // The manifest declares configChanges="uiMode" so this method is called instead of recreating
-    Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
-  }
-
   private fun setLayoutInDisplayCutoutModeIfSupported(shortEdges: Boolean) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
     val mode =
@@ -2304,6 +2297,7 @@ class PlayerActivity :
    */
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
+    Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
     val isPortrait = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
     viewModel.onOrientationChanged(isPortrait)
     if (isReady) {
