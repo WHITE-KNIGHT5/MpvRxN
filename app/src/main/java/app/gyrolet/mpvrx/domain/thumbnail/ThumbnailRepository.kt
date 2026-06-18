@@ -127,14 +127,17 @@ class ThumbnailRepository(
                 }
               }
 
-              // Audio files: extract embedded album art
-              // MKV files: extract frame via MediaMetadataRetriever (Coil may fail on MKV)
+              // Use MediaMetadataRetriever directly for ALL local media files:
+              // - Audio files → embedded album art (mp3, flac, m4a, ogg, etc.)
+              // - All local video files → frame at 10% duration (MKV, AVI, 10-bit, etc.)
+              // This is more reliable than Coil for uncommon formats
               val ext = video.path.substringAfterLast('.').lowercase()
               val isAudio = video.mimeType.startsWith("audio/") ||
                 app.gyrolet.mpvrx.utils.storage.FileTypeUtils.AUDIO_EXTENSIONS.contains(ext)
-              val isMkv = ext == "mkv"
+              val isLocalVideo = !isNetworkUrl(video.path) &&
+                app.gyrolet.mpvrx.utils.storage.FileTypeUtils.VIDEO_EXTENSIONS.contains(ext)
 
-              if (isAudio || isMkv) {
+              if (isAudio || isLocalVideo) {
                 val localBitmap = extractLocalMediaThumbnail(video, isAudio)
                   ?: return@withPermit null
                 return@withPermit scaleBitmap(localBitmap, widthPx, heightPx)
