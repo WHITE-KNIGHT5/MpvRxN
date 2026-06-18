@@ -775,10 +775,15 @@ class PlayerActivity :
 
     isUserFinishing = true
 
-    // If opened from notification (no back stack), go to main app instead of launcher
+    // If opened from notification (no back stack), go to folder where video was playing
     if (isTaskRoot) {
       packageManager.getLaunchIntentForPackage(packageName)?.let { mainIntent ->
         mainIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        // Pass the folder path so app can navigate back to it
+        val bucketId = viewModel.currentVideo.value?.bucketId ?: ""
+        if (bucketId.isNotBlank()) {
+          mainIntent.putExtra("navigate_to_folder", bucketId)
+        }
         startActivity(mainIntent)
       }
     }
