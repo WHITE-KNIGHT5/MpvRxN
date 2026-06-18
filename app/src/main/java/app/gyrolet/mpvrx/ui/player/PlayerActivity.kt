@@ -670,6 +670,10 @@ class PlayerActivity :
     val callback =
       object : OnBackPressedCallback(shouldInterceptBackPress()) {
         override fun handleOnBackStarted(backEvent: BackEventCompat) {
+          // Lock orientation immediately when back gesture starts
+          // This prevents the rotation flash caused by orientation difference
+          // between PlayerActivity (landscape) and the underlying activity (portrait)
+          requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
           if (smoothBackAnimation.get()) applyPredictiveBackProgress(backEvent)
         }
 
@@ -678,6 +682,8 @@ class PlayerActivity :
         }
 
         override fun handleOnBackCancelled() {
+          // Gesture was cancelled — restore free orientation
+          requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
           if (smoothBackAnimation.get()) resetPredictiveBackProgress()
         }
 
