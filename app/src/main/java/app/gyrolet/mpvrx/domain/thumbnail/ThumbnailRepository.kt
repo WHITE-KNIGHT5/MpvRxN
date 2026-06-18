@@ -127,6 +127,19 @@ class ThumbnailRepository(
                 }
               }
 
+              // Audio files: extract embedded album art
+              // MKV files: extract frame via MediaMetadataRetriever (Coil may fail on MKV)
+              val ext = video.path.substringAfterLast('.').lowercase()
+              val isAudio = video.mimeType.startsWith("audio/") ||
+                app.gyrolet.mpvrx.utils.storage.FileTypeUtils.AUDIO_EXTENSIONS.contains(ext)
+              val isMkv = ext == "mkv"
+
+              if (isAudio || isMkv) {
+                val localBitmap = extractLocalMediaThumbnail(video, isAudio)
+                  ?: return@withPermit null
+                return@withPermit scaleBitmap(localBitmap, widthPx, heightPx)
+              }
+
               val result =
                 runCatching {
                   imageLoader.execute(buildRequest(video))
@@ -732,6 +745,45 @@ class ThumbnailRepository(
 
   private fun thumbnailModeKey(): String =
     browserPreferences.thumbnailMode.get().thumbnailModeCacheKey(browserPreferences.thumbnailFramePosition.get())
+
+  /**
+   * Extracts thumbnail directly via MediaMetadataRetriever for:
+   * - Audio files → embedded album art (ID3 tags, FLAC art, etc.)
+   * - MKV files → video frame at 10% of duration
+   */
+  private fun extractLocalMediaThumbnail(video: Video, isAudio: Boolean): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+      // Use file path if available, otherwise fall back to URI
+      if (video.path.isNotBlank() && java.io.File(video.path).exists()) {
+        retriever.setDataSource(video.path)
+      } else {
+        retriever.setDataSource(context, video.uri)
+      }
+
+      if (isAudio) {
+        // Extract embedded album art (works for mp3, flac, m4a, ogg, opus, etc.)
+        val pic = retriever.embeddedPicture
+        pic?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+      } else {
+        // Extract video frame at 10% of duration for MKV
+        val durationMs = retriever
+          .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+          ?.toLongOrNull() ?: 0L
+        val timeUs = (durationMs * 1000L * 0.1).toLong()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+          retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 512, 512)
+        } else {
+          retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        }
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("ThumbnailRepository", "extractLocalMediaThumbnail failed: ${video.path}", e)
+      null
+    } finally {
+      retriever.release()
+    }
+  }
 }
 
 
