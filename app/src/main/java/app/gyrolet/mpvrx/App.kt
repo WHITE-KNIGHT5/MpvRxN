@@ -114,7 +114,6 @@ class App : Application(), SingletonImageLoader.Factory {
       .components {
         add(MediaThumbnailFetcher.Factory())
       }
-      .crossfade(true)
       .build()
 
   override fun onCreate() {
