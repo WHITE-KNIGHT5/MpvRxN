@@ -440,6 +440,50 @@ object MediaInfoOps {
   )
 
   /**
+   * Extract thumbnail bitmap for audio files (embedded album art)
+   * and video/MKV files (frame at 10% of duration).
+   *
+   * @param context Android context
+   * @param uri URI of the file
+   * @param isAudio true for audio files (extracts album art), false for video (extracts frame)
+   * @return Bitmap thumbnail or null if not available
+   */
+  suspend fun extractThumbnailBitmap(
+    context: Context,
+    uri: Uri,
+    isAudio: Boolean = false,
+  ): android.graphics.Bitmap? = withContext(Dispatchers.IO) {
+    runCatching {
+      val retriever = android.media.MediaMetadataRetriever()
+      try {
+        retriever.setDataSource(context, uri)
+        if (isAudio) {
+          // Extract embedded album art for audio files (mp3, flac, aac, m4a, etc.)
+          val embeddedPicture = retriever.embeddedPicture
+          if (embeddedPicture != null) {
+            android.graphics.BitmapFactory.decodeByteArray(
+              embeddedPicture, 0, embeddedPicture.size
+            )
+          } else null
+        } else {
+          // Extract video frame for MKV and other video files
+          val durationMs = retriever
+            .extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+            ?.toLongOrNull() ?: 0L
+          // Seek to 10% of duration for a representative frame
+          val timeUs = (durationMs * 1000L * 0.1).toLong()
+          retriever.getFrameAtTime(
+            timeUs,
+            android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+          )
+        }
+      } finally {
+        retriever.release()
+      }
+    }.getOrNull()
+  }
+
+  /**
    * Extract rotation (in degrees) from the video stream. Returns 0 if not specified or on error.
    */
   suspend fun getRotation(
