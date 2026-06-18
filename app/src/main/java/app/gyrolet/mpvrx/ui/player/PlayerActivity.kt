@@ -786,9 +786,9 @@ class PlayerActivity :
       packageManager.getLaunchIntentForPackage(packageName)?.let { mainIntent ->
         mainIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         // Pass the folder path so app can navigate back to it
-        val bucketId = viewModel.currentVideo.value?.bucketId ?: ""
-        if (bucketId.isNotBlank()) {
-          mainIntent.putExtra("navigate_to_folder", bucketId)
+        val folderPath = java.io.File(fileName).parent ?: ""
+        if (folderPath.isNotBlank()) {
+          mainIntent.putExtra("navigate_to_folder", folderPath)
         }
         startActivity(mainIntent)
       }
