@@ -764,7 +764,25 @@ class PlayerActivity :
       return
     }
 
+    // Audio files: automatically keep playing in background when pressing back
+    val isAudio = FileTypeUtils.AUDIO_EXTENSIONS.contains(
+      fileName.substringAfterLast('.').lowercase()
+    )
+    if (isAudio && isReady) {
+      triggerBackgroundPlayback()
+      return
+    }
+
     isUserFinishing = true
+
+    // If opened from notification (no back stack in task), go to main app instead of launcher
+    if (isTaskRoot) {
+      packageManager.getLaunchIntentForPackage(packageName)?.let { mainIntent ->
+        mainIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        startActivity(mainIntent)
+      }
+    }
+
     finish()
   }
 
@@ -1196,6 +1214,13 @@ class PlayerActivity :
     )
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    // Handle configuration changes (like theme/uiMode) without restarting the activity
+    // The manifest declares configChanges="uiMode" so this method is called instead of recreating
+    Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
   }
 
   private fun setLayoutInDisplayCutoutModeIfSupported(shortEdges: Boolean) {
@@ -2297,7 +2322,6 @@ class PlayerActivity :
    */
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
     val isPortrait = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
     viewModel.onOrientationChanged(isPortrait)
     if (isReady) {
