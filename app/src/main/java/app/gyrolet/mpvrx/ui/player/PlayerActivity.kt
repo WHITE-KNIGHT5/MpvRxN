@@ -792,8 +792,7 @@ class PlayerActivity :
         PlayerControls(
           viewModel = viewModel,
           onBackPress = {
-            isUserFinishing = true
-            finish()
+            handleBackPress()
           },
           modifier = Modifier,
         )
