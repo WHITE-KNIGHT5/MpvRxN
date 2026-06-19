@@ -1,5 +1,6 @@
 package app.gyrolet.mpvrx
 
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
@@ -30,6 +31,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -46,6 +48,7 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.ui.player.NavigationAnimStyle
 import app.gyrolet.mpvrx.presentation.Screen
 import app.gyrolet.mpvrx.repository.NetworkRepository
+import app.gyrolet.mpvrx.ui.browser.videolist.VideoListScreen
 import app.gyrolet.mpvrx.utils.update.UpdateDialog
 import app.gyrolet.mpvrx.utils.update.UpdateViewModel
 import app.gyrolet.mpvrx.repository.NetworkLifecycleObserver
@@ -61,6 +64,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
+import java.io.File
 
 private fun screenNavTransition(
   forward: Boolean,
@@ -121,6 +125,11 @@ class MainActivity : ComponentActivity() {
   private val networkRepository by inject<NetworkRepository>()
   private var appliedEdgeToEdgeDarkMode: Boolean? = null
 
+  // Holds a folder path to navigate to when returning from the player
+  // (e.g. pressing back after opening a video from a notification).
+  // Set by handleNavigationIntent(), consumed by Navigator()'s LaunchedEffect.
+  private val pendingFolderNavigation = mutableStateOf<String?>(null)
+
   // Create a coroutine scope tied to the activity lifecycle
   private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -131,8 +140,23 @@ class MainActivity : ComponentActivity() {
     PermissionUtils.handleMediaAccessResult(result.resultCode)
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleNavigationIntent(intent)
+  }
+
+  private fun handleNavigationIntent(intent: Intent) {
+    val folderPath = intent.getStringExtra("navigate_to_folder")
+    if (!folderPath.isNullOrBlank()) {
+      pendingFolderNavigation.value = folderPath
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+
+    handleNavigationIntent(intent)
 
     PermissionUtils.setMediaAccessLauncher(mediaAccessLauncher)
 
@@ -275,6 +299,17 @@ class MainActivity : ComponentActivity() {
       LaunchedEffect(hasNavEntries) {
         if (!hasNavEntries) {
           typedBackstack.add(MainScreen)
+        }
+      }
+
+      // Navigate to the folder we were playing from when returning from the
+      // player (e.g. back press after opening a video from a notification).
+      val pendingFolder = pendingFolderNavigation.value
+      LaunchedEffect(pendingFolder) {
+        if (!pendingFolder.isNullOrBlank()) {
+          val folderName = File(pendingFolder).name.ifBlank { pendingFolder }
+          typedBackstack.add(VideoListScreen(bucketId = pendingFolder, folderName = folderName))
+          pendingFolderNavigation.value = null
         }
       }
 
