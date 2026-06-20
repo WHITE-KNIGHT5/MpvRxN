@@ -19,6 +19,78 @@
 
 ---
 
+# Changelog
+
+All notable changes to MpvRxN are documented here.
+
+---
+
+## [v1.5.0] — June 2026
+
+### ✨ New Features
+
+- **Audio file support** — new toggle in *Settings → Audio → "Audio Player"*. Turn it on to show audio files (MP3, FLAC, AAC, OGG, M4A, OPUS, WAV, WMA, and more) alongside videos in every folder. Off by default — no extra scanning or load until enabled.
+- **Audio thumbnails** — embedded album art now displays for audio files in the folder and video list views.
+- **Better video thumbnails** — MKV, AVI, 10-bit, and other previously inconsistent formats now generate thumbnails more reliably using direct frame extraction.
+- **Background audio playback on back press** — pressing back (system gesture, system button, or the in-player back arrow) while playing audio now keeps it playing in the background instead of stopping. Video playback is unaffected and still stops as expected unless the background-play button is used.
+- **Smart return navigation** — opening a video or audio file from a playback notification and pressing back now returns to the exact folder that was being browsed, instead of the home/launcher screen.
+- **Swipe-to-switch tabs** — swipe between sections with wrap-around (looping from last tab back to first).
+- **Easy Unlock toggle** — lock icons now shown on both sides for quicker unlocking.
+- **Settings search** — scroll-to-section behavior when searching settings, and long-press the title bar to scroll to top.
+- **Folder navigation via notification** — opening the app from a folder-specific notification now navigates directly to that folder.
+
+### 🎨 UI / Player Improvements
+
+- Transparent pill backgrounds for volume, brightness, speed, and seek overlays.
+- Tuned seekbar thickness and thumb height for better visibility and touch targets.
+- Fixed pill overlay position in landscape mode.
+- Removed unwanted ripple/shadow on the play/pause button in landscape.
+- Background-play navigation now correctly returns to the folder screen while keeping the player alive in the background.
+- About screen updated with MpvRxN v1.5.0 branding.
+- **Back animation system overhaul** — new "Smooth back animation" preference:
+  - **ON** — predictive back gesture shows a smooth scale/zoom transition.
+  - **OFF** — instant, no-animation exit.
+  - This toggle now actually works correctly in all exit paths (see Bug Fixes).
+
+### ⚡ Performance
+
+- Folder loading now uses a disk cache (SharedPreferences-backed) for much faster repeat browsing.
+- Batched playback-state database calls via `getAllPlaybackStates()` instead of querying per-item.
+
+### 🐛 Bug Fixes
+
+**Back press & rotation (multiple root causes found and fixed across sessions):**
+- Fixed system back (gesture/button) sometimes bypassing custom back logic entirely. The back handler was being silently disabled during normal playback, so background audio could stop and folder-return logic wouldn't run unless the on-screen back arrow was used specifically.
+- Fixed rotation/black-screen flash that could appear when:
+  - Pressing back (gesture or button) to exit the player
+  - Using the manual "background play" button
+  - System-wide predictive back animation is enabled
+- Fixed a race condition where the player's automatic orientation logic (triggered by video-aspect-ratio updates) could override the screen-lock mid-exit, causing leftover flicker even after the main fix.
+- Fixed the "smooth back animation" OFF setting not actually suppressing the exit transition, due to a call-ordering bug (`overridePendingTransition` was being called too late to take effect).
+- Fixed Picture-in-Picture broadcast intent handling (switched to action-string-based intents with `FLAG_MUTABLE`) which was contributing to the landscape back-press rotation flash — this was a recurring issue across several sessions before the underlying causes were fully isolated.
+
+**Audio & folders:**
+- Fixed audio-only folders not appearing in the folder list when the Audio Player toggle is enabled.
+
+**Theme & playback:**
+- Fixed video playback briefly pausing/restarting when switching the system day/night theme while a video is open.
+
+**Build:**
+- Fixed several build errors (duplicate function declarations, unresolved references) introduced during refactors.
+
+### 🛠 CI/CD
+
+- `release.yml` updated to rename release APKs from `mpvRx-*` to `MpvRxN-*` and strip the `v` prefix from version tags.
+- APK signing configured directly in GitHub Actions.
+
+### 💡 Known Limitations
+
+- A handful of 10-bit/AVI files may still show inconsistent thumbnails on some devices — still being looked into.
+- The day/night playback interruption fix may not fully resolve the issue on every device/Android skin, since part of the underlying video-surface behavior lives in a precompiled library (`mpvlib.aar`) outside this codebase.
+
+
+---
+
 ## Showcase
 
 <div align="center">
