@@ -299,6 +299,13 @@ class PlayerActivity :
 
   private var isReady = false // Single flag: true when video loaded and ready
   private var isUserFinishing = false
+
+  // Set in onConfigurationChanged(); used to detect a transient onPause() that's
+  // really just a side-effect of a system theme/uiMode change overlay (e.g. Quick
+  // Settings dark-mode toggle briefly covering the screen) rather than the user
+  // actually navigating away. Prevents pausing playback for that brief moment,
+  // which otherwise looked like the video "stopping and restarting".
+  private var lastConfigChangeTimeMs = 0L
   private var isManualBackgroundPlayback = false // Track manual background playback trigger
   private var wasInPipMode = false
   private var handledPipDismissal = false
@@ -667,12 +674,21 @@ class PlayerActivity :
 
   private fun setupBackPressHandler() {
     val smoothBackAnimation = appearancePreferences.smoothBackAnimation
+    var orientationBeforeBackGesture: Int? = null
     val callback =
-      object : OnBackPressedCallback(shouldInterceptBackPress()) {
+      // Always enabled: handleBackPress() already branches internally for
+      // sheets/panels/autoPiP/audio-background/normal-exit. Disabling this
+      // callback in the "normal" case (no sheet/panel open) made the system
+      // back gesture/button skip handleBackPress() entirely — bypassing the
+      // audio background-keep-alive logic AND the orientation lock that
+      // prevents the rotation flash. The UI back arrow always worked because
+      // it calls handleBackPress() directly, ignoring isEnabled.
+      object : OnBackPressedCallback(true) {
         override fun handleOnBackStarted(backEvent: BackEventCompat) {
-          // Lock orientation immediately when back gesture starts
-          // This prevents the rotation flash caused by orientation difference
-          // between PlayerActivity (landscape) and the underlying activity (portrait)
+          // Save the current orientation, then lock it so the system can't rotate
+          // the screen during the predictive back preview (this was causing a
+          // rotation flash when the underlying activity has a different orientation).
+          orientationBeforeBackGesture = requestedOrientation
           requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
           if (smoothBackAnimation.get()) applyPredictiveBackProgress(backEvent)
         }
@@ -682,8 +698,9 @@ class PlayerActivity :
         }
 
         override fun handleOnBackCancelled() {
-          // Gesture was cancelled — restore free orientation
-          requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+          // Gesture was cancelled — restore the exact orientation the player had before
+          orientationBeforeBackGesture?.let { requestedOrientation = it }
+          orientationBeforeBackGesture = null
           if (smoothBackAnimation.get()) resetPredictiveBackProgress()
         }
 
@@ -697,24 +714,7 @@ class PlayerActivity :
       this,
       callback,
     )
-
-    lifecycleScope.launch {
-      combine(
-        viewModel.sheetShown,
-        viewModel.panelShown,
-        playerPreferences.autoPiPOnNavigation.changes(),
-      ) { sheetShown, panelShown, autoPipOnNavigation ->
-        sheetShown != Sheets.None || panelShown != Panels.None || autoPipOnNavigation
-      }
-        .distinctUntilChanged()
-        .collect { callback.isEnabled = it }
-    }
   }
-
-  private fun shouldInterceptBackPress(): Boolean =
-    viewModel.sheetShown.value != Sheets.None ||
-      viewModel.panelShown.value != Panels.None ||
-      playerPreferences.autoPiPOnNavigation.get()
 
   private fun applyPredictiveBackProgress(backEvent: BackEventCompat) {
     val root = binding.root
@@ -785,8 +785,19 @@ class PlayerActivity :
     if (isTaskRoot) {
       packageManager.getLaunchIntentForPackage(packageName)?.let { mainIntent ->
         mainIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        // Pass the folder path so app can navigate back to it
-        val folderPath = java.io.File(fileName).parent ?: ""
+        // Pass the folder path so app can navigate back to it.
+        // fileName is just the display name (no path), so use the actual
+        // resolved file path stored in currentPlayableUri instead.
+        val playablePath = currentPlayableUri
+        val isLocalFilePath = playablePath != null &&
+          !playablePath.startsWith("http://") &&
+          !playablePath.startsWith("https://") &&
+          !playablePath.startsWith("/proc/self/fd/")
+        val folderPath = if (isLocalFilePath) {
+          java.io.File(playablePath!!).parent ?: ""
+        } else {
+          ""
+        }
         if (folderPath.isNotBlank()) {
           mainIntent.putExtra("navigate_to_folder", folderPath)
         }
@@ -1040,7 +1051,9 @@ class PlayerActivity :
           isInPictureInPictureMode = isInPip,
         )
 
-      if (!isInPip && shouldPause) {
+      val isRecentConfigChange = (System.currentTimeMillis() - lastConfigChangeTimeMs) < 700L
+
+      if (!isInPip && shouldPause && !isRecentConfigChange) {
         wasPlayingBeforePause = !(viewModel.paused ?: true)
         viewModel.pause()
       } else if (!isInPip && !shouldPause) {
@@ -2325,6 +2338,7 @@ class PlayerActivity :
    */
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
+    lastConfigChangeTimeMs = System.currentTimeMillis()
     Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
     val isPortrait = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
     viewModel.onOrientationChanged(isPortrait)
