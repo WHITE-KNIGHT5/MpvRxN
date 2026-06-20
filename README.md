@@ -36,7 +36,7 @@ All notable changes made in MpvRxN.
 - **Long press folder name to scroll top** — Long press the folder name in any folder screen to scroll back to the top instantly
 - **FAB quick play** — Single tap the FAB button plays the most recently played video. Long press opens the original menu
 - **Easy Unlock toggle** — lock icons now shown on both sides for quicker unlocking with one click.
-Search auto-opens keyboard** — Tapping the search icon automatically opens the keyboard
+- **Search auto-opens keyboard** — Tapping the search icon automatically opens the keyboard now
 - **Background audio playback on back press** — pressing back (system gesture, system button, or the in-player back arrow) while playing audio now keeps it playing in the background instead of stopping. Video playback is unaffected and still stops as expected unless the background-play button is used.
 - **Folder navigation via notification** — opening the app from a folder-specific notification now navigates directly to that folder.
 - **Smart return navigation** — opening a video or audio file from a playback notification and pressing back now returns to the exact folder that was being browsed, instead of the home/launcher screen.
