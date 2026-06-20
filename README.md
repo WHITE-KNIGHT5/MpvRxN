@@ -56,7 +56,10 @@ All notable changes made in MpvRxN.
 ### ⚡ Performance
 
 - Folder loading now uses a disk cache (SharedPreferences-backed) for much faster repeat browsing.
-- Batched playback-state database calls via `getAllPlaybackStates()` instead of querying per-item.
+Folder loading performance** — Videos inside folders now load much faster:
+  - First open: loads from MediaStore and saves to disk cache
+  - Every open after: instant (from cache, even after app restart or device reboot)
+  - Background silent refresh after cache display
 
 ### 🐛 Bug Fixes
 
