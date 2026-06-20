@@ -278,18 +278,32 @@ class MediaPlaybackService :
 
             override fun onSkipToNext() {
               Log.d(TAG, "onSkipToNext called")
-              val duration = MPVLib.getPropertyInt("duration") ?: 0
-              val shouldUsePreciseSeeking = playerPreferences.usePreciseSeeking.get() || duration < 120
-              val seekMode = if (shouldUsePreciseSeeking) "relative+exact" else "relative+keyframes"
-              MPVLib.command("seek", "10", seekMode)
+              // Route through the same mechanism the notification's own Next
+              // button uses, so lock screen / quick settings / Bluetooth
+              // controls all navigate to the next playlist item instead of
+              // seeking ±10s. If there's no playlist, PlayerActivity's
+              // playNext() safely no-ops — the ±10s seek fallback is
+              // intentionally reserved for PiP mode only.
+              startActivity(
+                Intent(this@MediaPlaybackService, PlayerActivity::class.java).apply {
+                  action = ACTION_NOTIFICATION_NEXT
+                  flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+              )
             }
 
             override fun onSkipToPrevious() {
               Log.d(TAG, "onSkipToPrevious called")
-              val duration = MPVLib.getPropertyInt("duration") ?: 0
-              val shouldUsePreciseSeeking = playerPreferences.usePreciseSeeking.get() || duration < 120
-              val seekMode = if (shouldUsePreciseSeeking) "relative+exact" else "relative+keyframes"
-              MPVLib.command("seek", "-10", seekMode)
+              startActivity(
+                Intent(this@MediaPlaybackService, PlayerActivity::class.java).apply {
+                  action = ACTION_NOTIFICATION_PREVIOUS
+                  flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+              )
             }
 
             override fun onSeekTo(pos: Long) {
