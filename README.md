@@ -21,9 +21,9 @@
 
 ---
 
-# Changelog
+# Changelogs
 
-All notable changes made in MpvRxN.
+All notable changes to MpvRxN (a fork of [MpvRx](https://github.com/Riteshp2001/mpvRx)) are documented here.
 
 ---
 
@@ -31,64 +31,85 @@ All notable changes made in MpvRxN.
 
 ### ✨ New Features
 
-- **Audio file support with thumbnails** — new toggle in *Settings → Audio → "Audio Player"*. Turn it on to show audio files (MP3, FLAC, AAC, OGG, M4A, OPUS, WAV, WMA, and more) alongside videos in every folder. Off by default — no extra scanning or load until enabled.
-- **Swipe-to-switch tabs** — swipe between sections with wrap-around (looping from last tab back to first) even when all tabs are hidden (I love UI when tabs are hidden).
-- **Long press folder name to scroll top** — Long press the folder name in any folder screen to scroll back to the top instantly
-- **FAB quick play** — Single tap the FAB button plays the most recently played video. Long press opens the original menu
-- **Easy Unlock toggle** — lock icons now shown on both sides for quicker unlocking with one click.
-- **Long press speed button** → Resets playback speed to your default speed setting
-- **Search auto-opens keyboard** — Tapping the search icon automatically opens the keyboard now
-- **Background audio playback on back press** — pressing back (system gesture, system button, or the in-player back arrow) while playing audio now keeps it playing in the background instead of stopping. Video playback is unaffected and still stops as expected unless the background-play button is used.
-- **Folder navigation via notification** — opening the app from a folder-specific notification now navigates directly to that folder.
-- **Smart return navigation** — opening a video or audio file from a playback notification and pressing back now returns to the exact folder that was being browsed, instead of the home/launcher screen.
+- **Audio file support with thumbnails** — new toggle in *Settings → Audio → "Audio Player"*. Shows MP3, FLAC, AAC,  M4A, OPUS, and more alongside videos in every folder, with embedded album art. Off by default — no extra scanning until enabled.
+- **Background audio on back press** — pressing back (gesture, button, or the in-player arrow) while playing audio now keeps it playing in the background instead of stopping.
+- **Smart return navigation** — opening a file from a notification and pressing back now returns to the exact folder that was being browsed.
+- **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
+- **Swipe to switch tabs** — swipe left/right anywhere on the home screen to switch tabs, even when the navigation bar is completely hidden. Wraps from last tab back to Home; always opens on Home.
+- **Long-press folder/title to scroll top** — long-press the folder name (in any folder screen) or the home title to instantly scroll back to the top.
+- **FAB quick play** — single tap plays the most recently played video; long-press opens the original menu (Open File, Recently Played, Open Link).
+- **Long-press the speed button** to reset playback speed to your default.
+- **Search auto-opens the keyboard** when tapped.
+- **Easy Unlock toggle** — when enabled, a lock icon appears on both sides of the screen while controls are locked; tap either to unlock. Swipe-to-unlock always works regardless of this setting.
+- **Smooth Back Animation toggle(A13+)** (Settings → Appearance → Animations) — choose between a when on: "predictive back animation" when off animation won't happen(Android 13+).
 
-### 🎨 UI / Player Improvements
+### 🎨 UI & Player Improvements
 
-- Transparent pill backgrounds for volume, brightness, speed, and seek overlays.
-- Tuned seekbar thickness and thumb height for better visibility and touch targets.
-- Fixed pill overlay position in landscape mode.
-- Removed unwanted ripple/shadow on the play/pause button in landscape.
-- Background-play navigation now correctly returns to the folder screen while keeping the player alive in the background.
-- About screen updated with MpvRxN v1.5.0 branding.
-- **Back animation system overhaul** — new "Smooth back animation" preference:
-  - **ON** — predictive back gesture shows a smooth scale/zoom transition.
-  - **OFF** — instant, no-animation exit.
-  - This toggle now actually works correctly in all exit paths (see Bug Fixes).
+- **Transparent overlays** — volume, brightness, speed, and seek overlays now have fully transparent backgrounds instead of dark semi-transparent ones, with white text/icons for readability.
+- **Speed pill cleanup** — removed the arrow icon from the speed pill; now shows only the value (e.g. `1.5x`), no border.
+- **Speed panel removed** — the full slider panel that used to appear during swipe-to-change-speed is gone; only the simple pill shows now.
+- **Fixed swipe speed start point** — swiping to change speed now starts from the preset nearest your hold-speed setting, instead of always jumping to 2x.
+- **Seekbar** — consistently thin (no longer changes thickness while scrubbing), smaller thumb for a cleaner look. Portrait layout now puts the seekbar on top with timers shown below.
+- **Landscape play/pause button** — removed background color and ripple effect.
+- **Pill position** — speed/seek pill moved higher on screen in portrait.
 
 ### ⚡ Performance
 
-- Folder loading now uses a disk cache (SharedPreferences-backed) for much faster repeat browsing.
-Folder loading performance** — Videos inside folders now load much faster:
-  - First open: loads from MediaStore and saves to disk cache
-  - Every open after: instant (from cache, even after app restart or device reboot)
-  - Background silent refresh after cache display
+- **Folder loading** — first open loads from MediaStore and caches to disk; every open after is instant (even after an app restart or device reboot), with a silent background refresh to stay up to date.
+- **Camera-folder hang fixed** — playback info is now fetched in a single batched DB call instead of one query per video.
+
+### 🎬 Picture-in-Picture
+
+- **PiP controls fixed** — Play/Pause, Rewind (−10s), and Forward (+10s) buttons inside PiP mode now work correctly.
 
 ### 🐛 Bug Fixes
 
-- **PiP buttons fixed** — Play/Pause, Rewind (−10s), and Forward (+10s) buttons in PiP mode now work correctly
-- Fixed rotation/black-screen flash that could appear when:
-  - Pressing back (gesture or button) to exit the player
-  - Using the manual "background play" button
-  - System-wide predictive back animation is enabled
-- Fixed a race condition where the player's automatic orientation logic (triggered by video-aspect-ratio updates) could override the screen-lock mid-exit, causing leftover flicker even after the main fix.
-- Fixed the "smooth back animation" OFF setting not actually suppressing the exit transition, due to a call-ordering bug (`overridePendingTransition` was being called too late to take effect).
-- Fixed Picture-in-Picture broadcast intent handling (switched to action-string-based intents with `FLAG_MUTABLE`) which was contributing to the landscape back-press rotation flash — this was a recurring issue across several sessions before the underlying causes were fully isolated.
+**Rotation/black-screen flash on exit** — this has been a recurring issue across many sessions, with several genuinely separate root causes found and fixed one at a time:
+- The system back callback was being silently disabled during normal playback, so pressing back via gesture/button could skip custom exit logic entirely (background audio stopping, folder-return not happening) — only the on-screen back arrow worked correctly. Now always enabled.
+- The exit-orientation lock could be overwritten mid-transition by an unrelated async process (video-aspect-ratio orientation logic), undoing the fix intermittently.
+- The "instant exit" animation setting wasn't actually taking effect due to a call-ordering bug (`overridePendingTransition` was called after `finish()`, too late to apply).
+- Android 14+'s own predictive-back preview snapshot (shown during a swipe gesture) is now explicitly suppressed for the player's exit transition.
+- The manual "background play" button had its own separate flash, caused by system UI bars being restored before orientation was locked — fixed by locking orientation first.
+- PiP broadcast handling hardened (separate, explicit broadcast actions with `FLAG_MUTABLE`) instead of relying on default intent matching, which was contributing to flashes during PiP-related transitions.
+- *(Historical first attempt)* The very first fix for this bug — disabling `enableOnBackInvokedCallback` app-wide — masked the issue but also disabled predictive back everywhere. This was later replaced by enabling it specifically for the player with full custom handling above, fixing the underlying causes instead of just hiding the symptom.
 
-**Theme & playback:**
+**Other fixes:**
+- Fixed audio-only folders not appearing in the folder list when Audio Player is enabled.
 - Fixed video playback briefly pausing/restarting when switching the system day/night theme while a video is open.
+- Fixed a brief UI blink/glitch when returning to the home screen after playing a video (database query was blocking the main thread; moved to a background thread).
+- Fixed single-tap on the FAB doing nothing (an event-consumption bug in the long-press detector was swallowing the tap).
+- Various build errors from recent refactors (duplicate declarations, unresolved references, wrong import packages).
 
-**Build:**
-- Fixed several build errors (duplicate function declarations, unresolved references) introduced during refactors.
+### 🔧 Build & Identity
 
-### 🛠 CI/CD
-
-- `release.yml` updated to rename release APKs from `mpvRx-*` to `MpvRxN-*` and strip the `v` prefix from version tags.
-- APK signing configured directly in GitHub Actions.
+- **Package name**: `app.gyrolet.mpvrxn` — installs alongside the original MpvRx without conflict.
+- **Launcher name**: `MpvRx` (unchanged) · **Home screen title**: `MpvRxN`
+- **APK signing** automated via GitHub Actions — every build is signed and installs without warnings.
+- **Builds**: `arm64-v8a` and `armeabi-v7a` only (x86/x86_64 removed).
+- **APK naming**: `MpvRxN-arm64-v8a.apk` / `MpvRxN-armeabi-v7a.apk`.
+- **About screen**: shows `MpvRxN`, version, author, and fork GitHub URL.
 
 ### 💡 Known Limitations
 
-- Predictive back animation can still cause rotation flash issue(very fast black screen)
+- With the **system-wide Android "Predictive Back Animations" developer setting** enabled, a very brief black-screen flash can still occasionally occur on exit. Disabling that system setting avoids it entirely; this is separate from the in-app "Smooth Back Animation" toggle.
+- A few 10-bit/AVI files may still show inconsistent thumbnails on some devices.
+- The day/night theme-switch playback interruption fix may not fully resolve the issue on every device/Android skin, since part of the relevant surface-handling code lives in a precompiled library (`mpvlib.aar`) outside this fork's source.
+
 ---
+
+## Earlier Fork Changes (pre-v1.5.0)
+
+These are the original modifications made when first forking from upstream MpvRx, before the v1.5.0 development cycle above.
+
+- Removed dark backgrounds from all gesture overlays (volume, brightness, speed, seek) — replaced with transparent backgrounds and white text.
+- Removed the FastForward arrow icon from the speed pill.
+- Removed the full speed-slider panel during swipe gestures in favor of the simple pill.
+- Fixed swipe-speed always starting at 2x regardless of hold-speed setting.
+- FAB quick-play (single tap to play most recent video, long-press for menu) introduced for the first time.
+- Attempted to fix for the landscape rotation-flash bug (`enableOnBackInvokedCallback="false"` app-wide).
+- Changed `applicationId` to `app.gyrolet.mpvrxn` to allow installing alongside the original app.
+- Set up GitHub Actions CI/CD with automatic APK signing (keystore secrets) and trimmed build to `arm64-v8a`/`armeabi-v7a` only.
+
 
 ## Showcase
 
