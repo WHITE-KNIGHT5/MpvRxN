@@ -60,8 +60,8 @@ All notable changes made in MpvRxN.
 
 ### 🐛 Bug Fixes
 
-**PiP buttons fixed** — Play/Pause, Rewind (−10s), and Forward (+10s) buttons in PiP mode now work correctly
-**Back press & rotation (multiple root causes found and fixed across sessions):**
+- **PiP buttons fixed** — Play/Pause, Rewind (−10s), and Forward (+10s) buttons in PiP mode now work correctly
+- **Back press & rotation** (multiple root causes found and fixed across sessions)
 - Fixed system back (gesture/button) sometimes bypassing custom back logic entirely. The back handler was being silently disabled during normal playback, so background audio could stop and folder-return logic wouldn't run unless the on-screen back arrow was used specifically.
 - Fixed rotation/black-screen flash that could appear when:
   - Pressing back (gesture or button) to exit the player
