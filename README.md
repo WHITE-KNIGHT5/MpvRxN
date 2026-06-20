@@ -8,7 +8,7 @@
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
-- <i>MpvRxN: Fully vibe-coded app with Claude AI </>
+- <i>**MpvRxN:** Fully vibe-coded app with Claude AI </>
 
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
