@@ -32,16 +32,15 @@ All notable changes to MpvRxN (a fork of [MpvRx](https://github.com/Riteshp2001/
 ### ✨ New Features
 
 - **Audio file support with thumbnails** — new toggle in *Settings → Audio → "Audio Player"*. Shows MP3, FLAC, AAC,  M4A, OPUS, and more alongside videos in every folder, with embedded album art. Off by default — no extra scanning until enabled.
-- **Background audio on back press** — pressing back (gesture, button, or the in-player arrow) while playing audio now keeps it playing in the background instead of stopping.
-- **Smart return navigation** — opening a file from a notification and pressing back now returns to the exact folder that was being browsed.
-- **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
 - **Swipe to switch tabs** — swipe left/right anywhere on the home screen to switch tabs, even when the navigation bar is completely hidden. Wraps from last tab back to Home; always opens on Home.
 - **Long-press folder/title to scroll top** — long-press the folder name (in any folder screen) or the home title to instantly scroll back to the top.
 - **FAB quick play** — single tap plays the most recently played video; long-press opens the original menu (Open File, Recently Played, Open Link).
 - **Long-press the speed button** to reset playback speed to your default.
-- **Search auto-opens the keyboard** when tapped.
 - **Easy Unlock toggle** — when enabled, a lock icon appears on both sides of the screen while controls are locked; tap either to unlock. Swipe-to-unlock always works regardless of this setting.
+- **Search auto-opens the keyboard** when tapped.
 - **Smooth Back Animation toggle(A13+)** (Settings → Appearance → Animations) — choose between a when on: "predictive back animation" when off animation won't happen(Android 13+).
+**Smart return navigation** — opening a file from a notification and pressing back now returns to the exact folder that was being browsed.
+- **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
 
 ### 🎨 UI & Player Improvements
 
