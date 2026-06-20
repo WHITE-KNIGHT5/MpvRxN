@@ -47,7 +47,7 @@ All notable changes to MpvRxN are documented here.
 - **Transparent overlays** — volume, brightness, speed, and seek overlays now have fully transparent backgrounds instead of dark semi-transparent ones, with white text/icons for readability.
 - **Speed pill cleanup** — removed the arrow icon from the speed pill; now shows only the value (e.g. `1.5x`), no border.
 - **Speed panel removed** — the full slider panel that used to appear during swipe-to-change-speed is gone; only the simple pill shows now.
-- **Fixed swipe speed start point** — swiping to change speed now starts from the preset nearest your hold-speed setting, instead of always jumping to 2x.
+- **Changed swipe speed start point** — swiping to change speed now starts from the preset nearest your hold-speed setting, instead of always jumping to 2x.
 - **Seekbar** — consistently thin (no longer changes thickness while scrubbing), smaller thumb for a cleaner look. Portrait layout now puts the seekbar on top with timers shown below.
 - **Landscape play/pause button** — removed background color and ripple effect.
 - **Pill position** — speed/seek pill moved higher on screen in portrait.
