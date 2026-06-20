@@ -86,9 +86,6 @@ All notable changes to MpvRxN are documented here.
 ### 💡 Known Limitations
 
 - A handful of 10-bit/AVI files may still show inconsistent thumbnails on some devices — still being looked into.
-- The day/night playback interruption fix may not fully resolve the issue on every device/Android skin, since part of the underlying video-surface behavior lives in a precompiled library (`mpvlib.aar`) outside this codebase.
-
-
 ---
 
 ## Showcase
