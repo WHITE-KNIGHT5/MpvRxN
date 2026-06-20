@@ -33,7 +33,6 @@ All notable changes made in MpvRxN.
 
 - **Audio file support** — new toggle in *Settings → Audio → "Audio Player"*. Turn it on to show audio files (MP3, FLAC, AAC, OGG, M4A, OPUS, WAV, WMA, and more) alongside videos in every folder. Off by default — no extra scanning or load until enabled.
 - **Audio thumbnails** — embedded album art now displays for audio files in the folder and video list views.
-- **Better video thumbnails** — MKV, AVI, 10-bit, and other previously inconsistent formats now generate thumbnails more reliably using direct frame extraction.
 - **Background audio playback on back press** — pressing back (system gesture, system button, or the in-player back arrow) while playing audio now keeps it playing in the background instead of stopping. Video playback is unaffected and still stops as expected unless the background-play button is used.
 - **Smart return navigation** — opening a video or audio file from a playback notification and pressing back now returns to the exact folder that was being browsed, instead of the home/launcher screen.
 - **Swipe-to-switch tabs** — swipe between sections with wrap-around (looping from last tab back to first).
@@ -83,8 +82,6 @@ All notable changes made in MpvRxN.
 - APK signing configured directly in GitHub Actions.
 
 ### 💡 Known Limitations
-
-- A handful of 10-bit/AVI files may still show inconsistent thumbnails on some devices — still being looked into.
 
 - Predictive back animation can still cause rotation flash issue(very fast black screen)
 ---
