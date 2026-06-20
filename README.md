@@ -39,7 +39,7 @@ All notable changes to MpvRxN are documented here.
 - **Easy Unlock toggle** — when enabled, a lock icon appears on both sides of the screen while controls are locked; tap either to unlock. Swipe-to-unlock always works regardless of this setting.
 - **Search auto-opens the keyboard** when tapped.
 - **Smooth Back Animation toggle(A13+)** (Settings → Appearance → Animations) — choose between a when on: "predictive back animation" when off animation won't happen(Android 13+).
-**Smart return navigation** — opening a file from a notification and pressing back now returns to the exact folder that was being browsed.
+**Background play doesn't exist app** — Now when we press background play button the player doesn't go back to launcher instead it goes back where the file is being play.
 - **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
 
 ### 🎨 UI & Player Improvements
@@ -70,14 +70,7 @@ All notable changes to MpvRxN are documented here.
 - Android 14+'s own predictive-back preview snapshot (shown during a swipe gesture) is now explicitly suppressed for the player's exit transition.
 - The manual "background play" button had its own separate flash, caused by system UI bars being restored before orientation was locked — fixed by locking orientation first.
 - PiP broadcast handling hardened (separate, explicit broadcast actions with `FLAG_MUTABLE`) instead of relying on default intent matching, which was contributing to flashes during PiP-related transitions.
-- *(Historical first attempt)* The very first fix for this bug — disabling `enableOnBackInvokedCallback` app-wide — masked the issue but also disabled predictive back everywhere. This was later replaced by enabling it specifically for the player with full custom handling above, fixing the underlying causes instead of just hiding the symptom.
-
-**Other fixes:**
-- Fixed audio-only folders not appearing in the folder list when Audio Player is enabled.
-- Fixed video playback briefly pausing/restarting when switching the system day/night theme while a video is open.
-- Fixed a brief UI blink/glitch when returning to the home screen after playing a video (database query was blocking the main thread; moved to a background thread).
-- Fixed single-tap on the FAB doing nothing (an event-consumption bug in the long-press detector was swallowing the tap).
-- Various build errors from recent refactors (duplicate declarations, unresolved references, wrong import packages).
+- *(Historical first attempt)* The very first fix for this bug — disabling `enableOnBackInvokedCallback` app-wide — masked the issue but also disabled predictive back everywhere. This was later replaced by enabling it specifically for the player with full custom handling above, fixing the underlying causes instead of just hiding the symptom. 
 
 ### 🔧 Build & Identity
 
@@ -103,7 +96,7 @@ These are the original modifications made when first forking from upstream MpvRx
 - Removed dark backgrounds from all gesture overlays (volume, brightness, speed, seek) — replaced with transparent backgrounds and white text.
 - Removed the FastForward arrow icon from the speed pill.
 - Removed the full speed-slider panel during swipe gestures in favor of the simple pill.
-- Fixed swipe-speed always starting at 2x regardless of hold-speed setting.
+- Changed swipe-speed always starting at 2x regardless of hold-speed setting.
 - FAB quick-play (single tap to play most recent video, long-press for menu) introduced for the first time.
 - Attempted to fix for the landscape rotation-flash bug (`enableOnBackInvokedCallback="false"` app-wide).
 - Changed `applicationId` to `app.gyrolet.mpvrxn` to allow installing alongside the original app.
