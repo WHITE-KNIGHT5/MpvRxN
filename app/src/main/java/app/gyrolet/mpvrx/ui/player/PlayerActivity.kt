@@ -487,6 +487,18 @@ class PlayerActivity :
     setContentView(binding.root)
     setupSystemBarsAutoHide()
 
+    // The system's own predictive-back preview (enabled via
+    // enableOnBackInvokedCallback in the manifest) renders a live snapshot of
+    // the underlying activity during the gesture. If that activity has a
+    // different orientation (e.g. portrait MainActivity behind a landscape
+    // video), the preview can briefly show/flash that orientation regardless
+    // of our own requestedOrientation lock, since this is composited at the
+    // WindowManager level outside the Activity. Overriding the close
+    // transition to a plain no-op suppresses that system-level preview.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+      overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+    }
+
     val isNotificationReentry = isNotificationReentryIntent(intent)
     if (!isNotificationReentry) {
       releaseDetachedBackgroundPlaybackBeforeFreshLaunch()
@@ -1094,10 +1106,10 @@ class PlayerActivity :
       Log.e(TAG, "Error during finish", e)
     }
 
-    super.finish()
     if (!appearancePreferences.smoothBackAnimation.get()) {
       overridePendingTransition(0, 0)
     }
+    super.finish()
   }
 
   override fun finishAndRemoveTask() {
@@ -3559,6 +3571,12 @@ class PlayerActivity :
    * to the correct orientation, starting with landscape as fallback.
    */
   private fun setOrientation() {
+    // Skip — we're already exiting and have deliberately locked orientation
+    // for a clean transition. Letting this run mid-exit can race with that
+    // lock (e.g. if the player reports a stale/transitional aspect ratio
+    // during teardown) and re-trigger a visible rotation flash.
+    if (isUserFinishing) return
+
     val orientationPref = playerPreferences.orientation.get()
 
     requestedOrientation =
@@ -4022,6 +4040,11 @@ class PlayerActivity :
   }
 
   private fun finishForManualBackgroundPlayback() {
+    // Lock orientation FIRST — before any UI/surface changes below — so the
+    // screen can't rotate/flash while system bars reappear and the video
+    // surface is torn down for background playback.
+    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+
     // Restore system UI before going to background
     restoreSystemUI()
 
