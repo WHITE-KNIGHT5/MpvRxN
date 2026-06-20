@@ -23,7 +23,7 @@
 
 # Changelogs
 
-All notable changes to MpvRxN (a fork of [MpvRx](https://github.com/Riteshp2001/mpvRx)) are documented here.
+All notable changes to MpvRxN are documented here.
 
 ---
 
