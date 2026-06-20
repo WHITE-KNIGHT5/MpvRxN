@@ -21,7 +21,7 @@
 
 # Changelog
 
-All notable changes to MpvRxN are documented here.
+All notable changes made in MpvRxN.
 
 ---
 
@@ -36,7 +36,7 @@ All notable changes to MpvRxN are documented here.
 - **Smart return navigation** — opening a video or audio file from a playback notification and pressing back now returns to the exact folder that was being browsed, instead of the home/launcher screen.
 - **Swipe-to-switch tabs** — swipe between sections with wrap-around (looping from last tab back to first).
 - **Easy Unlock toggle** — lock icons now shown on both sides for quicker unlocking.
-- **Settings search** — scroll-to-section behavior when searching settings, and long-press the title bar to scroll to top.
+- **Settings search** — scroll-to-section behavior when searching settings, and long-press the folder name/title bar to scroll to top.
 - **Folder navigation via notification** — opening the app from a folder-specific notification now navigates directly to that folder.
 
 ### 🎨 UI / Player Improvements
@@ -69,9 +69,6 @@ All notable changes to MpvRxN are documented here.
 - Fixed the "smooth back animation" OFF setting not actually suppressing the exit transition, due to a call-ordering bug (`overridePendingTransition` was being called too late to take effect).
 - Fixed Picture-in-Picture broadcast intent handling (switched to action-string-based intents with `FLAG_MUTABLE`) which was contributing to the landscape back-press rotation flash — this was a recurring issue across several sessions before the underlying causes were fully isolated.
 
-**Audio & folders:**
-- Fixed audio-only folders not appearing in the folder list when the Audio Player toggle is enabled.
-
 **Theme & playback:**
 - Fixed video playback briefly pausing/restarting when switching the system day/night theme while a video is open.
 
@@ -86,6 +83,8 @@ All notable changes to MpvRxN are documented here.
 ### 💡 Known Limitations
 
 - A handful of 10-bit/AVI files may still show inconsistent thumbnails on some devices — still being looked into.
+
+- Predictive back animation can still cause rotation flash issue(very fast black screen)
 ---
 
 ## Showcase
