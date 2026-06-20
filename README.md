@@ -5,6 +5,7 @@
 </p>
 
 <h1 align="center">MpvRxN</h1>
+<i>Fully vibe-coded app with Claude AI </>
 
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
