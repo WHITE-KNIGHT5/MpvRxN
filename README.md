@@ -33,7 +33,7 @@ All notable changes made in MpvRxN.
 
 - **Audio file support** — new toggle in *Settings → Audio → "Audio Player"*. Turn it on to show audio files (MP3, FLAC, AAC, OGG, M4A, OPUS, WAV, WMA, and more) alongside videos in every folder. Off by default — no extra scanning or load until enabled.
 - **Swipe-to-switch tabs** — swipe between sections with wrap-around (looping from last tab back to first) even when all tabs are hidden (I love UI when tabs are hidden).
-- **Long-press to go top** — Long-press the folder name/title bar to scroll to top of a folder.
+- **Long press folder name to scroll top** — Long press the folder name in any folder screen to scroll back to the top instantly
 - **Audio thumbnails** — embedded album art now displays for audio files in the folder and video list views.
 - **Easy Unlock toggle** — lock icons now shown on both sides for quicker unlocking with one click.
 - **Background audio playback on back press** — pressing back (system gesture, system button, or the in-player back arrow) while playing audio now keeps it playing in the background instead of stopping. Video playback is unaffected and still stops as expected unless the background-play button is used.
