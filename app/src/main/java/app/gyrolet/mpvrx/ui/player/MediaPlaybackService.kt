@@ -28,6 +28,7 @@ import androidx.media.session.MediaButtonReceiver
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.database.entities.PlaybackStateEntity
 import app.gyrolet.mpvrx.domain.playbackstate.repository.PlaybackStateRepository
+import app.gyrolet.mpvrx.utils.storage.FileTypeUtils
 import app.gyrolet.mpvrx.preferences.AdvancedPreferences
 import app.gyrolet.mpvrx.preferences.BrowserPreferences
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
@@ -145,6 +146,7 @@ class MediaPlaybackService :
     try {
       MPVLib.addObserver(this)
       MPVLib.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+      MPVLib.observeProperty("eof-reached", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
       MPVLib.observeProperty("media-title", MPVLib.MpvFormat.MPV_FORMAT_STRING)
       MPVLib.observeProperty("metadata/artist", MPVLib.MpvFormat.MPV_FORMAT_STRING)
       MPVLib.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
@@ -683,6 +685,28 @@ class MediaPlaybackService :
         updateMediaSession()
         schedulePlaybackStateSave(force = true)
       }
+    }
+
+    if (property == "eof-reached" && value) {
+      handleBackgroundEndOfFile()
+    }
+  }
+
+  /**
+   * Advances to the next playlist item when the current file ends, but
+   * ONLY for audio. Video intentionally does NOT autoplay-next while in
+   * background/PlayerActivity-less mode — that's handled separately by
+   * PlayerActivity itself while it's alive in the foreground.
+   */
+  private fun handleBackgroundEndOfFile() {
+    if (!playerPreferences.autoplayNextVideo.get()) return
+    val currentUri = localPlaylist.getOrNull(localPlaylistIndex) ?: mediaUri ?: return
+    val extension = currentUri.substringAfterLast('.').substringBefore('?').lowercase()
+    val isAudio = FileTypeUtils.AUDIO_EXTENSIONS.contains(extension)
+    if (!isAudio) return
+
+    if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
+      Log.d(TAG, "Background audio EOF: no next item to advance to")
     }
   }
 

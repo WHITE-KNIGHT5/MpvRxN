@@ -4686,12 +4686,31 @@ class PlayerActivity :
     launchSource: String,
   ): List<File> {
     val parentFolder = currentFile.parentFile ?: return emptyList()
+
+    // Match siblings of the SAME media type as the current file, so audio
+    // playback gets a proper audio playlist (previously only video files
+    // were ever considered, leaving audio with an empty playlist — which
+    // broke Next/Previous everywhere, including the notification panel).
+    val isCurrentFileAudio = FileTypeUtils.AUDIO_EXTENSIONS.contains(
+      currentFile.extension.lowercase(),
+    )
+
     val directVideoFiles =
       parentFolder.listFiles { file ->
         file.isFile &&
-          FileTypeUtils.isVideoFile(file) &&
-          !file.name.startsWith(".")
+          !file.name.startsWith(".") &&
+          if (isCurrentFileAudio) {
+            FileTypeUtils.AUDIO_EXTENSIONS.contains(file.extension.lowercase())
+          } else {
+            FileTypeUtils.isVideoFile(file)
+          }
       }?.toList().orEmpty()
+
+    if (isCurrentFileAudio) {
+      // Audio playlists don't need the video-library sort/launch-source logic
+      // below (that path queries MediaFileRepository's video table).
+      return naturalSortFiles(directVideoFiles)
+    }
 
     if (!isVideoListLaunchSource(launchSource)) {
       return naturalSortFiles(directVideoFiles)
