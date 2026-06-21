@@ -1230,6 +1230,7 @@ class PlayerActivity :
     runCatching {
       setupWindowFlags()
       setupSystemUI()
+      pipHelper.registerPipReceiver()
 
       // Restore video if it was disabled for background playback
       enableVideoAfterBackground()

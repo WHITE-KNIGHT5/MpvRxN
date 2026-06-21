@@ -326,6 +326,12 @@ class MediaPlaybackService :
 
             override fun onSkipToNext() {
               Log.d(TAG, "onSkipToNext called")
+              // TEMPORARY DIAGNOSTIC — remove once the sync issue is confirmed fixed.
+              android.widget.Toast.makeText(
+                this@MediaPlaybackService,
+                "Skip Next: playlist=${localPlaylist.size}, index=$localPlaylistIndex",
+                android.widget.Toast.LENGTH_LONG,
+              ).show()
               if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
                 // No playlist (single file) — nothing to skip to. Per design,
                 // the ±10s seek fallback is reserved for PiP mode only, not
@@ -336,6 +342,11 @@ class MediaPlaybackService :
 
             override fun onSkipToPrevious() {
               Log.d(TAG, "onSkipToPrevious called")
+              android.widget.Toast.makeText(
+                this@MediaPlaybackService,
+                "Skip Prev: playlist=${localPlaylist.size}, index=$localPlaylistIndex",
+                android.widget.Toast.LENGTH_LONG,
+              ).show()
               if (!skipToPlaylistIndex(localPlaylistIndex - 1)) {
                 Log.d(TAG, "No previous playlist item available")
               }
