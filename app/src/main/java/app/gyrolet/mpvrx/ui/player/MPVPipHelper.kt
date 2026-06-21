@@ -48,6 +48,12 @@ class MPVPipHelper(
           context: Context?,
           intent: Intent?,
         ) {
+          // TEMPORARY DIAGNOSTIC — remove once confirmed working.
+          android.widget.Toast.makeText(
+            activity,
+            "PiP receiver got: ${intent?.action}",
+            android.widget.Toast.LENGTH_LONG,
+          ).show()
           val duration = MPVLib.getPropertyInt("duration") ?: 0
           val shouldUsePreciseSeeking = playerPreferences.usePreciseSeeking.get() || duration < 120
           val seekMode = if (shouldUsePreciseSeeking) "relative+exact" else "relative+keyframes"

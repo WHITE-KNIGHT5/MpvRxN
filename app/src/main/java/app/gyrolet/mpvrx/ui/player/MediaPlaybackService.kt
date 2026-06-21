@@ -188,6 +188,15 @@ class MediaPlaybackService :
       if (!uri.isNullOrBlank()) {
         mediaUri = uri
       }
+
+      // Reliable playlist sync — read directly from intent extras rather
+      // than depending solely on the racy bindService() callback.
+      val playlistExtra = it.getStringArrayListExtra("playlist")
+      if (playlistExtra != null) {
+        localPlaylist = playlistExtra
+        localPlaylistIndex = it.getIntExtra("playlist_index", localPlaylistIndex)
+        Log.d(TAG, "Playlist synced from intent: ${localPlaylist.size} items, index=$localPlaylistIndex")
+      }
     }
 
     // Fallback: Read current state from MPV if not provided via intent

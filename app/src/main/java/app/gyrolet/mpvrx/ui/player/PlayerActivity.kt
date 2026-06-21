@@ -3959,6 +3959,14 @@ class PlayerActivity :
       putExtra("media_artist", artist)
       putExtra("media_uri", currentPlayableUri)
       putExtra("media_identifier", mediaIdentifier)
+      // Pass the playlist directly via intent extras rather than relying
+      // solely on the bindService()/onServiceConnected() callback — if this
+      // Activity finishes (e.g. audio backgrounding via back press) before
+      // that async connection completes, Android cancels it and
+      // onServiceConnected() never fires, leaving the service's playlist
+      // permanently empty. onStartCommand() is reliable regardless.
+      putStringArrayListExtra("playlist", ArrayList(playlist.map { it.toString() }))
+      putExtra("playlist_index", playlistIndex)
     }
     
     try {
