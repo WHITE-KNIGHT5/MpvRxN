@@ -232,9 +232,17 @@ class PlayerActivity :
   private var pendingBackgroundPlaybackStart = false
 
   /**
-   * Playlist of URIs for sequential playback
+   * Playlist of URIs for sequential playback.
+   * Custom setter keeps MediaPlaybackService's local copy in sync, so it can
+   * perform real previous/next navigation (lock screen, quick settings,
+   * Bluetooth) entirely on its own, without ever needing to bring this
+   * Activity back to the foreground.
    */
   internal var playlist: List<Uri> = emptyList()
+    set(value) {
+      field = value
+      syncPlaylistToService()
+    }
 
   /**
    * Database metadata for playlist items, if the current playlist was loaded from Room.
@@ -257,6 +265,10 @@ class PlayerActivity :
    * Current index in the playlist
    */
   internal var playlistIndex: Int = 0
+    set(value) {
+      field = value
+      syncPlaylistToService()
+    }
 
   /**
    * Shuffled order of playlist indices (when shuffle is enabled)
@@ -544,8 +556,16 @@ class PlayerActivity :
       }
     }
 
-    // Only auto-generate playlist from folder if playlist mode is enabled and no playlist_id
-    if (playlist.isEmpty() && playlistId == null && playerPreferences.playlistMode.get()) {
+    // Auto-generate playlist from folder if either:
+    // - Playlist Mode is enabled (also controls Next/Previous button visibility), OR
+    // - Autoplay Next Video is enabled (needs a playlist to advance through,
+    //   independently of whether the manual nav buttons are shown)
+    // This keeps "show nav buttons" and "autoplay next" as fully independent settings.
+    if (
+      playlist.isEmpty() &&
+      playlistId == null &&
+      (playerPreferences.playlistMode.get() || playerPreferences.autoplayNextVideo.get())
+    ) {
       val path = parsePathFromIntent(intent)
       if (path != null) {
         generatePlaylistFromFolder(path)
@@ -3869,6 +3889,7 @@ class PlayerActivity :
         serviceBound = true
         Log.d(TAG, "Service connected")
         syncBackgroundPlaybackService(updateThumbnail = false)
+        syncPlaylistToService()
       }
 
       override fun onServiceDisconnected(name: ComponentName?) {
@@ -4183,6 +4204,19 @@ class PlayerActivity :
   /**
    * Play the previous video in the playlist
    */
+  /**
+   * Pushes the current playlist + index into MediaPlaybackService, so it can
+   * perform real previous/next navigation entirely on its own (lock screen,
+   * quick settings, Bluetooth) — without ever needing to bring this Activity
+   * back to the foreground just to skip a track.
+   */
+  private fun syncPlaylistToService() {
+    mediaPlaybackService?.updatePlaylistState(
+      playlist.map { it.toString() },
+      playlistIndex,
+    )
+  }
+
   fun playPrevious() {
     if (playlist.isEmpty()) return
 

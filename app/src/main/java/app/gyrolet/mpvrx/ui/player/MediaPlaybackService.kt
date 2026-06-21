@@ -101,6 +101,14 @@ class MediaPlaybackService :
   private var mediaArtist = ""
   private var mediaUri: String? = null
   private var paused = false
+
+  // Local copy of the playlist, pushed in by PlayerActivity whenever it
+  // changes (see PlayerActivity.syncPlaylistToService()). Lets this service
+  // navigate to the next/previous file entirely on its own — from the
+  // notification, lock screen, quick settings, or Bluetooth — without ever
+  // needing to bring the player UI back to the foreground just to skip a track.
+  private var localPlaylist: List<String> = emptyList()
+  private var localPlaylistIndex: Int = -1
   private var lastNotificationUpdateTime = 0L
   private var lastPlaybackStateSaveTime = 0L
   private val notificationUpdateIntervalMs = 1000L
@@ -256,6 +264,44 @@ class MediaPlaybackService :
     }
   }
 
+  /**
+   * Called by PlayerActivity whenever the playlist or current index changes,
+   * so this service always has an up-to-date local copy to navigate with —
+   * even after the Activity itself has finished (e.g. background audio
+   * playback after pressing back).
+   */
+  fun updatePlaylistState(
+    playlist: List<String>,
+    currentIndex: Int,
+  ) {
+    localPlaylist = playlist
+    localPlaylistIndex = currentIndex
+  }
+
+  /**
+   * Loads the playlist item at [targetIndex] directly via MPV, without ever
+   * touching/foregrounding PlayerActivity. Returns false if there's no
+   * playlist or the index is out of range (single-file playback) — in which
+   * case the caller does nothing further, per design.
+   */
+  private fun skipToPlaylistIndex(targetIndex: Int): Boolean {
+    if (localPlaylist.isEmpty() || targetIndex < 0 || targetIndex >= localPlaylist.size) {
+      return false
+    }
+
+    val targetUri = localPlaylist[targetIndex]
+    runCatching {
+      MPVLib.command("loadfile", targetUri, "replace")
+      localPlaylistIndex = targetIndex
+      // Title/artist will refresh automatically once MPV reports the new
+      // media-title for the loaded file (see eventProperty(String, String)).
+    }.onFailure { error ->
+      Log.e(TAG, "Error loading playlist item at index $targetIndex", error)
+      return false
+    }
+    return true
+  }
+
   private fun setupMediaSession() {
     mediaSession =
       MediaSessionCompat(this, TAG).apply {
@@ -278,32 +324,19 @@ class MediaPlaybackService :
 
             override fun onSkipToNext() {
               Log.d(TAG, "onSkipToNext called")
-              // Route through the same mechanism the notification's own Next
-              // button uses, so lock screen / quick settings / Bluetooth
-              // controls all navigate to the next playlist item instead of
-              // seeking ±10s. If there's no playlist, PlayerActivity's
-              // playNext() safely no-ops — the ±10s seek fallback is
-              // intentionally reserved for PiP mode only.
-              startActivity(
-                Intent(this@MediaPlaybackService, PlayerActivity::class.java).apply {
-                  action = ACTION_NOTIFICATION_NEXT
-                  flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP
-                },
-              )
+              if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
+                // No playlist (single file) — nothing to skip to. Per design,
+                // the ±10s seek fallback is reserved for PiP mode only, not
+                // background/lock-screen controls.
+                Log.d(TAG, "No next playlist item available")
+              }
             }
 
             override fun onSkipToPrevious() {
               Log.d(TAG, "onSkipToPrevious called")
-              startActivity(
-                Intent(this@MediaPlaybackService, PlayerActivity::class.java).apply {
-                  action = ACTION_NOTIFICATION_PREVIOUS
-                  flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP
-                },
-              )
+              if (!skipToPlaylistIndex(localPlaylistIndex - 1)) {
+                Log.d(TAG, "No previous playlist item available")
+              }
             }
 
             override fun onSeekTo(pos: Long) {
@@ -426,7 +459,7 @@ class MediaPlaybackService :
 
   private fun prevAction() = NotificationCompat.Action(
     android.R.drawable.ic_media_previous, "Previous",
-    buildTransportIntent(ACTION_NOTIFICATION_PREVIOUS, 1001),
+    MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS),
   )
 
   private fun playPauseAction() = NotificationCompat.Action(
@@ -437,7 +470,7 @@ class MediaPlaybackService :
 
   private fun nextAction() = NotificationCompat.Action(
     android.R.drawable.ic_media_next, "Next",
-    buildTransportIntent(ACTION_NOTIFICATION_NEXT, 1002),
+    MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT),
   )
 
   private fun chapterContentText(): String {
