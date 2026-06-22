@@ -304,8 +304,16 @@ class MediaPlaybackService :
     runCatching {
       MPVLib.command("loadfile", targetUri, "replace")
       localPlaylistIndex = targetIndex
-      // Title/artist will refresh automatically once MPV reports the new
-      // media-title for the loaded file (see eventProperty(String, String)).
+      // Keep mediaUri in sync immediately — this is what "tap notification
+      // to reopen player" reads, so without this it would reopen showing
+      // the original file instead of whatever is now actually playing.
+      mediaUri = targetUri
+      // Show a reasonable title right away from the filename, instead of
+      // waiting on MPV's async "media-title" event (which wasn't reliably
+      // updating the notification after a skip). MPV will still refresh
+      // this with the real embedded title once it finishes loading.
+      mediaTitle = targetUri.substringAfterLast('/').substringBeforeLast('.')
+      serviceScope.launch { updateMediaSession() }
     }.onFailure { error ->
       Log.e(TAG, "Error loading playlist item at index $targetIndex", error)
       return false
