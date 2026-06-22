@@ -4728,9 +4728,12 @@ class PlayerActivity :
       }?.toList().orEmpty()
 
     if (isCurrentFileAudio) {
-      // Audio playlists don't need the video-library sort/launch-source logic
-      // below (that path queries MediaFileRepository's video table).
-      return naturalSortFiles(directVideoFiles)
+      // Use the SAME sort function video siblings use — it correctly
+      // honors the user's actual sort preference (Title/Date/Size/Duration),
+      // not just filename order. Using a hardcoded title-only sort here
+      // previously caused next/previous and autoplay to jump to an
+      // unrelated file whenever the user's preference wasn't "Title".
+      return sortSiblingFilesForVideoList(directVideoFiles)
     }
 
     if (!isVideoListLaunchSource(launchSource)) {
