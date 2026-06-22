@@ -335,12 +335,6 @@ class MediaPlaybackService :
 
             override fun onSkipToNext() {
               Log.d(TAG, "onSkipToNext called")
-              // TEMPORARY DIAGNOSTIC — remove once the sync issue is confirmed fixed.
-              android.widget.Toast.makeText(
-                this@MediaPlaybackService,
-                "Skip Next: playlist=${localPlaylist.size}, index=$localPlaylistIndex",
-                android.widget.Toast.LENGTH_LONG,
-              ).show()
               if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
                 // No playlist (single file) — nothing to skip to. Per design,
                 // the ±10s seek fallback is reserved for PiP mode only, not
@@ -351,11 +345,6 @@ class MediaPlaybackService :
 
             override fun onSkipToPrevious() {
               Log.d(TAG, "onSkipToPrevious called")
-              android.widget.Toast.makeText(
-                this@MediaPlaybackService,
-                "Skip Prev: playlist=${localPlaylist.size}, index=$localPlaylistIndex",
-                android.widget.Toast.LENGTH_LONG,
-              ).show()
               if (!skipToPlaylistIndex(localPlaylistIndex - 1)) {
                 Log.d(TAG, "No previous playlist item available")
               }
@@ -713,20 +702,15 @@ class MediaPlaybackService :
   }
 
   /**
-   * Advances to the next playlist item when the current file ends, but
-   * ONLY for audio. Video intentionally does NOT autoplay-next while in
-   * background/PlayerActivity-less mode — that's handled separately by
-   * PlayerActivity itself while it's alive in the foreground.
+   * Advances to the next playlist item when the current file ends, while
+   * playing in background (no Activity alive to run its own EOF handler).
+   * Applies to both audio and video, per user preference.
    */
   private fun handleBackgroundEndOfFile() {
     if (!playerPreferences.autoplayNextVideo.get()) return
-    val currentUri = localPlaylist.getOrNull(localPlaylistIndex) ?: mediaUri ?: return
-    val extension = currentUri.substringAfterLast('.').substringBefore('?').lowercase()
-    val isAudio = FileTypeUtils.AUDIO_EXTENSIONS.contains(extension)
-    if (!isAudio) return
 
     if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
-      Log.d(TAG, "Background audio EOF: no next item to advance to")
+      Log.d(TAG, "Background EOF: no next item to advance to")
     }
   }
 

@@ -3598,6 +3598,18 @@ class PlayerActivity :
     // during teardown) and re-trigger a visible rotation flash.
     if (isUserFinishing) return
 
+    // Audio files should always play in portrait — there's no real video to
+    // size the screen around. Without this, embedded album art (which MPV
+    // treats as a video track with its own aspect ratio) could make the
+    // aspect-based logic below lock to landscape for some audio files.
+    val isAudioFile = FileTypeUtils.AUDIO_EXTENSIONS.contains(
+      fileName.substringAfterLast('.').lowercase()
+    )
+    if (isAudioFile) {
+      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+      return
+    }
+
     val orientationPref = playerPreferences.orientation.get()
 
     requestedOrientation =
