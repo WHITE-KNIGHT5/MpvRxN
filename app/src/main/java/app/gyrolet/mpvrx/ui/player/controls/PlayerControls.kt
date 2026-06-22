@@ -115,6 +115,7 @@ import app.gyrolet.mpvrx.preferences.AppearancePreferences
 import app.gyrolet.mpvrx.preferences.AudioPreferences
 import app.gyrolet.mpvrx.preferences.PlayerButton
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
+import app.gyrolet.mpvrx.utils.storage.FileTypeUtils
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.preferences.preference.deleteAndGet
 import app.gyrolet.mpvrx.preferences.preference.plusAssign
@@ -250,6 +251,13 @@ fun PlayerControls(
   val currentSkippableSegment by viewModel.currentSkippableSegment.collectAsState()
   val showSkipChipAuto by viewModel.showSkipChipAuto.collectAsState()
   val playlistMode by playerPreferences.playlistMode.collectAsState()
+  // Audio files should always show Previous/Next, regardless of the
+  // Playlist Mode setting — that setting only controls video behavior.
+  val currentMediaPath by MPVLib.propString["path"].collectAsState()
+  val isAudioFile = remember(currentMediaPath) {
+    val extension = currentMediaPath?.substringAfterLast('.')?.substringBefore('?')?.lowercase() ?: ""
+    FileTypeUtils.AUDIO_EXTENSIONS.contains(extension)
+  }
     val haptic = LocalHapticFeedback.current
 
     val customButtons by viewModel.customButtons.collectAsState()
@@ -1122,7 +1130,7 @@ fun PlayerControls(
                   1.0f to Color.Transparent,
                 )
 
-              if (playlistMode && viewModel.hasPlaylistSupport()) {
+              if ((playlistMode || isAudioFile) && viewModel.hasPlaylistSupport()) {
                 androidx.compose.foundation.layout.Row(
                   horizontalArrangement = Arrangement.spacedBy(24.dp),
                   verticalAlignment = Alignment.CenterVertically,
