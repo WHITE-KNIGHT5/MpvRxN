@@ -4365,9 +4365,12 @@ class PlayerActivity :
     viewModel.onVideoLoadStarted()
 
     lifecycleScope.launch(Dispatchers.Default) {
-      MPVLib.setPropertyString("vid", "no")
       MPVLib.command("loadfile", playableUri)
     }
+
+    // Keep notification/background service synced immediately after file change
+    syncPlaylistToService()
+    syncBackgroundPlaybackService(updateThumbnail = true)
 
     // Update media title (this will trigger UI update)
     val shouldForceTitle =

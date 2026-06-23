@@ -42,6 +42,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -730,14 +731,24 @@ class MediaPlaybackService :
     if (!playerPreferences.autoplayNextVideo.get()) return
 
     val now = System.currentTimeMillis()
-    if (now - lastEofHandledTimeMs < 2000L) {
-      Log.d(TAG, "Ignoring duplicate eof-reached within debounce window")
+    if (now - lastEofHandledTimeMs < 3000L) {
+      Log.d(TAG, "Ignoring duplicate eof-reached")
       return
     }
     lastEofHandledTimeMs = now
 
-    if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
-      Log.d(TAG, "Background EOF: no next item to advance to")
+    serviceScope.launch {
+      delay(1000)
+
+      val currentPath =
+        runCatching { MPVLib.getPropertyString("path") }
+          .getOrNull()
+
+      if (currentPath == mediaUri) {
+        if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
+          Log.d(TAG, "Background EOF: no next item to advance to")
+        }
+      }
     }
   }
 
