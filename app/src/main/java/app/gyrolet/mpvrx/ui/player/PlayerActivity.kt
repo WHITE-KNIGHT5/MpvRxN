@@ -845,6 +845,7 @@ class PlayerActivity :
       MpvrxTheme {
         PlayerControls(
           viewModel = viewModel,
+          currentFileName = fileName,
           onBackPress = {
             handleBackPress()
           },

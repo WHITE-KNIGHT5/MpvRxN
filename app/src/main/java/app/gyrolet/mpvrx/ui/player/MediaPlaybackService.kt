@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -312,7 +313,12 @@ class MediaPlaybackService :
       // waiting on MPV's async "media-title" event (which wasn't reliably
       // updating the notification after a skip). MPV will still refresh
       // this with the real embedded title once it finishes loading.
-      mediaTitle = targetUri.substringAfterLast('/').substringBeforeLast('.')
+      // Uri.decode() turns "%20" etc. back into readable spaces/characters.
+      mediaTitle = Uri.decode(targetUri.substringAfterLast('/').substringBeforeLast('.'))
+      // Clear the previous file's artist rather than leaving it showing —
+      // it was staying stuck on the first file's artist after skipping,
+      // since metadata/artist doesn't reliably re-fire for every file.
+      mediaArtist = ""
       serviceScope.launch { updateMediaSession() }
     }.onFailure { error ->
       Log.e(TAG, "Error loading playlist item at index $targetIndex", error)
