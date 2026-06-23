@@ -227,8 +227,10 @@ class VideoListViewModel(
           previousVideoCount = retryVideoList.size
 
           _videos.value = retryVideoList
-          videoCache[bucketId] = retryVideoList
-          saveToDiskCache(bucketId, retryVideoList)
+          if (retryVideoList.isNotEmpty()) {
+            videoCache[bucketId] = retryVideoList
+            saveToDiskCache(bucketId, retryVideoList)
+          }
           loadPlaybackInfo(retryVideoList)
         } else {
           _videos.value = videoList
@@ -366,6 +368,7 @@ class VideoListViewModel(
 
   // Save videos to disk cache
   private fun saveToDiskCache(bucketId: String, videos: List<Video>) {
+    if (videos.isEmpty()) return
     try {
       val prefs = getApplication<Application>().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
       val array = org.json.JSONArray()
