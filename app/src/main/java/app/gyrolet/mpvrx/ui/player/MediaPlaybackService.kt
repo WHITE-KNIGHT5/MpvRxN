@@ -111,6 +111,12 @@ class MediaPlaybackService :
   // needing to bring the player UI back to the foreground just to skip a track.
   private var localPlaylist: List<String> = emptyList()
   private var localPlaylistIndex: Int = -1
+
+  // Debounce for eof-reached: MPV can briefly report eof-reached=true more
+  // than once during a single file transition (e.g. while the next file is
+  // still loading), which previously caused autoplay to advance two files
+  // ahead instead of one.
+  private var lastEofHandledTimeMs = 0L
   private var lastNotificationUpdateTime = 0L
   private var lastPlaybackStateSaveTime = 0L
   private val notificationUpdateIntervalMs = 1000L
@@ -722,6 +728,13 @@ class MediaPlaybackService :
    */
   private fun handleBackgroundEndOfFile() {
     if (!playerPreferences.autoplayNextVideo.get()) return
+
+    val now = System.currentTimeMillis()
+    if (now - lastEofHandledTimeMs < 2000L) {
+      Log.d(TAG, "Ignoring duplicate eof-reached within debounce window")
+      return
+    }
+    lastEofHandledTimeMs = now
 
     if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
       Log.d(TAG, "Background EOF: no next item to advance to")
