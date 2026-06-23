@@ -134,10 +134,51 @@ object MediaFileRepository : KoinComponent {
   ): List<Video> =
     withContext(Dispatchers.IO) {
       try {
-        VideoScanUtils.getVideosInFolder(context, bucketId, currentScanOptions(), forceFileSystemCheck)
+        val videos =
+          VideoScanUtils.getVideosInFolder(
+            context,
+            bucketId,
+            currentScanOptions(),
+            forceFileSystemCheck,
+          )
+
+        if (videos.isNotEmpty() || forceFileSystemCheck) {
+          return@withContext videos
+        }
+
+        // Transient MediaStore/cache races can occasionally return an empty
+        // list even though files are present. Retry once with a forced
+        // filesystem verification pass before reporting the folder as empty.
+        val retryVideos =
+          VideoScanUtils.getVideosInFolder(
+            context,
+            bucketId,
+            currentScanOptions(),
+            forceFileSystemCheck = true,
+          )
+
+        if (retryVideos.isNotEmpty()) {
+          Log.d(TAG, "Recovered empty folder scan for bucket $bucketId via filesystem retry")
+        }
+
+        retryVideos
       } catch (e: Exception) {
         Log.e(TAG, "Error getting videos for bucket $bucketId", e)
-        emptyList()
+        if (forceFileSystemCheck) {
+          emptyList()
+        } else {
+          runCatching {
+            VideoScanUtils.getVideosInFolder(
+              context,
+              bucketId,
+              currentScanOptions(),
+              forceFileSystemCheck = true,
+            )
+          }.getOrElse { retryError ->
+            Log.e(TAG, "Filesystem retry failed for bucket $bucketId", retryError)
+            emptyList()
+          }
+        }
       }
     }
 
