@@ -308,7 +308,19 @@ class MainActivity : ComponentActivity() {
       LaunchedEffect(pendingFolder) {
         if (!pendingFolder.isNullOrBlank()) {
           val folderName = File(pendingFolder).name.ifBlank { pendingFolder }
-          typedBackstack.add(VideoListScreen(bucketId = pendingFolder, folderName = folderName))
+          // Avoid pushing a duplicate entry if we're already on this exact
+          // folder — doing so unconditionally created a second, freshly-
+          // loading instance stacked on top of the existing one, which is
+          // what caused the "empty folder, press back to see it populated"
+          // symptom (the new instance hadn't loaded yet; the old one
+          // underneath already had). bucketId/folderName are private, so
+          // structural equality (data class ==) is used instead of direct
+          // property access.
+          val candidate = VideoListScreen(bucketId = pendingFolder, folderName = folderName)
+          val alreadyOnThisFolder = typedBackstack.lastOrNull() == candidate
+          if (!alreadyOnThisFolder) {
+            typedBackstack.add(candidate)
+          }
           pendingFolderNavigation.value = null
         }
       }
