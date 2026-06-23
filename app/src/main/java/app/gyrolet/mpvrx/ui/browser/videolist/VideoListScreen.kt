@@ -347,6 +347,7 @@ data class VideoListScreen(
                 ),
               onClick = {
                 coroutineScope.launch {
+                  kotlinx.coroutines.yield()
                   val folderPath = sortedVideosWithInfo.firstOrNull()?.video?.path?.let { File(it).parent } ?: ""
                   val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 100)
                   val lastPlayedInFolder = recentlyPlayedVideos.firstOrNull {
@@ -384,10 +385,15 @@ data class VideoListScreen(
             if (selectionManager.isInSelectionMode) {
               selectionManager.toggle(video)
             } else {
-              // Always use MediaUtils.playFile which lets PlayerActivity auto-generate playlist
-              // This avoids TransactionTooLargeException from passing large playlists
-              // PlayerActivity will auto-generate playlist from folder if playlistMode is enabled
-              MediaUtils.playFile(video, context, "video_list")
+              // Defer the launch by one coroutine turn so the tap ripple/press
+              // state can render immediately before starting the player.
+              coroutineScope.launch {
+                kotlinx.coroutines.yield()
+                // Always use MediaUtils.playFile which lets PlayerActivity auto-generate playlist
+                // This avoids TransactionTooLargeException from passing large playlists
+                // PlayerActivity will auto-generate playlist from folder if playlistMode is enabled
+                MediaUtils.playFile(video, context, "video_list")
+              }
             }
           },
           onVideoLongClick = { video -> selectionManager.handleLongClick(video) },
