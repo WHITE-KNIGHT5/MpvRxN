@@ -186,6 +186,7 @@ fun <T> playerControlsEnterAnimationSpec(): FiniteAnimationSpec<T> =
 fun PlayerControls(
   viewModel: PlayerViewModel,
   onBackPress: () -> Unit,
+  currentFileName: String = "",
   modifier: Modifier = Modifier,
 ) {
   val spacing = MaterialTheme.spacing
@@ -253,9 +254,8 @@ fun PlayerControls(
   val playlistMode by playerPreferences.playlistMode.collectAsState()
   // Audio files should always show Previous/Next, regardless of the
   // Playlist Mode setting — that setting only controls video behavior.
-  val currentMediaPath by MPVLib.propString["path"].collectAsState()
-  val isAudioFile = remember(currentMediaPath) {
-    val extension = currentMediaPath?.substringAfterLast('.')?.substringBefore('?')?.lowercase() ?: ""
+  val isAudioFile = remember(currentFileName) {
+    val extension = currentFileName.substringAfterLast('.').lowercase()
     FileTypeUtils.AUDIO_EXTENSIONS.contains(extension)
   }
     val haptic = LocalHapticFeedback.current
