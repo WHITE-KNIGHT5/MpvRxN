@@ -19,6 +19,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.net.Uri
+import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -2499,8 +2500,13 @@ class PlayerActivity :
           playlistIndex < playlist.size - 1
         }
 
-        // Check if autoplay next video is enabled
-        val autoplayEnabled = playerPreferences.autoplayNextVideo.get()
+        // Check if autoplay next video is enabled — audio always
+        // auto-advances regardless of this setting, matching the permanent
+        // audio Next/Previous buttons behavior.
+        val isCurrentFileAudio = FileTypeUtils.AUDIO_EXTENSIONS.contains(
+          fileName.substringAfterLast('.').lowercase()
+        )
+        val autoplayEnabled = playerPreferences.autoplayNextVideo.get() || isCurrentFileAudio
 
         if (hasNextItem && (autoplayEnabled || viewModel.shouldRepeatPlaylist())) {
           // Play next item in playlist
@@ -3972,6 +3978,46 @@ class PlayerActivity :
     }
   }
 
+  /**
+   * Reads the artist tag for the now-playing notification. Tries mpv's own
+   * property first (instant if already parsed), but mpv parses metadata
+   * asynchronously — if this gets called right as backgrounding starts
+   * (e.g. user locks the screen within the first second of playback), mpv
+   * may not have it yet, so this returns blank. That blank then shows as
+   * "Playing" in the notification, and a moment later mpv's own update
+   * corrects it to the real artist — causing the visible slide animation.
+   *
+   * Falls back to reading the tag directly via MediaMetadataRetriever
+   * (metadata-only, no frame decode — fast) for local/content files, which
+   * doesn't depend on mpv's internal timing at all and gets it right the
+   * first time instead of correcting it after the fact.
+   */
+  private fun getReliableArtist(): String {
+    val mpvArtist = runCatching { MPVLib.getPropertyString("metadata/artist") }.getOrNull() ?: ""
+    if (mpvArtist.isNotBlank()) return mpvArtist
+
+    val uriString = currentPlayableUri ?: return ""
+    if (uriString.startsWith("http://") || uriString.startsWith("https://")) {
+      // Skip the fallback for network streams — don't want to introduce a
+      // new delay waiting on a network read just for a notification subtitle.
+      return ""
+    }
+
+    return runCatching {
+      val retriever = MediaMetadataRetriever()
+      try {
+        if (uriString.startsWith("content://")) {
+          retriever.setDataSource(this, Uri.parse(uriString))
+        } else {
+          retriever.setDataSource(uriString)
+        }
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+      } finally {
+        retriever.release()
+      }
+    }.getOrNull() ?: ""
+  }
+
   private fun startBackgroundPlaybackInternal(bindToActivity: Boolean): Boolean {
     if (fileName.isBlank() || !isReady) {
       Log.w(TAG, "Cannot start background playback: video not ready")
@@ -3990,7 +4036,7 @@ class PlayerActivity :
     MediaPlaybackService.createNotificationChannel(this)
     
     // Get media info before starting service
-    val artist = runCatching { MPVLib.getPropertyString("metadata/artist") }.getOrNull() ?: ""
+    val artist = getReliableArtist()
     
     // Pass media info via intent extras
     val intent = Intent(this, MediaPlaybackService::class.java).apply {
@@ -4421,7 +4467,7 @@ class PlayerActivity :
   private fun syncBackgroundPlaybackService(updateThumbnail: Boolean) {
     val service = mediaPlaybackService ?: return
     val title = getPreferredCurrentTitle().ifBlank { fileName.ifBlank { "Unknown Video" } }
-    val artist = runCatching { MPVLib.getPropertyString("metadata/artist") }.getOrNull() ?: ""
+    val artist = getReliableArtist()
     val thumbnailKey = buildBackgroundThumbnailKey()
     val cachedThumbnail =
       if (thumbnailKey == lastBackgroundThumbnailKey) {
@@ -4735,6 +4781,13 @@ class PlayerActivity :
   ): List<File> {
     val parentFolder = currentFile.parentFile ?: return emptyList()
 
+    val cacheKey = "${parentFolder.absolutePath}|$launchSource"
+    val cached = autoPlaylistCache[cacheKey]
+    val now = System.currentTimeMillis()
+    if (cached != null && now - cached.timestampMs < AUTO_PLAYLIST_CACHE_TTL_MS) {
+      return cached.files
+    }
+
     // Match siblings of the SAME media type as the current file, so audio
     // playback gets a proper audio playlist (previously only video files
     // were ever considered, leaving audio with an empty playlist — which
@@ -4756,40 +4809,40 @@ class PlayerActivity :
 
     // Opened outside the in-app list (file manager etc.) — no visible
     // sorted list to match, so just use the filesystem sort.
-    if (isCurrentFileAudio && !isVideoListLaunchSource(launchSource)) {
-      return sortSiblingFilesForVideoList(directVideoFiles)
-    }
-
-    if (!isCurrentFileAudio && !isVideoListLaunchSource(launchSource)) {
-      return naturalSortFiles(directVideoFiles)
-    }
-
-    // Opened from the in-app list (video OR audio) — fetch the SAME
-    // MediaStore-backed, same-sorted order the visible list uses, so the
-    // generated playlist's index always matches what's on screen. Audio
-    // previously skipped this and used a raw filesystem sort instead,
-    // which could land on a totally different position than what the
-    // list showed (e.g. track #1 on screen ≠ index actually used for
-    // next/previous navigation).
-
-    val currentFilePath = normalizePlaylistFilePath(currentFile.absolutePath)
-    val fileByPath = directVideoFiles.associateBy { normalizePlaylistFilePath(it.absolutePath) }
-    val sortedFromLibrary =
-      app.gyrolet.mpvrx.repository.MediaFileRepository
-        .getVideosInFolder(context, normalizePlaylistFilePath(parentFolder.absolutePath))
-        .let { videos ->
-          app.gyrolet.mpvrx.utils.sort.SortUtils.sortVideos(
-            videos,
-            browserPreferences.videoSortType.get(),
-            browserPreferences.videoSortOrder.get(),
-          )
-        }.mapNotNull { video -> fileByPath[normalizePlaylistFilePath(video.path)] }
-
-    return if (sortedFromLibrary.any { normalizePlaylistFilePath(it.absolutePath) == currentFilePath }) {
-      sortedFromLibrary
-    } else {
+    val result: List<File> = if (isCurrentFileAudio && !isVideoListLaunchSource(launchSource)) {
       sortSiblingFilesForVideoList(directVideoFiles)
+    } else if (!isCurrentFileAudio && !isVideoListLaunchSource(launchSource)) {
+      naturalSortFiles(directVideoFiles)
+    } else {
+      // Opened from the in-app list (video OR audio) — fetch the SAME
+      // MediaStore-backed, same-sorted order the visible list uses, so the
+      // generated playlist's index always matches what's on screen. Audio
+      // previously skipped this and used a raw filesystem sort instead,
+      // which could land on a totally different position than what the
+      // list showed (e.g. track #1 on screen ≠ index actually used for
+      // next/previous navigation).
+      val currentFilePath = normalizePlaylistFilePath(currentFile.absolutePath)
+      val fileByPath = directVideoFiles.associateBy { normalizePlaylistFilePath(it.absolutePath) }
+      val sortedFromLibrary =
+        app.gyrolet.mpvrx.repository.MediaFileRepository
+          .getVideosInFolder(context, normalizePlaylistFilePath(parentFolder.absolutePath))
+          .let { videos ->
+            app.gyrolet.mpvrx.utils.sort.SortUtils.sortVideos(
+              videos,
+              browserPreferences.videoSortType.get(),
+              browserPreferences.videoSortOrder.get(),
+            )
+          }.mapNotNull { video -> fileByPath[normalizePlaylistFilePath(video.path)] }
+
+      if (sortedFromLibrary.any { normalizePlaylistFilePath(it.absolutePath) == currentFilePath }) {
+        sortedFromLibrary
+      } else {
+        sortSiblingFilesForVideoList(directVideoFiles)
+      }
     }
+
+    autoPlaylistCache[cacheKey] = AutoPlaylistCacheEntry(result, System.currentTimeMillis())
+    return result
   }
 
   private suspend fun loadPlaylistById(
@@ -4867,6 +4920,14 @@ class PlayerActivity :
 
   private fun generatePlaylistFromFolder(currentPath: String) {
     lifecycleScope.launch(Dispatchers.IO) {
+      // Even though this runs on a background thread, starting it the
+      // instant a file opens still competes for CPU/disk with mpv's own
+      // startup (codec init, first-frame decode, audio buffer priming) on
+      // many devices — that contention is what actually causes the
+      // "stuck for a second" feeling, not coroutine scheduling. Giving mpv
+      // a clear run first, then doing this work, fixes that without
+      // needing a precise "playback truly started" hook.
+      delay(1500)
       runCatching {
         val currentFile = File(currentPath)
         if (!currentFile.exists()) return@runCatching
@@ -5039,6 +5100,21 @@ class PlayerActivity :
   }
 
   companion object {
+    /**
+     * Cache of the last resolved auto-playlist sibling list per folder, so opening
+     * another file from the same folder shortly after doesn't redo the full
+     * MediaStore query + sort — this was a real source of the "feels stuck for
+     * a second" delay when opening files, since the rescan competed with MPV's
+     * own startup for IO/CPU. Cleared after a short TTL so folder changes
+     * (new/deleted files) are still picked up reasonably quickly.
+     */
+    private const val AUTO_PLAYLIST_CACHE_TTL_MS = 8000L
+    private data class AutoPlaylistCacheEntry(
+      val files: List<File>,
+      val timestampMs: Long,
+    )
+    private val autoPlaylistCache = HashMap<String, AutoPlaylistCacheEntry>()
+
     /**
      * Intent action used to return playback result data to the calling activity.
      */
