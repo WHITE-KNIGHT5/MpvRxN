@@ -769,16 +769,29 @@ class ThumbnailRepository(
         val pic = retriever.embeddedPicture
         pic?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
       } else {
-        // Extract video frame at 10% of duration for MKV
+        // Extract video frame at 10% of duration
         val durationMs = retriever
           .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
           ?.toLongOrNull() ?: 0L
         val timeUs = (durationMs * 1000L * 0.1).toLong()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-          retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 512, 512)
-        } else {
-          retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-        }
+
+        fun frameAt(time: Long, option: Int): Bitmap? = runCatching {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            retriever.getScaledFrameAtTime(time, option, 512, 512)
+          } else {
+            retriever.getFrameAtTime(time, option)
+          }
+        }.getOrNull()
+
+        // OPTION_CLOSEST_SYNC only seeks to the nearest keyframe — fails on
+        // many HEVC/AV1 files with sparse keyframes or device decoder quirks,
+        // even though mpv plays them fine. OPTION_CLOSEST forces an exact
+        // decode to the target time instead — slower, far more reliable.
+        // Falls back to frame 0 as a last resort for files that only
+        // decode cleanly from the very start.
+        frameAt(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+          ?: frameAt(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+          ?: frameAt(0L, MediaMetadataRetriever.OPTION_CLOSEST)
       }
     } catch (e: Exception) {
       android.util.Log.w("ThumbnailRepository", "extractLocalMediaThumbnail failed: ${video.path}", e)
