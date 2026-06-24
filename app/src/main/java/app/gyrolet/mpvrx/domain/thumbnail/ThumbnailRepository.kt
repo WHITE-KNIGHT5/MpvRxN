@@ -139,8 +139,21 @@ class ThumbnailRepository(
 
               if (isAudio || isLocalVideo) {
                 val localBitmap = extractLocalMediaThumbnail(video, isAudio)
-                  ?: return@withPermit null
-                return@withPermit scaleBitmap(localBitmap, widthPx, heightPx)
+                if (localBitmap != null) {
+                  return@withPermit scaleBitmap(localBitmap, widthPx, heightPx)
+                }
+                if (isAudio) {
+                  return@withPermit null
+                }
+                // MediaMetadataRetriever failed at every fallback tier — likely
+                // a device with no usable HEVC/AV1 decoder exposed to that API.
+                // Try Coil as a true last resort before giving up; it may use a
+                // different underlying decode path.
+                val coilResult =
+                  runCatching {
+                    imageLoader.execute(buildRequest(video))
+                  }.getOrNull() as? SuccessResult ?: return@withPermit null
+                return@withPermit scaleBitmap(coilResult.image.toBitmap(), widthPx, heightPx)
               }
 
               val result =
