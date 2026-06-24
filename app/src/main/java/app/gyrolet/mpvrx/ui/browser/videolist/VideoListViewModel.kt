@@ -195,21 +195,33 @@ class VideoListViewModel(
           _videosWereDeletedOrMoved.value = false
         }
 
-        // Update previous count
-        previousVideoCount = videoList.size
-
         if (videoList.isEmpty()) {
           Log.d(tag, "No videos found for bucket $bucketId - attempting media rescan")
-          triggerMediaScan()
-          delay(1000)
-          var retryVideoList = MediaFileRepository.getVideosInFolder(
-            getApplication(),
-            bucketId,
-            forceFileSystemCheck = true,
-          )
+
+          // MediaStore indexing is asynchronous — a single 1-second retry
+          // wasn't enough for large folders (100+ files), which is what
+          // caused the folder to intermittently appear empty even though
+          // files genuinely existed on disk. Retry a few times with
+          // increasing delays before trusting an empty result at all.
+          var retryVideoList = videoList
+          val retryDelaysMs = listOf(800L, 1500L, 3000L)
+          for (delayMs in retryDelaysMs) {
+            triggerMediaScan()
+            delay(delayMs)
+            retryVideoList = MediaFileRepository.getVideosInFolder(
+              getApplication(),
+              bucketId,
+              forceFileSystemCheck = true,
+            ).filter { video ->
+              video.mimeType.isBlank() ||
+                video.mimeType.startsWith("video/") ||
+                (browserPreferences.showAudioFiles.get() && video.mimeType.startsWith("audio/"))
+            }
+            if (retryVideoList.isNotEmpty()) break
+          }
 
           // Enrich retry list if needed
-          if (MetadataRetrieval.isVideoMetadataNeeded(browserPreferences)) {
+          if (MetadataRetrieval.isVideoMetadataNeeded(browserPreferences) && retryVideoList.isNotEmpty()) {
             retryVideoList = MetadataRetrieval.enrichVideosIfNeeded(
               context = getApplication(),
               videos = retryVideoList,
@@ -218,21 +230,34 @@ class VideoListViewModel(
             )
           }
 
-          // Update count after retry
-          if (previousVideoCount > 0 && retryVideoList.isEmpty()) {
-            _videosWereDeletedOrMoved.value = true
-          } else if (retryVideoList.isNotEmpty()) {
-            _videosWereDeletedOrMoved.value = false
-          }
-          previousVideoCount = retryVideoList.size
-
-          _videos.value = retryVideoList
           if (retryVideoList.isNotEmpty()) {
+            _videosWereDeletedOrMoved.value = false
+            previousVideoCount = retryVideoList.size
+            _videos.value = retryVideoList
             videoCache[bucketId] = retryVideoList
             saveToDiskCache(bucketId, retryVideoList)
+            loadPlaybackInfo(retryVideoList)
+          } else if (forceFileSystemCheck) {
+            // This was an explicit hard refresh (pull-to-refresh) and the
+            // folder is still genuinely empty after all retries — trust it,
+            // this is a real deletion, not a transient MediaStore lag.
+            if (previousVideoCount > 0) {
+              _videosWereDeletedOrMoved.value = true
+            }
+            previousVideoCount = 0
+            _videos.value = emptyList()
+            videoCache[bucketId] = emptyList()
+            saveToDiskCache(bucketId, emptyList())
+            loadPlaybackInfo(emptyList())
+          } else {
+            // Automatic/background load came back empty after retries.
+            // Never overwrite a previously-shown file list with an empty
+            // one here — keep whatever's already on screen and stop
+            // quietly. A manual pull-to-refresh will re-check from scratch.
+            Log.d(tag, "Folder appears empty on background check — keeping last known list, not overwriting")
           }
-          loadPlaybackInfo(retryVideoList)
         } else {
+          previousVideoCount = videoList.size
           _videos.value = videoList
           videoCache[bucketId] = videoList
           saveToDiskCache(bucketId, videoList)
@@ -240,8 +265,7 @@ class VideoListViewModel(
         }
       } catch (e: Exception) {
         Log.e(tag, "Error loading videos for bucket $bucketId", e)
-        _videos.value = emptyList()
-        _videosWithPlaybackInfo.value = emptyList()
+        // Don't clear an already-displayed list on a transient error either.
       } finally {
         _isLoading.value = false
       }
@@ -368,7 +392,6 @@ class VideoListViewModel(
 
   // Save videos to disk cache
   private fun saveToDiskCache(bucketId: String, videos: List<Video>) {
-    if (videos.isEmpty()) return
     try {
       val prefs = getApplication<Application>().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
       val array = org.json.JSONArray()
