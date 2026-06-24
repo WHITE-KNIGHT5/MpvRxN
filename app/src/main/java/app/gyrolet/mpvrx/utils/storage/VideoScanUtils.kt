@@ -82,7 +82,7 @@ object VideoScanUtils : KoinComponent {
         if (
             folder.exists() &&
             folder.canRead() &&
-            shouldRunFilesystemVideoCheck(forceFileSystemCheck, videosMap.size)
+            shouldRunFilesystemVideoCheck(forceFileSystemCheck, videosMap.size, folder, options.includeAudioFiles)
         ) {
             scanVideosFromFileSystem(context, folder, videosMap, options, noMediaPathFilter)
         }
