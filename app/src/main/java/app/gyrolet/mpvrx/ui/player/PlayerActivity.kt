@@ -556,19 +556,30 @@ class PlayerActivity :
       }
     }
 
-    // Auto-generate playlist from folder if either:
+    // Auto-generate playlist from folder if any of:
     // - Playlist Mode is enabled (also controls Next/Previous button visibility), OR
     // - Autoplay Next Video is enabled (needs a playlist to advance through,
-    //   independently of whether the manual nav buttons are shown)
-    // This keeps "show nav buttons" and "autoplay next" as fully independent settings.
+    //   independently of whether the manual nav buttons are shown), OR
+    // - The current file is audio (Next/Previous must always work for audio,
+    //   regardless of Playlist Mode/Autoplay — PlayerControls.kt already shows
+    //   the buttons for audio unconditionally; this builds the playlist those
+    //   buttons actually depend on, via viewModel.hasPlaylistSupport())
+    val autoPlaylistPath = parsePathFromIntent(intent)
+    val isCurrentFileAudioForPlaylist =
+      autoPlaylistPath != null &&
+        FileTypeUtils.AUDIO_EXTENSIONS.contains(File(autoPlaylistPath).extension.lowercase())
+
     if (
       playlist.isEmpty() &&
       playlistId == null &&
-      (playerPreferences.playlistMode.get() || playerPreferences.autoplayNextVideo.get())
+      (
+        playerPreferences.playlistMode.get() ||
+          playerPreferences.autoplayNextVideo.get() ||
+          isCurrentFileAudioForPlaylist
+      )
     ) {
-      val path = parsePathFromIntent(intent)
-      if (path != null) {
-        generatePlaylistFromFolder(path)
+      if (autoPlaylistPath != null) {
+        generatePlaylistFromFolder(autoPlaylistPath)
       }
     }
 
@@ -3434,11 +3445,26 @@ class PlayerActivity :
       }
     }
 
-    // Auto-generate playlist from folder if playlist mode is enabled and no playlist_id
-    if (playlist.isEmpty() && playlistId == null && playerPreferences.playlistMode.get()) {
-      val path = parsePathFromIntent(intent)
-      if (path != null) {
-        generatePlaylistFromFolder(path)
+    // Auto-generate playlist from folder if Playlist Mode, Autoplay, or the
+    // current file is audio — must match the same condition used in
+    // onCreate(), or the playlist goes stale/empty whenever the Activity is
+    // reused (notification tap, next file while app is open).
+    val newIntentAutoPlaylistPath = parsePathFromIntent(intent)
+    val isCurrentFileAudioForPlaylist =
+      newIntentAutoPlaylistPath != null &&
+        FileTypeUtils.AUDIO_EXTENSIONS.contains(File(newIntentAutoPlaylistPath).extension.lowercase())
+
+    if (
+      playlist.isEmpty() &&
+      playlistId == null &&
+      (
+        playerPreferences.playlistMode.get() ||
+          playerPreferences.autoplayNextVideo.get() ||
+          isCurrentFileAudioForPlaylist
+      )
+    ) {
+      if (newIntentAutoPlaylistPath != null) {
+        generatePlaylistFromFolder(newIntentAutoPlaylistPath)
       }
     }
 
@@ -4365,12 +4391,9 @@ class PlayerActivity :
     viewModel.onVideoLoadStarted()
 
     lifecycleScope.launch(Dispatchers.Default) {
+      MPVLib.setPropertyString("vid", "no")
       MPVLib.command("loadfile", playableUri)
     }
-
-    // Keep notification/background service synced immediately after file change
-    syncPlaylistToService()
-    syncBackgroundPlaybackService(updateThumbnail = true)
 
     // Update media title (this will trigger UI update)
     val shouldForceTitle =
@@ -4731,18 +4754,23 @@ class PlayerActivity :
           }
       }?.toList().orEmpty()
 
-    if (isCurrentFileAudio) {
-      // Use the SAME sort function video siblings use — it correctly
-      // honors the user's actual sort preference (Title/Date/Size/Duration),
-      // not just filename order. Using a hardcoded title-only sort here
-      // previously caused next/previous and autoplay to jump to an
-      // unrelated file whenever the user's preference wasn't "Title".
+    // Opened outside the in-app list (file manager etc.) — no visible
+    // sorted list to match, so just use the filesystem sort.
+    if (isCurrentFileAudio && !isVideoListLaunchSource(launchSource)) {
       return sortSiblingFilesForVideoList(directVideoFiles)
     }
 
-    if (!isVideoListLaunchSource(launchSource)) {
+    if (!isCurrentFileAudio && !isVideoListLaunchSource(launchSource)) {
       return naturalSortFiles(directVideoFiles)
     }
+
+    // Opened from the in-app list (video OR audio) — fetch the SAME
+    // MediaStore-backed, same-sorted order the visible list uses, so the
+    // generated playlist's index always matches what's on screen. Audio
+    // previously skipped this and used a raw filesystem sort instead,
+    // which could land on a totally different position than what the
+    // list showed (e.g. track #1 on screen ≠ index actually used for
+    // next/previous navigation).
 
     val currentFilePath = normalizePlaylistFilePath(currentFile.absolutePath)
     val fileByPath = directVideoFiles.associateBy { normalizePlaylistFilePath(it.absolutePath) }
