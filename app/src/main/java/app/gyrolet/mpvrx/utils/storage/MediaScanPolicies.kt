@@ -6,7 +6,33 @@ import java.util.Locale
 internal fun shouldRunFilesystemVideoCheck(
   forceFileSystemCheck: Boolean,
   mediaStoreResultCount: Int,
-): Boolean = forceFileSystemCheck || mediaStoreResultCount == 0
+  folder: File,
+  includeAudioFiles: Boolean,
+): Boolean {
+  if (forceFileSystemCheck || mediaStoreResultCount == 0) {
+    return true
+  }
+
+  // MediaStore indexes files asynchronously in the background. A non-zero
+  // result count doesn't mean MediaStore has finished scanning this folder —
+  // e.g. right after copying 140 new files in, MediaStore might have only
+  // indexed 1 of them so far. Comparing against the real on-disk count
+  // (cheap — just a directory listing, no metadata extraction) catches
+  // that case instead of trusting any non-zero count as "complete".
+  val actualFileCount =
+    runCatching {
+      folder.listFiles { file ->
+        file.isFile &&
+          !file.name.startsWith(".") &&
+          (
+            FileTypeUtils.VIDEO_EXTENSIONS.contains(file.extension.lowercase()) ||
+              (includeAudioFiles && FileTypeUtils.AUDIO_EXTENSIONS.contains(file.extension.lowercase()))
+          )
+      }?.size ?: 0
+    }.getOrDefault(0)
+
+  return actualFileCount > mediaStoreResultCount
+}
 
 internal fun shouldIncludePrimaryStorageInFilesystemFolderScan(
   options: MediaScanOptions,
