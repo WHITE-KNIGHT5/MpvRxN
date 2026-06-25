@@ -109,12 +109,14 @@ class ThumbnailRepository(
         async {
           try {
             getCachedThumbnail(video, widthPx, heightPx)?.let { cached ->
+              android.util.Log.d("ThumbnailRepository", "Using CACHED thumbnail (no fresh attempt) for ${video.path}")
               synchronized(memoryCache) {
                 memoryCache.put(key, cached)
               }
               _thumbnailReadyKeys.tryEmit(key)
               return@async cached
             }
+            android.util.Log.d("ThumbnailRepository", "No cache hit, attempting fresh extraction for ${video.path}")
 
             val bitmap = generationSemaphore.withPermit {
               // Coil's video thumbnail decoder only supports file/content sources. For network videos,
@@ -776,6 +778,7 @@ class ThumbnailRepository(
       } else {
         retriever.setDataSource(context, video.uri)
       }
+      android.util.Log.d("ThumbnailRepository", "setDataSource OK: ${video.path}")
 
       if (isAudio) {
         // Extract embedded album art (works for mp3, flac, m4a, ogg, opus, etc.)
@@ -787,6 +790,7 @@ class ThumbnailRepository(
           .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
           ?.toLongOrNull() ?: 0L
         val timeUs = (durationMs * 1000L * 0.1).toLong()
+        android.util.Log.d("ThumbnailRepository", "durationMs=$durationMs timeUs=$timeUs for ${video.path}")
 
         fun frameAt(time: Long, option: Int): Bitmap? = runCatching {
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -794,7 +798,16 @@ class ThumbnailRepository(
           } else {
             retriever.getFrameAtTime(time, option)
           }
-        }.getOrNull()
+        }.fold(
+          onSuccess = { result ->
+            android.util.Log.d("ThumbnailRepository", "frameAt time=$time option=$option result=${if (result != null) "bitmap ${result.width}x${result.height}" else "null"} for ${video.path}")
+            result
+          },
+          onFailure = { e ->
+            android.util.Log.w("ThumbnailRepository", "frameAt time=$time option=$option threw for ${video.path}", e)
+            null
+          },
+        )
 
         // OPTION_CLOSEST_SYNC only seeks to the nearest keyframe — fails on
         // many HEVC/AV1 files with sparse keyframes or device decoder quirks,
@@ -802,9 +815,13 @@ class ThumbnailRepository(
         // decode to the target time instead — slower, far more reliable.
         // Falls back to frame 0 as a last resort for files that only
         // decode cleanly from the very start.
-        frameAt(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        val result = frameAt(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
           ?: frameAt(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
           ?: frameAt(0L, MediaMetadataRetriever.OPTION_CLOSEST)
+        if (result == null) {
+          android.util.Log.w("ThumbnailRepository", "ALL frame extraction tiers returned null for ${video.path}")
+        }
+        result
       }
     } catch (e: Exception) {
       android.util.Log.w("ThumbnailRepository", "extractLocalMediaThumbnail failed: ${video.path}", e)
