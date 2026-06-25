@@ -129,35 +129,35 @@ class ThumbnailRepository(
                 }
               }
 
-              // Use MediaMetadataRetriever directly for ALL local media files:
-              // - Audio files → embedded album art (mp3, flac, m4a, ogg, etc.)
-              // - All local video files → frame at 10% duration (MKV, AVI, 10-bit, etc.)
-              // This is more reliable than Coil for uncommon formats
+              // Audio embedded album art is a fork feature (not in upstream) —
+              // keep using MediaMetadataRetriever for that, it's the right tool
+              // for reading ID3/embedded pictures.
               val ext = video.path.substringAfterLast('.').lowercase()
               val isAudio = video.mimeType.startsWith("audio/") ||
                 app.gyrolet.mpvrx.utils.storage.FileTypeUtils.AUDIO_EXTENSIONS.contains(ext)
-              val isLocalVideo = !isNetworkUrl(video.path) &&
-                app.gyrolet.mpvrx.utils.storage.FileTypeUtils.VIDEO_EXTENSIONS.contains(ext)
 
-              if (isAudio || isLocalVideo) {
-                val localBitmap = extractLocalMediaThumbnail(video, isAudio)
-                if (localBitmap != null) {
-                  return@withPermit scaleBitmap(localBitmap, widthPx, heightPx)
-                }
-                if (isAudio) {
-                  return@withPermit null
-                }
-                // MediaMetadataRetriever failed at every fallback tier — likely
-                // a device with no usable HEVC/AV1 decoder exposed to that API.
-                // Try Coil as a true last resort before giving up; it may use a
-                // different underlying decode path.
-                val coilResult =
-                  runCatching {
-                    imageLoader.execute(buildRequest(video))
-                  }.getOrNull() as? SuccessResult ?: return@withPermit null
+              if (isAudio) {
+                val localBitmap = extractLocalMediaThumbnail(video, isAudio = true)
+                return@withPermit localBitmap?.let { scaleBitmap(it, widthPx, heightPx) }
+              }
+
+              // Local VIDEO: use Coil first, exactly like upstream does — this
+              // is what picks a sensible frame (e.g. the intro) instead of a
+              // fixed 10%-into-the-file position, and appears to handle
+              // HEVC/AV1 more reliably than calling MediaMetadataRetriever
+              // directly. MediaMetadataRetriever is now only a fallback for
+              // the rare case Coil itself fails.
+              val coilResult =
+                runCatching {
+                  imageLoader.execute(buildRequest(video))
+                }.getOrNull() as? SuccessResult
+              if (coilResult != null) {
                 return@withPermit scaleBitmap(coilResult.image.toBitmap(), widthPx, heightPx)
               }
 
+              android.util.Log.d("ThumbnailRepository", "Coil failed for local video, trying MediaMetadataRetriever fallback: ${video.path}")
+              val fallbackBitmap = extractLocalMediaThumbnail(video, isAudio = false)
+              return@withPermit fallbackBitmap?.let { scaleBitmap(it, widthPx, heightPx) }
               val result =
                 runCatching {
                   imageLoader.execute(buildRequest(video))
