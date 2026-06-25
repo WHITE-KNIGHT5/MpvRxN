@@ -271,7 +271,18 @@ data class VideoListScreen(
       val observer =
         LifecycleEventObserver { _, event ->
           if (event == Lifecycle.Event.ON_RESUME) {
-            viewModel.refreshLight()
+            // lifecycleOwner here is the Activity's lifecycle, shared by
+            // EVERY VideoListScreen instance still on the back-stack — not
+            // scoped to this specific screen. Without this check, returning
+            // to the app (e.g. exiting the player) re-triggers a background
+            // reload for every previously-visited folder simultaneously,
+            // not just the one actually being looked at. That's what
+            // caused "no files" to show up for a folder that was never
+            // even the one on screen — a stale, off-screen ViewModel was
+            // reloading itself in the background.
+            if (backstack.lastOrNull() == this@VideoListScreen) {
+              viewModel.refreshLight()
+            }
           }
         }
       lifecycleOwner.lifecycle.addObserver(observer)
@@ -347,7 +358,6 @@ data class VideoListScreen(
                 ),
               onClick = {
                 coroutineScope.launch {
-                  kotlinx.coroutines.yield()
                   val folderPath = sortedVideosWithInfo.firstOrNull()?.video?.path?.let { File(it).parent } ?: ""
                   val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 100)
                   val lastPlayedInFolder = recentlyPlayedVideos.firstOrNull {
@@ -385,15 +395,10 @@ data class VideoListScreen(
             if (selectionManager.isInSelectionMode) {
               selectionManager.toggle(video)
             } else {
-              // Defer the launch by one coroutine turn so the tap ripple/press
-              // state can render immediately before starting the player.
-              coroutineScope.launch {
-                kotlinx.coroutines.yield()
-                // Always use MediaUtils.playFile which lets PlayerActivity auto-generate playlist
-                // This avoids TransactionTooLargeException from passing large playlists
-                // PlayerActivity will auto-generate playlist from folder if playlistMode is enabled
-                MediaUtils.playFile(video, context, "video_list")
-              }
+              // Always use MediaUtils.playFile which lets PlayerActivity auto-generate playlist
+              // This avoids TransactionTooLargeException from passing large playlists
+              // PlayerActivity will auto-generate playlist from folder if playlistMode is enabled
+              MediaUtils.playFile(video, context, "video_list")
             }
           },
           onVideoLongClick = { video -> selectionManager.handleLongClick(video) },
