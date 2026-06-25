@@ -634,11 +634,20 @@ class PlayerActivity :
               val targetIndex = playlistIndex.coerceIn(0, playlist.lastIndex)
               loadPlaylistItem(targetIndex)
             } else {
-              player.playFile(playableUri)
+              lifecycleScope.launch(Dispatchers.Default) {
+                player.playFile(playableUri)
+              }
             }
           }
         } else {
-          player.playFile(playableUri)
+          // Avoid blocking UI thread while mpv opens/probes the file — this
+          // was the actual cause of the "stuck for a second on every open"
+          // freeze, unrelated to playlist generation. Every other loadfile
+          // site in this class already does this; this was the one spot
+          // that didn't.
+          lifecycleScope.launch(Dispatchers.Default) {
+            player.playFile(playableUri)
+          }
         }
       }
     }
@@ -2484,6 +2493,7 @@ class PlayerActivity :
    * @param isEof true if end of file reached
    */
   private fun handleEndOfFile(isEof: Boolean) {
+    Log.d(TAG, "handleEndOfFile: isEof=$isEof playlistSize=${playlist.size} playlistIndex=$playlistIndex fileName=$fileName")
     if (isEof) {
       // Check if we should repeat the current file
       if (viewModel.shouldRepeatCurrentFile()) {
@@ -2507,6 +2517,11 @@ class PlayerActivity :
           fileName.substringAfterLast('.').lowercase()
         )
         val autoplayEnabled = playerPreferences.autoplayNextVideo.get() || isCurrentFileAudio
+        Log.d(
+          TAG,
+          "handleEndOfFile: hasNextItem=$hasNextItem isCurrentFileAudio=$isCurrentFileAudio " +
+            "autoplayEnabled=$autoplayEnabled shouldRepeatPlaylist=${viewModel.shouldRepeatPlaylist()}",
+        )
 
         if (hasNextItem && (autoplayEnabled || viewModel.shouldRepeatPlaylist())) {
           // Play next item in playlist
@@ -4259,6 +4274,7 @@ class PlayerActivity :
    * Play the next video in the playlist
    */
   fun playNext() {
+    Log.d(TAG, "playNext: playlistSize=${playlist.size} playlistIndex=$playlistIndex playlistTotalCount=$playlistTotalCount")
     if (playlist.isEmpty()) return
 
     // Use total count if we're doing windowed loading, otherwise use playlist size
@@ -4312,6 +4328,7 @@ class PlayerActivity :
   }
 
   fun playPrevious() {
+    Log.d(TAG, "playPrevious: playlistSize=${playlist.size} playlistIndex=$playlistIndex playlistTotalCount=$playlistTotalCount")
     if (playlist.isEmpty()) return
 
     // Use total count if we're doing windowed loading, otherwise use playlist size
@@ -4435,10 +4452,27 @@ class PlayerActivity :
     // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
     isReady = false
     viewModel.onVideoLoadStarted()
+    Log.d(TAG, "loadPlaylistItemInternal: index=$index uri=$uri playableUri=$playableUri fileName=$fileName")
 
     lifecycleScope.launch(Dispatchers.Default) {
       MPVLib.setPropertyString("vid", "no")
-      MPVLib.command("loadfile", playableUri)
+      val loadResult = runCatching { MPVLib.command("loadfile", playableUri) }
+      loadResult.onFailure { e ->
+        Log.e(TAG, "loadfile command threw for index=$index playableUri=$playableUri", e)
+      }
+      // Watchdog: if MPV_EVENT_FILE_LOADED never fires (silent failure —
+      // e.g. an unresolvable content URI), isReady stays false forever and
+      // vid stays "no", looking exactly like "shows in notification but
+      // never plays". Logging this case is the missing piece — without it
+      // a failed loadfile leaves no trace anywhere.
+      kotlinx.coroutines.delay(4000)
+      if (!isReady) {
+        Log.e(
+          TAG,
+          "loadfile watchdog: MPV_EVENT_FILE_LOADED never fired within 4s for " +
+            "index=$index playableUri=$playableUri — file likely failed to load silently",
+        )
+      }
     }
 
     // Update media title (this will trigger UI update)
@@ -4920,14 +4954,6 @@ class PlayerActivity :
 
   private fun generatePlaylistFromFolder(currentPath: String) {
     lifecycleScope.launch(Dispatchers.IO) {
-      // Even though this runs on a background thread, starting it the
-      // instant a file opens still competes for CPU/disk with mpv's own
-      // startup (codec init, first-frame decode, audio buffer priming) on
-      // many devices — that contention is what actually causes the
-      // "stuck for a second" feeling, not coroutine scheduling. Giving mpv
-      // a clear run first, then doing this work, fixes that without
-      // needing a precise "playback truly started" hook.
-      delay(1500)
       runCatching {
         val currentFile = File(currentPath)
         if (!currentFile.exists()) return@runCatching
