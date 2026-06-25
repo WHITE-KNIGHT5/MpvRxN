@@ -40,8 +40,8 @@ class AppearancePreferences(
   val showRecentsTab = preferenceStore.getBoolean("show_recents_tab", true)
   val showPlaylistsTab = preferenceStore.getBoolean("show_playlists_tab", true)
   val showNetworkTab = preferenceStore.getBoolean("show_network_tab", false)
-  val smoothBackAnimation = preferenceStore.getBoolean("smooth_back_animation", false)
-  val easyUnlock = preferenceStore.getBoolean("easy_unlock", false)
+  val smoothBackAnimation = preferenceStore.getBoolean("smooth_back_animation", true)
+  val easyUnlock = preferenceStore.getBoolean("easy_unlock", true)
 
   val topLeftControls =
     preferenceStore.getString(
