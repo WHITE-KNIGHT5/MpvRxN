@@ -311,6 +311,18 @@ class PlayerActivity :
   private lateinit var pipHelper: MPVPipHelper
 
   private var isReady = false // Single flag: true when video loaded and ready
+
+  /**
+   * Timestamp of the last successful MPV_EVENT_FILE_LOADED. Used to detect
+   * audio-focus-loss callbacks that are stale leftovers from the PREVIOUS
+   * file's audio stream closing during a fast back-to-back transition
+   * (e.g. auto-advancing to the next playlist item), rather than a genuine
+   * new conflict with another app. Android can deliver these callbacks
+   * with a short delay, after the next file has already started playing —
+   * if unfiltered, that stale signal pauses the new file right after it
+   * starts, which looks exactly like "next file loads but doesn't play."
+   */
+  private var lastFileLoadedAtMs = 0L
   private var isUserFinishing = false
 
   // Set in onConfigurationChanged(); used to detect a transient onPause() that's
@@ -464,6 +476,17 @@ class PlayerActivity :
         AudioManager.AUDIOFOCUS_LOSS,
         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
           -> {
+          val msSinceLoad = System.currentTimeMillis() - lastFileLoadedAtMs
+          if (msSinceLoad < 800L) {
+            // Almost certainly a stale signal from the PREVIOUS file's audio
+            // stream closing during a fast back-to-back transition (e.g.
+            // auto-advance), arriving slightly after the next file already
+            // started. Android can deliver focus-change callbacks with a
+            // short delay. Acting on it here would pause the new file right
+            // after it starts — exactly "next file loads but doesn't play."
+            Log.d(TAG, "Ignoring audio focus loss $msSinceLoad ms after file load (likely stale)")
+            return@OnAudioFocusChangeListener
+          }
           // Save current state to restore later
           val oldRestore = restoreAudioFocus
           val wasPlayerPaused = viewModel.paused ?: false
@@ -2670,6 +2693,7 @@ class PlayerActivity :
     when (eventId) {
       MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
         isReady = true
+        lastFileLoadedAtMs = System.currentTimeMillis()
         MPVLib.setPropertyString("vid", "auto")
         viewModel.onVideoLoadCompleted()
         handleFileLoaded()
