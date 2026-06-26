@@ -42,7 +42,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -473,7 +472,16 @@ class MediaPlaybackService :
         putExtra("media_identifier", mediaIdentifier)
         putExtra("launch_source", "notification")
         putExtra("internal_launch", true)
-        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        // FLAG_ACTIVITY_NEW_TASK is required here: this Intent is built from
+        // a Service, with no Activity context to anchor to. Without it,
+        // singleTask's task resolution can spawn a fresh, orphaned task for
+        // PlayerActivity with nothing beneath it — so pressing back exits
+        // straight to the home screen instead of returning to MainActivity
+        // (and its "return to the folder I was playing from" logic, which
+        // never gets a chance to run because there's no MainActivity to land on).
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+          Intent.FLAG_ACTIVITY_SINGLE_TOP or
+          Intent.FLAG_ACTIVITY_CLEAR_TOP
       },
       PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
@@ -731,24 +739,14 @@ class MediaPlaybackService :
     if (!playerPreferences.autoplayNextVideo.get()) return
 
     val now = System.currentTimeMillis()
-    if (now - lastEofHandledTimeMs < 3000L) {
-      Log.d(TAG, "Ignoring duplicate eof-reached")
+    if (now - lastEofHandledTimeMs < 2000L) {
+      Log.d(TAG, "Ignoring duplicate eof-reached within debounce window")
       return
     }
     lastEofHandledTimeMs = now
 
-    serviceScope.launch {
-      delay(1000)
-
-      val currentPath =
-        runCatching { MPVLib.getPropertyString("path") }
-          .getOrNull()
-
-      if (currentPath == mediaUri) {
-        if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
-          Log.d(TAG, "Background EOF: no next item to advance to")
-        }
-      }
+    if (!skipToPlaylistIndex(localPlaylistIndex + 1)) {
+      Log.d(TAG, "Background EOF: no next item to advance to")
     }
   }
 
