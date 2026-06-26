@@ -22,6 +22,7 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.TaskStackBuilder
 import androidx.core.app.ServiceCompat
 import androidx.core.graphics.ColorUtils
 import androidx.media.MediaBrowserServiceCompat
@@ -462,9 +463,8 @@ class MediaPlaybackService :
   private fun buildNotification(): Notification =
     if (useProgressNotification()) buildModernNotification() else buildLegacyNotification()
 
-  private fun buildContentIntent(): PendingIntent =
-    PendingIntent.getActivity(
-      this, 0,
+  private fun buildContentIntent(): PendingIntent {
+    val playerIntent =
       Intent(this, PlayerActivity::class.java).apply {
         action = ACTION_OPEN_PLAYER
         mediaUri?.let { putExtra("uri", it) }
@@ -472,19 +472,26 @@ class MediaPlaybackService :
         putExtra("media_identifier", mediaIdentifier)
         putExtra("launch_source", "notification")
         putExtra("internal_launch", true)
-        // FLAG_ACTIVITY_NEW_TASK is required here: this Intent is built from
-        // a Service, with no Activity context to anchor to. Without it,
-        // singleTask's task resolution can spawn a fresh, orphaned task for
-        // PlayerActivity with nothing beneath it — so pressing back exits
-        // straight to the home screen instead of returning to MainActivity
-        // (and its "return to the folder I was playing from" logic, which
-        // never gets a chance to run because there's no MainActivity to land on).
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-          Intent.FLAG_ACTIVITY_SINGLE_TOP or
-          Intent.FLAG_ACTIVITY_CLEAR_TOP
-      },
-      PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-    )
+      }
+
+    // TaskStackBuilder explicitly chains MainActivity beneath PlayerActivity
+    // every time, rather than relying on FLAG_ACTIVITY_NEW_TASK + singleTask's
+    // task-affinity resolution. That resolution turned out to be inconsistent
+    // specifically for this Service-launched-PendingIntent path: it sometimes
+    // created a separate task instead of reusing the existing app task, which
+    // meant pressing back had to finish that separate task and briefly show
+    // the home screen while Android switched to the other one — a visible
+    // flash, even though the end result (landing on the right folder) was
+    // technically correct. Building the stack explicitly here removes that
+    // ambiguity, at the cost of MainActivity always reloading fresh on a
+    // notification tap (any unrelated deep navigation state, like a search
+    // query, won't be preserved — but which folder you were playing from
+    // still will be, since that's handled separately).
+    return TaskStackBuilder.create(this)
+      .addNextIntent(Intent(this, app.gyrolet.mpvrx.MainActivity::class.java))
+      .addNextIntent(playerIntent)
+      .getPendingIntent(0, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)!!
+  }
 
   private fun buildTransportIntent(action: String, requestCode: Int): PendingIntent =
     PendingIntent.getActivity(
