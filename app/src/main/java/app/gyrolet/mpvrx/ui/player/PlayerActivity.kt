@@ -2810,7 +2810,19 @@ class PlayerActivity :
 
     applySubtitlePreferences()
     applyVideoFilterPreferences()
-    viewModel.restoreSavedVideoAspect(showUpdate = false)
+
+    // mpv renders embedded album art as a video frame, so applying the
+    // saved video aspect preference (e.g. Crop) here also crops/stretches
+    // album art. Audio should always display its art in Fit, regardless
+    // of whatever aspect mode is saved for actual videos.
+    val isCurrentFileAudioForAspect = FileTypeUtils.AUDIO_EXTENSIONS.contains(
+      fileName.substringAfterLast('.').lowercase()
+    )
+    if (isCurrentFileAudioForAspect) {
+      viewModel.changeVideoAspect(VideoAspect.Fit, showUpdate = false)
+    } else {
+      viewModel.restoreSavedVideoAspect(showUpdate = false)
+    }
 
     if (shouldForceCurrentMediaTitle()) {
       val preferredTitle = getPreferredCurrentTitle()
