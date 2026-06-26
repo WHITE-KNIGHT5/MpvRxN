@@ -12,6 +12,9 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.view.PixelCopy
+import android.view.ViewGroup
+import android.widget.ImageView
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -323,6 +326,20 @@ class PlayerActivity :
    * starts, which looks exactly like "next file loads but doesn't play."
    */
   private var lastFileLoadedAtMs = 0L
+
+  /**
+   * Rotation flash fix: mpv's render surface briefly disconnects its buffer
+   * producer while it's resized during a config change (confirmed via
+   * logcat — "producer disconnected before acquireNextBufferLocked" fires
+   * in the same handful of milliseconds as the resize). That brief gap
+   * with no valid buffer is the actual source of the black flash. Rather
+   * than capture a frame at the exact, race-prone moment of rotation,
+   * a fresh snapshot is cached periodically during normal playback, so
+   * a recent frame is already on hand the instant a config change starts.
+   */
+  private var lastFrameBitmap: Bitmap? = null
+  private var rotationFreezeOverlay: ImageView? = null
+  private var frameCaptureJob: Job? = null
   private var isUserFinishing = false
 
   // Set in onConfigurationChanged(); used to detect a transient onPause() that's
@@ -545,6 +562,7 @@ class PlayerActivity :
     setupAudio()
     setupBackPressHandler()
     setupPlayerControls()
+    setupRotationFreezeOverlay()
     setupPipHelper()
     setupMediaSession()
     registerScreenStateReceiver()
@@ -1000,6 +1018,9 @@ class PlayerActivity :
 
   override fun onDestroy() {
     Log.d(TAG, "PlayerActivity onDestroy")
+    frameCaptureJob?.cancel()
+    lastFrameBitmap?.takeIf { !it.isRecycled }?.recycle()
+    lastFrameBitmap = null
     val keepBackgroundPlaybackAlive =
       PlayerLifecyclePolicy.shouldKeepBackgroundPlaybackAliveOnDestroy(
         manualBackgroundPlayback = isManualBackgroundPlayback,
@@ -2418,11 +2439,96 @@ class PlayerActivity :
     super.onConfigurationChanged(newConfig)
     lastConfigChangeTimeMs = System.currentTimeMillis()
     Log.d(TAG, "Configuration changed: uiMode=${newConfig.uiMode}")
+    showRotationFreezeOverlay()
     val isPortrait = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
     viewModel.onOrientationChanged(isPortrait)
     if (isReady) {
       handleConfigurationChange()
     }
+  }
+
+  /**
+   * Sets up an ImageView positioned exactly over the player surface, used
+   * to mask the brief black flash that happens when mpv's render surface
+   * disconnects its buffer producer during a resize (e.g. rotation). Stays
+   * invisible/gone except during the short window around a config change.
+   */
+  private fun setupRotationFreezeOverlay() {
+    val parent = player.parent as? ViewGroup ?: return
+    val overlay =
+      ImageView(this).apply {
+        layoutParams =
+          if (parent is android.widget.FrameLayout) {
+            android.widget.FrameLayout.LayoutParams(
+              ViewGroup.LayoutParams.MATCH_PARENT,
+              ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+          } else {
+            ViewGroup.LayoutParams(
+              ViewGroup.LayoutParams.MATCH_PARENT,
+              ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+          }
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        setBackgroundColor(android.graphics.Color.BLACK)
+        visibility = android.view.View.GONE
+        elevation = player.elevation + 1f
+      }
+    parent.addView(overlay)
+    rotationFreezeOverlay = overlay
+  }
+
+  /**
+   * Captures a snapshot of the player surface's current contents. Called
+   * periodically during normal playback (not at the moment of rotation —
+   * that's exactly when the surface is mid-resize and a capture there
+   * would race against the same disconnect that causes the flash).
+   */
+  private fun captureFrameSnapshot() {
+    val bitmap = runCatching {
+      Bitmap.createBitmap(player.width.coerceAtLeast(1), player.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+    }.getOrNull() ?: return
+    runCatching {
+      PixelCopy.request(
+        player,
+        bitmap,
+        { result ->
+          if (result == PixelCopy.SUCCESS) {
+            lastFrameBitmap?.takeIf { !it.isRecycled }?.recycle()
+            lastFrameBitmap = bitmap
+          }
+        },
+        android.os.Handler(mainLooper),
+      )
+    }
+  }
+
+  /** Starts the periodic snapshot capture used to back the rotation freeze overlay. */
+  private fun startFrameCaptureLoop() {
+    frameCaptureJob?.cancel()
+    frameCaptureJob =
+      lifecycleScope.launch {
+        while (isActive) {
+          delay(1000)
+          if (isReady) captureFrameSnapshot()
+        }
+      }
+  }
+
+  private fun showRotationFreezeOverlay() {
+    val overlay = rotationFreezeOverlay ?: return
+    val bitmap = lastFrameBitmap
+    if (bitmap != null && !bitmap.isRecycled) {
+      overlay.setImageBitmap(bitmap)
+    } else {
+      overlay.setImageBitmap(null)
+    }
+    overlay.visibility = android.view.View.VISIBLE
+    overlay.bringToFront()
+    // Hide once the resize has settled. The disconnect/reconnect on the
+    // underlying surface completes within tens of milliseconds per logcat,
+    // so this just needs enough margin to be safe, not exact.
+    overlay.postDelayed({ overlay.visibility = android.view.View.GONE }, 350L)
   }
 
   /**
@@ -2697,6 +2803,7 @@ class PlayerActivity :
         MPVLib.setPropertyString("vid", "auto")
         viewModel.onVideoLoadCompleted()
         handleFileLoaded()
+        startFrameCaptureLoop()
       }
 
       MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> {
