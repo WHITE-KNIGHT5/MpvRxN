@@ -4152,16 +4152,20 @@ class PlayerActivity :
    */
   private fun getReliableArtist(): String {
     val mpvArtist = runCatching { MPVLib.getPropertyString("metadata/artist") }.getOrNull() ?: ""
-    if (mpvArtist.isNotBlank()) return mpvArtist
+    if (mpvArtist.isNotBlank()) {
+      Log.d(TAG, "getReliableArtist: mpv property returned '$mpvArtist'")
+      return mpvArtist
+    }
 
     val uriString = currentPlayableUri ?: return ""
     if (uriString.startsWith("http://") || uriString.startsWith("https://")) {
       // Skip the fallback for network streams — don't want to introduce a
       // new delay waiting on a network read just for a notification subtitle.
+      Log.d(TAG, "getReliableArtist: mpv property blank, skipping fallback for network URL")
       return ""
     }
 
-    return runCatching {
+    val fallback = runCatching {
       val retriever = MediaMetadataRetriever()
       try {
         if (uriString.startsWith("content://")) {
@@ -4173,7 +4177,15 @@ class PlayerActivity :
       } finally {
         retriever.release()
       }
-    }.getOrNull() ?: ""
+    }.fold(
+      onSuccess = { it },
+      onFailure = { e ->
+        Log.w(TAG, "getReliableArtist: MediaMetadataRetriever fallback threw for $uriString", e)
+        ""
+      },
+    )
+    Log.d(TAG, "getReliableArtist: mpv property blank, fallback returned '$fallback' for $uriString")
+    return fallback
   }
 
   private fun startBackgroundPlaybackInternal(bindToActivity: Boolean): Boolean {
@@ -4195,6 +4207,7 @@ class PlayerActivity :
     
     // Get media info before starting service
     val artist = getReliableArtist()
+    Log.d(TAG, "startBackgroundPlaybackInternal: sending media_artist='$artist' for $fileName")
     
     // Pass media info via intent extras
     val intent = Intent(this, MediaPlaybackService::class.java).apply {
@@ -4645,6 +4658,7 @@ class PlayerActivity :
     val service = mediaPlaybackService ?: return
     val title = getPreferredCurrentTitle().ifBlank { fileName.ifBlank { "Unknown Video" } }
     val artist = getReliableArtist()
+    Log.d(TAG, "syncBackgroundPlaybackService: artist='$artist' title='$title'")
     val thumbnailKey = buildBackgroundThumbnailKey()
     val cachedThumbnail =
       if (thumbnailKey == lastBackgroundThumbnailKey) {
