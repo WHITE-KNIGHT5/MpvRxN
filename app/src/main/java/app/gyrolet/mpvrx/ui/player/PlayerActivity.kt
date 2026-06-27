@@ -537,6 +537,17 @@ class PlayerActivity :
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+
+    // Resolve the filename and apply orientation BEFORE setContentView().
+    // setOrientation() was previously called after the window was already
+    // inflated and shown, which forced Android to reconfigure an
+    // already-visible window mid-stream — a heavy, disruptive operation
+    // that reintroduced the "feels stuck on open" freeze. Calling it here
+    // instead lets the window get created directly in the correct
+    // orientation the first time, with no reconfiguration needed at all.
+    fileName = getFileName(intent)
+    setOrientation()
+
     setContentView(binding.root)
     setupSystemBarsAutoHide()
 
@@ -692,17 +703,6 @@ class PlayerActivity :
         }
       }
     }
-
-    // setOrientation() already defaults to landscape (the common case) when
-    // video-params/aspect isn't known yet — calling it immediately here,
-    // even for "Video" orientation mode, applies that sensible guess right
-    // away instead of leaving the Activity at its inherited orientation
-    // (portrait, since that's how the phone is usually held when opening a
-    // file) until mpv finishes parsing and fires the real aspect update.
-    // That gap was the actual source of "starts portrait, snaps to
-    // landscape" on every video open. The later aspect-update call sites
-    // still correct this if the video turns out to be portrait.
-    setOrientation()
 
     // Apply persisted shuffle state after playlist is loaded
     viewModel.applyPersistedShuffleState()

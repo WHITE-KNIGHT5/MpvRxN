@@ -68,7 +68,18 @@ class MPVPipHelper(
       addAction(PIP_ACTION_FORWARD)
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      activity.registerReceiver(pipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+      // PiP buttons are operated by System UI - a different process/app
+      // from this one. RECEIVER_NOT_EXPORTED restricts the receiver to
+      // only accept broadcasts attributed to this app's own identity, and
+      // there are well-documented, version/OEM-dependent cases where
+      // System UI's PendingIntent-triggered broadcast for a PiP RemoteAction
+      // doesn't get attributed that way reliably, causing the receiver to
+      // silently never fire — matching "PiP buttons sometimes don't work."
+      // RECEIVER_EXPORTED is the standard fix used by most media apps for
+      // this exact case; the action strings are private to this app, so
+      // the actual exposure is minimal (worst case, another app could
+      // trigger play/pause/seek while this app happens to be in PiP).
+      activity.registerReceiver(pipReceiver, filter, Context.RECEIVER_EXPORTED)
     } else {
       activity.registerReceiver(pipReceiver, filter)
     }
