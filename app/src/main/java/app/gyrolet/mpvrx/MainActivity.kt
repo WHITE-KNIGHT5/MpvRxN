@@ -150,6 +150,16 @@ class MainActivity : ComponentActivity() {
     val folderPath = intent.getStringExtra("navigate_to_folder")
     if (!folderPath.isNullOrBlank()) {
       pendingFolderNavigation.value = folderPath
+      // Clear it immediately so a subsequent onCreate() for this SAME
+      // underlying Intent (Activity recreation due to a config change,
+      // which Android preserves the launching Intent across) doesn't
+      // reprocess and re-trigger this again. Re-triggering raced against
+      // the back-stack's own restoration and could push a fresh, not-yet-
+      // loaded duplicate folder entry on top of the one already correctly
+      // restored — pressing back would pop the empty duplicate and reveal
+      // the real one underneath, looking like "empty folder opens inside
+      // the original folder."
+      intent.removeExtra("navigate_to_folder")
     }
   }
 
