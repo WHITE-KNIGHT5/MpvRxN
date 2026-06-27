@@ -693,11 +693,16 @@ class PlayerActivity :
       }
     }
 
-    // Only set orientation immediately if NOT in Video mode
-    // For Video mode, wait for video-params/aspect to become available
-    if (playerPreferences.orientation.get() != PlayerOrientation.Video) {
-      setOrientation()
-    }
+    // setOrientation() already defaults to landscape (the common case) when
+    // video-params/aspect isn't known yet — calling it immediately here,
+    // even for "Video" orientation mode, applies that sensible guess right
+    // away instead of leaving the Activity at its inherited orientation
+    // (portrait, since that's how the phone is usually held when opening a
+    // file) until mpv finishes parsing and fires the real aspect update.
+    // That gap was the actual source of "starts portrait, snaps to
+    // landscape" on every video open. The later aspect-update call sites
+    // still correct this if the video turns out to be portrait.
+    setOrientation()
 
     // Apply persisted shuffle state after playlist is loaded
     viewModel.applyPersistedShuffleState()
@@ -875,28 +880,31 @@ class PlayerActivity :
 
     isUserFinishing = true
 
-    // If opened from notification (no back stack), go to folder where video was playing
-    if (isTaskRoot) {
-      packageManager.getLaunchIntentForPackage(packageName)?.let { mainIntent ->
-        mainIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        // Pass the folder path so app can navigate back to it.
-        // fileName is just the display name (no path), so use the actual
-        // resolved file path stored in currentPlayableUri instead.
-        val playablePath = currentPlayableUri
-        val isLocalFilePath = playablePath != null &&
-          !playablePath.startsWith("http://") &&
-          !playablePath.startsWith("https://") &&
-          !playablePath.startsWith("/proc/self/fd/")
-        val folderPath = if (isLocalFilePath) {
-          java.io.File(playablePath!!).parent ?: ""
-        } else {
-          ""
-        }
-        if (folderPath.isNotBlank()) {
-          mainIntent.putExtra("navigate_to_folder", folderPath)
-        }
-        startActivity(mainIntent)
+    // Tell MainActivity which folder to navigate back to, regardless of
+    // whether it's already in this task (e.g. placed there by
+    // MediaPlaybackService's TaskStackBuilder when reopened from a
+    // notification) or needs to be started fresh. Previously this only
+    // ran when isTaskRoot was true, which broke entirely once
+    // TaskStackBuilder started placing MainActivity beneath PlayerActivity
+    // in the same task — isTaskRoot became false in that exact scenario,
+    // skipping this whole block and landing on a blank MainActivity with
+    // no folder info, defaulting to home instead of the playing folder.
+    val playablePath = currentPlayableUri
+    val isLocalFilePath = playablePath != null &&
+      !playablePath.startsWith("http://") &&
+      !playablePath.startsWith("https://") &&
+      !playablePath.startsWith("/proc/self/fd/")
+    val folderPath = if (isLocalFilePath) {
+      java.io.File(playablePath!!).parent ?: ""
+    } else {
+      ""
+    }
+    if (folderPath.isNotBlank()) {
+      val mainIntent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
+        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        putExtra("navigate_to_folder", folderPath)
       }
+      startActivity(mainIntent)
     }
 
     finish()
