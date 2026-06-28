@@ -1561,6 +1561,13 @@ class PlayerActivity :
    * if no user directory is configured.
    */
   private fun syncFromUserMpvDirectory(syncSubtitleFontsFolder: Boolean) {
+    val now = System.currentTimeMillis()
+    if (now - lastMpvDirSyncAtMs < MPV_DIR_SYNC_TTL_MS) {
+      Log.d(TAG, "Skipping MPV directory sync - synced ${now - lastMpvDirSyncAtMs}ms ago")
+      return
+    }
+    lastMpvDirSyncAtMs = now
+
     val mpvConfStorageUri = advancedPreferences.mpvConfStorageUri.get()
 
     // Try to open the user's MPV directory
@@ -5342,6 +5349,23 @@ class PlayerActivity :
       val timestampMs: Long,
     )
     private val autoPlaylistCache = HashMap<String, AutoPlaylistCacheEntry>()
+
+    /**
+     * Last time syncFromUserMpvDirectory() actually ran its full sync. That
+     * function does several DocumentFile (Storage Access Framework) reads —
+     * config files, scripts, script-opts, shaders, fonts — which are
+     * noticeably slower than plain file access (each is effectively an IPC
+     * round-trip to a content provider). It was running unconditionally on
+     * EVERY file open, even when opening another file moments later from
+     * the same browsing session where nothing in that directory could have
+     * changed. This is a real, separate contributor to "click and wait"
+     * beyond the playFile() threading fix, specifically for anyone with a
+     * custom MPV config directory set. A short TTL skips the redundant
+     * re-sync for rapid successive opens while still picking up actual
+     * changes (e.g. editing a script) reasonably promptly.
+     */
+    private const val MPV_DIR_SYNC_TTL_MS = 15000L
+    private var lastMpvDirSyncAtMs = 0L
 
     /**
      * Intent action used to return playback result data to the calling activity.
