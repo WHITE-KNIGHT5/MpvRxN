@@ -93,7 +93,7 @@ class PlayerPreferences(
   val useWavySeekbar = preferenceStore.getBoolean("use_wavy_seekbar", true)
 
   val customSkipDuration = preferenceStore.getInt("custom_skip_duration", 90)
-  val enableIntroDb = preferenceStore.getBoolean("enable_introdb", true)
+  val enableIntroDb = preferenceStore.getBoolean("enable_introdb", false)
   val introSegmentProvider = preferenceStore.getEnum("intro_segment_provider", IntroSegmentProvider.HYBRID)
   val detectIntroOutroFromChapters = preferenceStore.getBoolean("detect_intro_outro_from_chapters", true)
   val autoSkipIntro = preferenceStore.getBoolean("auto_skip_intro", false)
