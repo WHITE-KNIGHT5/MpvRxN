@@ -171,10 +171,15 @@ class MPVPipHelper(
         activity,
         action.hashCode(),
         intent,
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-          PendingIntent.FLAG_MUTABLE
-        else
-          PendingIntent.FLAG_UPDATE_CURRENT,
+        // These are simple, parameter-less trigger actions (play/pause/seek) -
+        // nothing here needs the receiver to be mutable. FLAG_MUTABLE was
+        // also missing FLAG_UPDATE_CURRENT entirely on S+, which could
+        // return a stale cached PendingIntent on repeated calls (this gets
+        // rebuilt on every button press via updatePictureInPictureParams()).
+        // FLAG_IMMUTABLE is Android's own recommended default when
+        // mutability isn't required, and has documented reliability
+        // advantages over FLAG_MUTABLE for this exact PiP RemoteAction case.
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
       )
 
     return RemoteAction(
