@@ -1,4 +1,4 @@
-<h1 align="center">Fixing some bugs, I'll release the apk soon</h1>
+<h1 align="center">Ready</h1>
 
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
@@ -13,7 +13,6 @@
 
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
-
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
   <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" />
