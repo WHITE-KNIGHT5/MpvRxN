@@ -4,12 +4,11 @@
 </p>
 <h1 align="center">MpvRxN</h1>
 <p align="center">
-  <img src="assets/demo.gif" width="700">
+  <img src="assets/demo.gif" width="100%">
 </p>
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
-
 - <i>MpvRxN: Fully vibe-coded app with Claude AI </>
 
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
