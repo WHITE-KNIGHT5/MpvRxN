@@ -4,7 +4,7 @@
 </p>
 <h1 align="center">MpvRxN</h1>
 <p align="center">
-  <img src="assets/demo.gif" width="600">
+  <img src="assets/demo.gif" width="700">
 </p>
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
