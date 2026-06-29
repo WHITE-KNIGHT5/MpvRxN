@@ -537,20 +537,6 @@ class PlayerActivity :
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
-
-    // Resolve the filename and apply a SAFE initial orientation guess
-    // BEFORE setContentView(). Calling the full setOrientation() here
-    // crashes — it touches `player` (binding.player), which forces the
-    // layout to inflate before it's attached to the window and before
-    // setupMPV() has run. That triggers a native/JNI crash that bypasses
-    // Kotlin's try/catch entirely. This early guess intentionally never
-    // touches `player` — aspect is guaranteed unknown this early anyway,
-    // so there's nothing to gain from querying it here. The later,
-    // aspect-aware setOrientation() calls (after setupMPV()) still run
-    // normally and correct this once the real aspect is known.
-    fileName = getFileName(intent)
-    applySafeInitialOrientationGuess()
-
     setContentView(binding.root)
     setupSystemBarsAutoHide()
 
@@ -705,6 +691,12 @@ class PlayerActivity :
           }
         }
       }
+    }
+
+    // Only set orientation immediately if NOT in Video mode
+    // For Video mode, wait for video-params/aspect to become available
+    if (playerPreferences.orientation.get() != PlayerOrientation.Video) {
+      setOrientation()
     }
 
     // Apply persisted shuffle state after playlist is loaded
@@ -3800,40 +3792,6 @@ class PlayerActivity :
    * For "Video" orientation mode, this will wait for video-params/aspect to update
    * to the correct orientation, starting with landscape as fallback.
    */
-  /**
-   * Safe, early version of setOrientation() for use BEFORE setContentView()/
-   * setupMPV(). Never touches `player` (binding.player) — accessing it this
-   * early forces premature layout inflation before the view is attached to
-   * the window, which crashes natively (bypasses try/catch entirely) on
-   * this custom mpv view. Aspect is guaranteed unknown this early anyway,
-   * so there's nothing lost by skipping straight to the same fallback
-   * setOrientation() would have used. The later, aspect-aware
-   * setOrientation() calls (after setupMPV()) still run normally and
-   * correct this once the real aspect is known.
-   */
-  private fun applySafeInitialOrientationGuess() {
-    val isAudioFile = FileTypeUtils.AUDIO_EXTENSIONS.contains(
-      fileName.substringAfterLast('.').lowercase()
-    )
-    if (isAudioFile) {
-      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-      return
-    }
-
-    val orientationPref = playerPreferences.orientation.get()
-    requestedOrientation =
-      when (orientationPref) {
-        PlayerOrientation.Free -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-        PlayerOrientation.Video -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        PlayerOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        PlayerOrientation.ReversePortrait -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
-        PlayerOrientation.SensorPortrait -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-        PlayerOrientation.Landscape -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        PlayerOrientation.ReverseLandscape -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
-        PlayerOrientation.SensorLandscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-      }
-  }
-
   private fun setOrientation() {
     // Skip — we're already exiting and have deliberately locked orientation
     // for a clean transition. Letting this run mid-exit can race with that
