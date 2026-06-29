@@ -2,6 +2,66 @@
 
 These notes are written in plain English and focus on what changed for real use.
 
+# MpvRxN v1.5.0
+
+> **MpvRxN** is a custom fork of MpvRx.
+
+### ✨ New Features
+
+- 🎵 **Audio file support with thumbnails** — new toggle in *Settings → Audio → "Audio Player"*. Shows MP3, FLAC, AAC, OGG, M4A, OPUS, WAV, WMA and more alongside videos in every folder, with embedded album art. Off by default.
+- 🔊 **Background audio on back press** — pressing back (gesture, button, or the in-player arrow) while playing audio now keeps it playing in the background instead of stopping.
+- 📂 **Background play doesn't exist app ** — Now when we press background play button the player doesn't go back to launcher instead it goes back where the file is being play.
+- 🔔 **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
+- 👆 **Swipe between tabs** — works even when the nav bar is hidden, with wrap-around.
+- ⏫ **Long-press folder name or title** to scroll back to the top instantly.
+- ▶️ **FAB quick play** — tap plays your most recently played video; long-press opens the original menu.
+- ⏱️ **Long-press the speed button** to reset playback speed to your default.
+- 🔍 **Search auto-opens the keyboard** when tapped.
+- 🔓 **Easy Unlock** — lock icons on both sides for one-tap unlocking.
+- 🎞️ **Smooth Back Animation toggle** — choose a smooth scale exit or an instant cut.
+
+### 🎨 Improvements
+
+- Transparent volume/brightness/speed/seek overlays with white text — no more dark boxes.
+- Cleaner speed pill (no arrow icon), no full slider panel during swipe.
+- Chnaged swipe-speed always jumping to 2x — now starts from your actual hold-speed preset.
+- Thinner, more consistent seekbar with a smaller thumb.
+- **Much faster folder loading** — disk-cached after first open, instant on every load after (even post-reboot).
+
+### 🎬 Picture-in-Picture
+
+- Play/Pause, Rewind (−10s), and Forward (+10s) buttons inside PiP now work correctly.
+
+### 🐛 Bug Fixes
+
+The **rotation/black-screen flash on exit** has haunted this fork for a while — this release fixes the large majority of cases, with several genuinely separate causes resolved:
+- System back (gesture/button) was sometimes silently disabled, which could stop background audio and skip folder-return logic.
+- The exit orientation lock could get overridden mid-transition by an unrelated background process.
+- The "instant exit" setting wasn't actually taking effect due to a timing bug.
+- Android 14's own predictive-back preview is now suppressed specifically for the player.
+- The manual background-play button had its own separate flash — fixed by locking orientation earlier in the process.
+
+Also fixed:
+- Audio-only folders not showing up when Audio Player is enabled.
+- Video pausing/restarting briefly when switching system day/night theme.
+- A UI blink when returning to the home screen after playback.
+- Single-tap on the FAB sometimes doing nothing.
+
+### 💡 Known Limitations
+
+- With the **system-wide Android "Predictive Back Animations"** developer setting on, a very brief black-screen flash can still occasionally occur on exit. Turning that system setting off avoids it entirely.
+- A few 10-bit/AVI files may still show inconsistent thumbnails on some devices.
+
+✨ Default Settings Changes
+Smooth Back Animation: now on by default
+Easy Unlock: now on by default
+Hide Player Buttons Background: now on by default
+Seekbar Style: now defaults to Standard (was Thick)
+Use Online Skip Markers: now off by default
+Bottom navigation tabs (Home, Recents, Playlists, Network): now off by default
+---
+
+
 ## 1.4.1-final
 
 ### Player, Playback & Stability
