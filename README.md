@@ -2,9 +2,6 @@
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
-<p align="center">
-  <img src="assets/demo.gif" alt="Demo GIF" width="100%">
-</p>
 <h1 align="center">MpvRxN</h1>
 <p align="center">
   <img src="assets/demo.gif" width="100%">
