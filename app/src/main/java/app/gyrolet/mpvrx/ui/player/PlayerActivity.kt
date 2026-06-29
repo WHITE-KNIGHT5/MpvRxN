@@ -875,31 +875,44 @@ class PlayerActivity :
 
     isUserFinishing = true
 
-    // Tell MainActivity which folder to navigate back to, regardless of
-    // whether it's already in this task (e.g. placed there by
-    // MediaPlaybackService's TaskStackBuilder when reopened from a
-    // notification) or needs to be started fresh. Previously this only
-    // ran when isTaskRoot was true, which broke entirely once
-    // TaskStackBuilder started placing MainActivity beneath PlayerActivity
-    // in the same task — isTaskRoot became false in that exact scenario,
-    // skipping this whole block and landing on a blank MainActivity with
-    // no folder info, defaulting to home instead of the playing folder.
-    val playablePath = currentPlayableUri
-    val isLocalFilePath = playablePath != null &&
-      !playablePath.startsWith("http://") &&
-      !playablePath.startsWith("https://") &&
-      !playablePath.startsWith("/proc/self/fd/")
-    val folderPath = if (isLocalFilePath) {
-      java.io.File(playablePath!!).parent ?: ""
-    } else {
-      ""
-    }
-    if (folderPath.isNotBlank()) {
-      val mainIntent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
-        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        putExtra("navigate_to_folder", folderPath)
+    // Only restore folder navigation if this file was opened through
+    // MpvRxN's own UI (launch_source is always set in that case — e.g.
+    // "video_list", "notification"). When a file is opened externally via
+    // another app's share/open-with intent (e.g. tapping a downloaded song
+    // in Telegram and choosing MpvRxN), launch_source is absent — there's
+    // no meaningful in-app folder to return to, and forcing MainActivity
+    // open here was hijacking back navigation that should just return the
+    // user to the app that launched this (Telegram), matching upstream's
+    // behavior and normal Android inter-app conventions.
+    val wasOpenedFromOwnUi = intent.getStringExtra("launch_source") != null
+
+    if (wasOpenedFromOwnUi) {
+      // Tell MainActivity which folder to navigate back to, regardless of
+      // whether it's already in this task (e.g. placed there by
+      // MediaPlaybackService's TaskStackBuilder when reopened from a
+      // notification) or needs to be started fresh. Previously this only
+      // ran when isTaskRoot was true, which broke entirely once
+      // TaskStackBuilder started placing MainActivity beneath PlayerActivity
+      // in the same task — isTaskRoot became false in that exact scenario,
+      // skipping this whole block and landing on a blank MainActivity with
+      // no folder info, defaulting to home instead of the playing folder.
+      val playablePath = currentPlayableUri
+      val isLocalFilePath = playablePath != null &&
+        !playablePath.startsWith("http://") &&
+        !playablePath.startsWith("https://") &&
+        !playablePath.startsWith("/proc/self/fd/")
+      val folderPath = if (isLocalFilePath) {
+        java.io.File(playablePath!!).parent ?: ""
+      } else {
+        ""
       }
-      startActivity(mainIntent)
+      if (folderPath.isNotBlank()) {
+        val mainIntent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
+          addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+          putExtra("navigate_to_folder", folderPath)
+        }
+        startActivity(mainIntent)
+      }
     }
 
     finish()
