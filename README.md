@@ -2,10 +2,10 @@
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
+<h1 align="center">MpvRxN</h1>
 <p align="center">
   <img src="assets/demo.gif" width="350">
 </p>
-<h1 align="center">MpvRxN</h1>
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
