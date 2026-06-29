@@ -1,4 +1,4 @@
-<h1 align="center">Almost Ready</h1>
+<h1 align="center">Released 🎉</h1>
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
@@ -60,6 +60,15 @@ All notable changes to MpvRxN are documented here.
 
 - **PiP controls fixed** — Play/Pause, Rewind (−10s), and Forward (+10s) buttons inside PiP mode now work correctly.
 
+- ### ✨ Default Settings Changes
+- Smooth Back Animation: now on by default
+- Easy Unlock: now on by default
+- Hide Player Buttons Background: now on by default
+- Seekbar Style: now defaults to Standard
+- Use Online Skip Markers: now off by default
+- Bottom navigation tabs (Home, Recents, Playlists, Network): now off by default
+**[You can turn on them in Settings if you want]**
+
 ### 🐛 Bug Fixes
 
 **Rotation/black-screen flash on exit** — this has been a recurring issue across many sessions, with several genuinely separate root causes found and fixed one at a time:
@@ -81,7 +90,7 @@ All notable changes to MpvRxN are documented here.
 - **About screen**: shows `MpvRxN`, version, author, and fork GitHub URL.
 
 ### 💡 Known Limitations
-
+- Some things that work properly on some devices may not work on some other devices.
 - With the **system-wide Android "Predictive Back Animations" developer setting** enabled, a very brief black-screen flash can still occasionally occur on exit. Disabling that system setting avoids it entirely; this is separate from the in-app "Smooth Back Animation" toggle.
 - A few 10-bit/AVI files may still show inconsistent thumbnails on some devices.
 - The day/night theme-switch playback interruption fix may not fully resolve the issue on every device/Android skin, since part of the relevant surface-handling code lives in a precompiled library (`mpvlib.aar`) outside this fork's source.
