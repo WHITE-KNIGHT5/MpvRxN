@@ -1,5 +1,7 @@
-<h1 align="center">Ready</h1>
-
+<h1 align="center">Released 🎉</h1>
+<p align="center">
+  <img src="assets/demo.gif" width="350">
+</p>
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
@@ -12,9 +14,6 @@
 - <i>MpvRxN: Fully vibe-coded app with Claude AI </>
 
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
-</p>
-<p align="center">
-  <img src="assets/demo.gif" width="350">
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
