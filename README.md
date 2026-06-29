@@ -1,10 +1,10 @@
-<h1 align="center">Released 🎉</h1>
+<h1 align="center">Ready</h1>
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
 <h1 align="center">MpvRxN</h1>
 <p align="center">
-  <img src="assets/demo.gif" width="500">
+  <img src="assets/demo.gif" width="600">
 </p>
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
