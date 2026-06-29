@@ -1,5 +1,5 @@
 <h1 align="center">Almost Ready</h1>
-![](assets/demo.gif)
+![https://github.com/WHITE-KNIGHT5/MpvRxN/blob/master/assets/demo.gif](assets/demo.gif)
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
