@@ -14,6 +14,9 @@
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
 <p align="center">
+  <img src="assets/demo.gif" width="350">
+</p>
+<p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
   <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" />
   <img
