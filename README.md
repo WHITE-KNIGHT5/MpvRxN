@@ -5,12 +5,11 @@
 <p align="center">
   <img src="assets/demo.gif" width="100%">
 </p>
+MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
+- <i> MpvRxN: Fully vibe-coded app with Claude AI </> </i>
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
-- <i> MpvRxN: Fully vibe-coded app with Claude AI </> </i>
-
-MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
 
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
