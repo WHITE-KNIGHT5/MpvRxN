@@ -24,7 +24,7 @@ MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
 
 # Changelogs
 
-All notable changes to MpvRxN are documented here.
+All notable changes to [MpvRxN](https://github.com/WHITE-KNIGHT5/MpvRxN) are documented here.
 
 ---
 
