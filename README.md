@@ -10,6 +10,8 @@
   <br>
 - <i>MpvRxN: Fully vibe-coded app with Claude AI </>
 
+-MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
+
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
 <p align="center">
