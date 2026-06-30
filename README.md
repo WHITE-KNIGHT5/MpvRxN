@@ -1,4 +1,3 @@
-<h1 align="center">Released 🎉</h1>
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
