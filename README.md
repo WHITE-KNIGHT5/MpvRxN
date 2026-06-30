@@ -8,7 +8,7 @@
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
-- <i> MpvRxN: Fully vibe-coded app with Claude AI </> <i>
+- <i> MpvRxN: Fully vibe-coded app with Claude AI </> </i>
 
 MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
 
