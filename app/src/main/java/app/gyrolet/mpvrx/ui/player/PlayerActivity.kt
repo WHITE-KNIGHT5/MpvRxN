@@ -537,6 +537,14 @@ class PlayerActivity :
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+
+    // Set orientation before setContentView() so the window is created
+    // directly in the correct orientation, eliminating the portrait→landscape
+    // flip on open. This version is safe to call this early because it
+    // never touches `player` (binding.player) — only reads preferences and
+    // sets requestedOrientation, both of which are safe before inflation.
+    applySafeInitialOrientationGuess()
+
     setContentView(binding.root)
     setupSystemBarsAutoHide()
 
@@ -3794,6 +3802,22 @@ class PlayerActivity :
   }
 
   // ==================== Orientation Management ====================
+
+  private fun applySafeInitialOrientationGuess() {
+    // Safe to call before setContentView() — only reads preferences and
+    // sets requestedOrientation. Never touches player/binding.
+    val orientationPref = playerPreferences.orientation.get()
+    requestedOrientation = when (orientationPref) {
+      PlayerOrientation.Free -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+      PlayerOrientation.Video -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+      PlayerOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+      PlayerOrientation.ReversePortrait -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+      PlayerOrientation.SensorPortrait -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+      PlayerOrientation.Landscape -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+      PlayerOrientation.ReverseLandscape -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+      PlayerOrientation.SensorLandscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+  }
 
   /**
    * Sets the screen orientation based on user preferences.

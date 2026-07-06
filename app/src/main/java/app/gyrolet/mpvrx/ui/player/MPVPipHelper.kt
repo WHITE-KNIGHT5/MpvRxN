@@ -199,7 +199,15 @@ class MPVPipHelper(
   }
 
   fun onStop() {
-    unregisterPipReceiver()
+    // Do NOT unregister when still in PiP mode — onStop() fires during the
+    // brief Activity resume/stop cycle that happens when navigating to another
+    // app while in PiP (confirmed in logcat: handleResumeActivity fires at
+    // 14:32:16 then stops again while the PiP window is still visible).
+    // Unregistering here kills the receiver mid-session, making buttons
+    // permanently unresponsive until the next PiP entry re-registers it.
+    if (!activity.isInPictureInPictureMode) {
+      unregisterPipReceiver()
+    }
   }
 }
 
