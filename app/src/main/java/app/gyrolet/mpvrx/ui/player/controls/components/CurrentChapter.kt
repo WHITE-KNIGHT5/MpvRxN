@@ -60,17 +60,10 @@ fun CurrentChapter(
         .clip(AppShapeScale.full)
         .clickable(onClick = onClick),
     shape = AppShapeScale.full,
-    color =
-        MaterialTheme.colorScheme.surfaceContainer.copy(
-          alpha = 0.55f,
-        ),
+    color = Color.Transparent,
     contentColor = MaterialTheme.colorScheme.onSurface,
     tonalElevation = 0.dp,
-    border =
-        BorderStroke(
-          1.dp,
-          MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-        ),
+    border = null,
   ) {
     AnimatedContent(
       targetState = chapter,
@@ -121,10 +114,4 @@ fun CurrentChapter(
           )
         }
       }
-    }
-  }
-}
-
-
-
-
+  
