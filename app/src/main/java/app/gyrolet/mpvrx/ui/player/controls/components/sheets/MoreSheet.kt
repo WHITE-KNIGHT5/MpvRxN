@@ -32,7 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimeInput
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -386,7 +386,7 @@ fun TimePickerDialog(
             is24Hour = true,
           )
 
-        TimeInput(state = state)
+        TimePicker(state = state)
         
         // Quick Presets
         Column(
