@@ -63,7 +63,6 @@ fun CurrentChapter(
     color = Color.Transparent,
     contentColor = MaterialTheme.colorScheme.onSurface,
     tonalElevation = 0.dp,
-    border = null,
   ) {
     AnimatedContent(
       targetState = chapter,
@@ -114,4 +113,10 @@ fun CurrentChapter(
           )
         }
       }
-  
+    }
+  }
+}
+
+
+
+
