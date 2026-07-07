@@ -2,6 +2,8 @@ package app.gyrolet.mpvrx.ui.player.controls.components.sheets
 
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
+import androidx.compose.material.icons.Icons as MaterialIcons
+import androidx.compose.material.icons.filled.Settings
 
 import android.text.format.DateUtils
 import androidx.compose.animation.core.animateFloatAsState
@@ -158,7 +160,7 @@ fun MoreSheet(
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
             ) {
-              Icon(imageVector = Icons.Default.Settings, contentDescription = null)
+              Icon(imageVector = Settings, contentDescription = null)
               Text(text = "Settings")
             }
           }
