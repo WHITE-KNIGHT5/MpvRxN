@@ -250,10 +250,12 @@ fun PlayerSheets(
     }
 
     Sheets.More -> {
+      val activity = androidx.compose.ui.platform.LocalContext.current as app.gyrolet.mpvrx.ui.player.PlayerActivity
       MoreSheet(
         remainingTime = sleepTimerTimeRemaining,
         onStartTimer = onStartSleepTimer,
         onDismissRequest = onDismissRequest,
+        onNavigateToSettings = { activity.openSettings() },
         onEnterFiltersPanel = { onOpenPanel(Panels.VideoFilters) },
         onEnterLuaScriptsPanel = { onOpenPanel(Panels.LuaScripts) },
         onAnime4KChanged = viewModel::restartHdrScreenOutputAndAmbientIfActive,
