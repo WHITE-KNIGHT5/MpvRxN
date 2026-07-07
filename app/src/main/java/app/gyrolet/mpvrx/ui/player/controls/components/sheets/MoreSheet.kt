@@ -32,7 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -74,6 +74,7 @@ fun MoreSheet(
   remainingTime: Int,
   onStartTimer: (Int) -> Unit,
   onDismissRequest: () -> Unit,
+  onNavigateToSettings: () -> Unit,
   onEnterFiltersPanel: () -> Unit,
   onEnterLuaScriptsPanel: () -> Unit,
   onAnime4KChanged: () -> Unit = {},
@@ -150,6 +151,15 @@ fun MoreSheet(
                   onTimeSelect = onStartTimer,
                 )
               }
+            }
+          }
+          TextButton(onClick = onNavigateToSettings) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+            ) {
+              Icon(imageVector = Icons.Default.Settings, contentDescription = null)
+              Text(text = "Settings")
             }
           }
           TextButton(onClick = onEnterFiltersPanel) {
@@ -386,7 +396,14 @@ fun TimePickerDialog(
             is24Hour = true,
           )
 
-        TimePicker(state = state)
+        val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+          // Dismiss keyboard immediately when the dialog opens — TimeInput
+          // auto-focuses its field and triggers the keyboard on show.
+          // User can still tap the field to open it manually.
+          keyboardController?.hide()
+        }
+        TimeInput(state = state)
         
         // Quick Presets
         Column(
