@@ -61,7 +61,7 @@ fun CurrentChapter(
         .clickable(onClick = onClick),
     shape = AppShapeScale.full,
     color = Color.Transparent,
-    contentColor = MaterialTheme.colorScheme.onSurface,
+    contentColor = Color.White,
     tonalElevation = 0.dp,
   ) {
     AnimatedContent(
@@ -98,7 +98,7 @@ fun CurrentChapter(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color.White,
             overflow = TextOverflow.Clip,
           )
           Text(
@@ -108,7 +108,7 @@ fun CurrentChapter(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color.White,
             modifier = Modifier.basicMarquee(),
           )
         }
