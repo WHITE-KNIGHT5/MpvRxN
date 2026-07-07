@@ -1043,7 +1043,6 @@ class PlayerActivity :
   override fun onDestroy() {
     Log.d(TAG, "PlayerActivity onDestroy")
     frameCaptureJob?.cancel()
-    lastFrameBitmap?.takeIf { !it.isRecycled }?.recycle()
     lastFrameBitmap = null
     val keepBackgroundPlaybackAlive =
       PlayerLifecyclePolicy.shouldKeepBackgroundPlaybackAliveOnDestroy(
@@ -1313,6 +1312,18 @@ class PlayerActivity :
   }
 
   fun getCurrentPlayableUriForLookup(): String? = currentPlayableUri ?: intent?.dataString
+
+  /**
+   * Returns to the app's main screen. Called from the Settings shortcut in
+   * the player's More sheet — gets the user back to the app quickly so they
+   * can navigate to Settings themselves, without having to back out manually.
+   */
+  fun openSettings() {
+    val intent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
+      addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+    startActivity(intent)
+  }
 
   override fun onStart() {
     super.onStart()
@@ -2525,7 +2536,11 @@ class PlayerActivity :
         bitmap,
         { result ->
           if (result == PixelCopy.SUCCESS) {
-            lastFrameBitmap?.takeIf { !it.isRecycled }?.recycle()
+            // Do NOT recycle the old bitmap here — the ImageView overlay
+            // may still be actively drawing it on the render thread at
+            // this exact moment. Manual recycling while the ImageView
+            // still holds a reference causes "trying to use a recycled
+            // bitmap" crash. Let GC handle it instead.
             lastFrameBitmap = bitmap
           }
         },
