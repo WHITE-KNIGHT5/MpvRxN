@@ -1321,6 +1321,7 @@ class PlayerActivity :
   fun openSettings() {
     val intent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
       addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      putExtra("navigate_to_settings", true)
     }
     startActivity(intent)
   }
@@ -3759,6 +3760,13 @@ class PlayerActivity :
     if (isInPictureInPictureMode) {
       wasInPipMode = true
       handledPipDismissal = false
+      // Start the background playback service when entering PiP so the
+      // media notification with controls (Previous, Pause/Play, Next) shows
+      // on the lock screen and notification shade — same behavior as
+      // YouTube/Morphe in PiP. Without this, no notification appears since
+      // the service only starts when the user explicitly presses the
+      // background-play button, not when entering PiP.
+      startBackgroundPlayback(allowUserPrompt = false)
     }
 
     binding.controls.alpha = if (isInPictureInPictureMode) 0f else 1f
