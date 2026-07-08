@@ -66,7 +66,7 @@ class PlayerPreferences(
 
   val closeAfterReachingEndOfVideo = preferenceStore.getBoolean("close_after_eof", true)
 
-  val rememberBrightness = preferenceStore.getBoolean("remember_brightness")
+  val rememberBrightness = preferenceStore.getBoolean("remember_brightness", true)
   val defaultBrightness = preferenceStore.getFloat("default_brightness", -1f)
 
   val allowGesturesInPanels = preferenceStore.getBoolean("allow_gestures_in_panels")
