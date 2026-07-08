@@ -476,6 +476,7 @@ fun TimePickerDialog(
     }
     } // end Box
   }
+}
 
 @Composable
 fun SectionHeaderWithInfo(
