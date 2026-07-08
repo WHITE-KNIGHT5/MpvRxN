@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
   // (e.g. pressing back after opening a video from a notification).
   // Set by handleNavigationIntent(), consumed by Navigator()'s LaunchedEffect.
   private val pendingFolderNavigation = mutableStateOf<String?>(null)
+  private val pendingSettingsNavigation = mutableStateOf(false)
 
   // Create a coroutine scope tied to the activity lifecycle
   private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -150,16 +151,11 @@ class MainActivity : ComponentActivity() {
     val folderPath = intent.getStringExtra("navigate_to_folder")
     if (!folderPath.isNullOrBlank()) {
       pendingFolderNavigation.value = folderPath
-      // Clear it immediately so a subsequent onCreate() for this SAME
-      // underlying Intent (Activity recreation due to a config change,
-      // which Android preserves the launching Intent across) doesn't
-      // reprocess and re-trigger this again. Re-triggering raced against
-      // the back-stack's own restoration and could push a fresh, not-yet-
-      // loaded duplicate folder entry on top of the one already correctly
-      // restored — pressing back would pop the empty duplicate and reveal
-      // the real one underneath, looking like "empty folder opens inside
-      // the original folder."
       intent.removeExtra("navigate_to_folder")
+    }
+    if (intent.getBooleanExtra("navigate_to_settings", false)) {
+      pendingSettingsNavigation.value = true
+      intent.removeExtra("navigate_to_settings")
     }
   }
 
@@ -318,20 +314,24 @@ class MainActivity : ComponentActivity() {
       LaunchedEffect(pendingFolder) {
         if (!pendingFolder.isNullOrBlank()) {
           val folderName = File(pendingFolder).name.ifBlank { pendingFolder }
-          // Avoid pushing a duplicate entry if we're already on this exact
-          // folder — doing so unconditionally created a second, freshly-
-          // loading instance stacked on top of the existing one, which is
-          // what caused the "empty folder, press back to see it populated"
-          // symptom (the new instance hadn't loaded yet; the old one
-          // underneath already had). bucketId/folderName are private, so
-          // structural equality (data class ==) is used instead of direct
-          // property access.
           val candidate = VideoListScreen(bucketId = pendingFolder, folderName = folderName)
           val alreadyOnThisFolder = typedBackstack.lastOrNull() == candidate
           if (!alreadyOnThisFolder) {
             typedBackstack.add(candidate)
           }
           pendingFolderNavigation.value = null
+        }
+      }
+
+      // Navigate to Settings when triggered from the player's More sheet.
+      val goToSettings = pendingSettingsNavigation.value
+      LaunchedEffect(goToSettings) {
+        if (goToSettings) {
+          val alreadyOnSettings = typedBackstack.lastOrNull() == app.gyrolet.mpvrx.ui.preferences.PreferencesScreen
+          if (!alreadyOnSettings) {
+            typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
+          }
+          pendingSettingsNavigation.value = false
         }
       }
 
