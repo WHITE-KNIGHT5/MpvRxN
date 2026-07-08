@@ -153,23 +153,6 @@ fun MoreSheet(
               }
             }
           }
-          TextButton(onClick = onNavigateToSettings) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
-            ) {
-              Text(text = "Settings")
-            }
-          }
-          TextButton(onClick = onEnterFiltersPanel) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
-            ) {
-              Icon(imageVector = Icons.Default.Tune, contentDescription = null)
-              Text(text = stringResource(id = R.string.player_sheets_filters_title))
-            }
-          }
           TextButton(
             onClick = onEnterLuaScriptsPanel,
             enabled = mpvConfStorageLocation.isNotBlank(),
@@ -202,6 +185,23 @@ fun MoreSheet(
                     LocalContentColor.current
                   },
               )
+            }
+          }
+          TextButton(onClick = onEnterFiltersPanel) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+            ) {
+              Icon(imageVector = Icons.Default.Tune, contentDescription = null)
+              Text(text = stringResource(id = R.string.player_sheets_filters_title))
+            }
+          }
+          TextButton(onClick = onNavigateToSettings) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+            ) {
+              Text(text = "Settings")
             }
           }
         }
@@ -395,16 +395,10 @@ fun TimePickerDialog(
             is24Hour = true,
           )
 
-        val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-          // Dismiss keyboard immediately when the dialog opens — TimeInput
-          // auto-focuses its field and triggers the keyboard on show.
-          // User can still tap the field to open it manually.
-          keyboardController?.hide()
-        }
-        TimeInput(state = state)
-        
-        // Quick Presets
+        // Quick Presets shown first — no keyboard opens automatically.
+        // TimeInput only appears when user explicitly taps "Custom".
+        var showCustomInput by remember { mutableStateOf(false) }
+
         Column(
             horizontalAlignment = Alignment.Start,
             modifier = Modifier.fillMaxWidth()
@@ -422,7 +416,7 @@ fun TimePickerDialog(
                 sleepTimerPresets.forEach { minutes ->
                     FilterChip(
                         selected = false,
-                        onClick = { 
+                        onClick = {
                             onTimeSelect(minutes * 60)
                             onDismissRequest()
                         },
@@ -430,7 +424,17 @@ fun TimePickerDialog(
                         leadingIcon = null,
                     )
                 }
+                FilterChip(
+                    selected = showCustomInput,
+                    onClick = { showCustomInput = !showCustomInput },
+                    label = { Text("Custom") },
+                    leadingIcon = null,
+                )
             }
+        }
+
+        if (showCustomInput) {
+          TimeInput(state = state)
         }
 
         // Actions
