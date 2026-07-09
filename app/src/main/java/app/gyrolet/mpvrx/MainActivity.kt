@@ -327,10 +327,14 @@ class MainActivity : ComponentActivity() {
       val goToSettings = pendingSettingsNavigation.value
       LaunchedEffect(goToSettings) {
         if (goToSettings) {
-          val alreadyOnSettings = typedBackstack.lastOrNull() == app.gyrolet.mpvrx.ui.preferences.PreferencesScreen
-          if (!alreadyOnSettings) {
-            typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
+          // Clear back-stack down to just MainScreen first, then push
+          // PreferencesScreen. Without this, back from Settings would step
+          // through: Settings → Folder → MainScreen → Player (3 presses).
+          // With this, back from Settings goes directly: Settings → Player (1 press).
+          while (typedBackstack.size > 1) {
+            typedBackstack.removeLastOrNull()
           }
+          typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
           pendingSettingsNavigation.value = false
         }
       }
