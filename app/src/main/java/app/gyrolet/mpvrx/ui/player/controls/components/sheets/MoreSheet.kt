@@ -129,32 +129,6 @@ fun MoreSheet(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           var isSleepTimerDialogShown by remember { mutableStateOf(false) }
-          TextButton(onClick = { isSleepTimerDialogShown = true }) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
-            ) {
-              Icon(imageVector = Icons.Outlined.Timer, contentDescription = null)
-              Text(
-                text =
-                  if (remainingTime == 0) {
-                    stringResource(R.string.timer_title)
-                  } else {
-                    stringResource(
-                      R.string.timer_remaining,
-                      DateUtils.formatElapsedTime(remainingTime.toLong()),
-                    )
-                  },
-              )
-              if (isSleepTimerDialogShown) {
-                TimePickerDialog(
-                  remainingTime = remainingTime,
-                  onDismissRequest = { isSleepTimerDialogShown = false },
-                  onTimeSelect = onStartTimer,
-                )
-              }
-            }
-          }
           TextButton(
             onClick = onEnterLuaScriptsPanel,
             enabled = mpvConfStorageLocation.isNotBlank(),
@@ -204,6 +178,32 @@ fun MoreSheet(
               horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
             ) {
               Text(text = "Settings")
+            }
+          }
+          TextButton(onClick = { isSleepTimerDialogShown = true }) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+            ) {
+              Icon(imageVector = Icons.Outlined.Timer, contentDescription = null)
+              Text(
+                text =
+                  if (remainingTime == 0) {
+                    stringResource(R.string.timer_title)
+                  } else {
+                    stringResource(
+                      R.string.timer_remaining,
+                      DateUtils.formatElapsedTime(remainingTime.toLong()),
+                    )
+                  },
+              )
+              if (isSleepTimerDialogShown) {
+                TimePickerDialog(
+                  remainingTime = remainingTime,
+                  onDismissRequest = { isSleepTimerDialogShown = false },
+                  onTimeSelect = onStartTimer,
+                )
+              }
             }
           }
         }
