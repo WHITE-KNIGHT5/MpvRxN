@@ -3947,7 +3947,7 @@ class PlayerActivity :
       // frame decode — fast and safe to call this early). Falls back to
       // landscape for files that can't be read or aren't local.
       val detectedLandscape = runCatching {
-        val uri = extractUriFromIntent(intent) ?: return@runCatching null
+        val uri = extractUriFromIntent(intent)?.toString() ?: return@runCatching null
         val retriever = android.media.MediaMetadataRetriever()
         try {
           if (uri.startsWith("content://")) {
