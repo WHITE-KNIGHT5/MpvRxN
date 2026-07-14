@@ -1400,12 +1400,10 @@ class PlayerActivity :
    */
   fun openSettings() {
     val intent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
-      // SINGLE_TOP: reuses existing MainActivity if alive, triggering
-      // onNewIntent() instead of recreating it — avoids the harsh
-      // recreation flash that CLEAR_TOP causes.
-      // REORDER_TO_FRONT: brings MainActivity to front of the same task
-      // so back from Settings returns to the player, not the folder.
-      addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+      // CLEAR_TASK: MainActivity starts completely fresh with an empty
+      // back-stack, so back from Settings goes directly back to the player
+      // instead of stepping through the folder and home screen first.
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
       putExtra("navigate_to_settings", true)
     }
     startActivity(intent)
