@@ -3940,9 +3940,52 @@ class PlayerActivity :
     // Safe to call before setContentView() — only reads preferences and
     // sets requestedOrientation. Never touches player/binding.
     val orientationPref = playerPreferences.orientation.get()
+
+    if (orientationPref == PlayerOrientation.Video) {
+      // For "Video" mode, try to detect the video's actual orientation
+      // quickly from the container metadata (just reads the header, no
+      // frame decode — fast and safe to call this early). Falls back to
+      // landscape for files that can't be read or aren't local.
+      val detectedLandscape = runCatching {
+        val uri = extractUriFromIntent(intent) ?: return@runCatching null
+        val retriever = android.media.MediaMetadataRetriever()
+        try {
+          if (uri.startsWith("content://")) {
+            retriever.setDataSource(this, android.net.Uri.parse(uri))
+          } else if (!uri.startsWith("http")) {
+            retriever.setDataSource(uri)
+          } else {
+            return@runCatching null // network stream — skip, default to landscape
+          }
+          val width = retriever.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+          )?.toIntOrNull() ?: 0
+          val height = retriever.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+          )?.toIntOrNull() ?: 0
+          val rotation = retriever.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
+          )?.toIntOrNull() ?: 0
+          // Account for rotation metadata — some videos are stored rotated
+          val effectiveWidth = if (rotation == 90 || rotation == 270) height else width
+          val effectiveHeight = if (rotation == 90 || rotation == 270) width else height
+          if (effectiveWidth > 0 && effectiveHeight > 0) effectiveWidth > effectiveHeight else null
+        } finally {
+          retriever.release()
+        }
+      }.getOrNull()
+
+      requestedOrientation = when (detectedLandscape) {
+        true -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        false -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        null -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE // fallback
+      }
+      return
+    }
+
     requestedOrientation = when (orientationPref) {
       PlayerOrientation.Free -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-      PlayerOrientation.Video -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+      PlayerOrientation.Video -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE // unreachable
       PlayerOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
       PlayerOrientation.ReversePortrait -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
       PlayerOrientation.SensorPortrait -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -3968,6 +4011,13 @@ class PlayerActivity :
     // lock (e.g. if the player reports a stale/transitional aspect ratio
     // during teardown) and re-trigger a visible rotation flash.
     if (isUserFinishing) return
+
+    // Skip — user manually changed the rotation via the rotation button.
+    // Resetting to the preference here would undo their choice every time
+    // they minimise and return to the app, which is exactly the bug.
+    // This flag is cleared when a new file starts loading so each file
+    // still gets a fresh orientation from the preference.
+    if (hasManualRotationOverride) return
 
     // Audio files should always play in portrait — there's no real video to
     // size the screen around. Without this, embedded album art (which MPV
@@ -4540,7 +4590,14 @@ class PlayerActivity :
     get() = requestedOrientation
     set(value) {
       requestedOrientation = value
+      // User manually changed the rotation via the rotation button —
+      // mark this so setOrientation() doesn't reset it on next resume
+      hasManualRotationOverride = true
     }
+
+  /** True when the user has manually changed rotation via the rotation button.
+   *  Cleared when a new file loads so the next video starts fresh. */
+  private var hasManualRotationOverride = false
 
   // ==================== Playlist Management ====================
 
@@ -4787,6 +4844,10 @@ class PlayerActivity :
     // Load the new video
     // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
     isReady = false
+    // Clear manual rotation override for this new file — each new file
+    // should get a fresh orientation from the user's preference, while
+    // still preserving any rotation change the user makes during playback.
+    hasManualRotationOverride = false
     viewModel.onVideoLoadStarted()
     Log.d(TAG, "loadPlaylistItemInternal: index=$index uri=$uri playableUri=$playableUri fileName=$fileName")
 
