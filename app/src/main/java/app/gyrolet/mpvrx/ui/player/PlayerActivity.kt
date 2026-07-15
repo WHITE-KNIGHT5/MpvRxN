@@ -327,30 +327,6 @@ class PlayerActivity :
    */
   private var lastFileLoadedAtMs = 0L
 
-  // ==================== PiP Overlay ====================
-
-  /**
-   * Broadcast receiver that handles playback control commands sent back from
-   * PipOverlayService (the floating buttons drawn over other apps while in PiP).
-   */
-  private val pipOverlayCommandReceiver = object : android.content.BroadcastReceiver() {
-    override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
-      when (intent.action) {
-        PipOverlayService.ACTION_PLAY_PAUSE -> {
-          if (viewModel.paused == true) viewModel.unpause() else viewModel.pause()
-          // Send updated playback state back to overlay so it updates its icon
-          sendPipOverlayPlaybackState()
-        }
-        PipOverlayService.ACTION_SEEK_BACK -> {
-          MPVLib.command("seek", "-10", "relative")
-        }
-        PipOverlayService.ACTION_SEEK_FORWARD -> {
-          MPVLib.command("seek", "10", "relative")
-        }
-      }
-    }
-  }
-
   /**
    * Rotation flash fix: mpv's render surface briefly disconnects its buffer
    * producer while it's resized during a config change (confirmed via
@@ -1068,8 +1044,6 @@ class PlayerActivity :
     Log.d(TAG, "PlayerActivity onDestroy")
     frameCaptureJob?.cancel()
     lastFrameBitmap = null
-    stopPipOverlay()
-    runCatching { unregisterReceiver(pipOverlayCommandReceiver) }
     val keepBackgroundPlaybackAlive =
       PlayerLifecyclePolicy.shouldKeepBackgroundPlaybackAliveOnDestroy(
         manualBackgroundPlayback = isManualBackgroundPlayback,
@@ -1274,12 +1248,6 @@ class PlayerActivity :
   override fun onStop() {
     runCatching {
       pipHelper.onStop()
-      runCatching { unregisterReceiver(pipOverlayCommandReceiver) }
-
-      // Stop the floating overlay when leaving PiP
-      if (!isInPictureInPictureMode) {
-        stopPipOverlay()
-      }
 
       if (noisyReceiverRegistered) {
         unregisterReceiver(noisyReceiver)
@@ -1345,54 +1313,6 @@ class PlayerActivity :
 
   fun getCurrentPlayableUriForLookup(): String? = currentPlayableUri ?: intent?.dataString
 
-  // ==================== PiP Overlay Helpers ====================
-
-  private fun sendPipOverlayPlaybackState() {
-    val isPlaying = viewModel.paused == false
-    sendBroadcast(
-      android.content.Intent(PipOverlayService.ACTION_UPDATE_PLAYBACK).apply {
-        setPackage(packageName)
-        putExtra(PipOverlayService.EXTRA_IS_PLAYING, isPlaying)
-      }
-    )
-  }
-
-  private fun startPipOverlay() {
-    val intent = android.content.Intent(this, PipOverlayService::class.java).apply {
-      action = PipOverlayService.ACTION_START
-      putExtra(PipOverlayService.EXTRA_IS_PLAYING, viewModel.paused == false)
-    }
-    startService(intent)
-  }
-
-  private fun stopPipOverlay() {
-    runCatching {
-      stopService(android.content.Intent(this, PipOverlayService::class.java))
-    }
-  }
-
-  /**
-   * Checks if the "display over other apps" permission is granted.
-   * If not, opens the system settings page to let the user grant it,
-   * then returns false (caller should not enter PiP yet).
-   * If already granted, returns true (caller can enter PiP immediately).
-   */
-  fun checkAndRequestOverlayPermission(): Boolean {
-    if (android.provider.Settings.canDrawOverlays(this)) return true
-    // Permission not granted — open system settings page for this app
-    android.widget.Toast.makeText(
-      this,
-      "Allow \"Display over other apps\" for PiP controls to work outside MpvRxN",
-      android.widget.Toast.LENGTH_LONG,
-    ).show()
-    val intent = android.content.Intent(
-      android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-      Uri.parse("package:$packageName"),
-    )
-    startActivity(intent)
-    return false
-  }
-
   /**
    * Returns to the app's main screen. Called from the Settings shortcut in
    * the player's More sheet — gets the user back to the app quickly so they
@@ -1416,17 +1336,6 @@ class PlayerActivity :
       setupWindowFlags()
       setupSystemUI()
       pipHelper.registerPipReceiver()
-
-      val pipOverlayFilter = android.content.IntentFilter().apply {
-        addAction(PipOverlayService.ACTION_PLAY_PAUSE)
-        addAction(PipOverlayService.ACTION_SEEK_BACK)
-        addAction(PipOverlayService.ACTION_SEEK_FORWARD)
-      }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        registerReceiver(pipOverlayCommandReceiver, pipOverlayFilter, android.content.Context.RECEIVER_EXPORTED)
-      } else {
-        registerReceiver(pipOverlayCommandReceiver, pipOverlayFilter)
-      }
 
       // Restore video if it was disabled for background playback
       enableVideoAfterBackground()
@@ -2725,10 +2634,6 @@ class PlayerActivity :
         if (!value && !isReady) {
           isReady = true
         }
-        // Keep the PiP overlay's play/pause icon in sync
-        if (isInPictureInPictureMode) {
-          sendPipOverlayPlaybackState()
-        }
       }
       "eof-reached" -> handleEndOfFile(value)
     }
@@ -3859,13 +3764,6 @@ class PlayerActivity :
       wasInPipMode = true
       handledPipDismissal = false
       startBackgroundPlayback(allowUserPrompt = false)
-      // Start the floating overlay with playback controls if permission granted
-      if (android.provider.Settings.canDrawOverlays(this)) {
-        startPipOverlay()
-      }
-    } else {
-      // Exiting PiP — stop the overlay
-      stopPipOverlay()
     }
 
     binding.controls.alpha = if (isInPictureInPictureMode) 0f else 1f
@@ -3912,15 +3810,6 @@ class PlayerActivity :
    * Enters Picture-in-Picture mode and hides all overlay controls.
    */
   fun enterPipModeHidingOverlay() {
-    // If the user hasn't granted "display over other apps" yet, ask now
-    // (only on first PiP press — after granting, canDrawOverlays() returns
-    // true and this block is skipped on all future presses).
-    if (!android.provider.Settings.canDrawOverlays(this)) {
-      checkAndRequestOverlayPermission()
-      // Still enter PiP even if permission isn't granted yet — the overlay
-      // just won't show until they grant it and press PiP again.
-    }
-
     runCatching {
       enterPipUIMode()
     }.onFailure { e ->
