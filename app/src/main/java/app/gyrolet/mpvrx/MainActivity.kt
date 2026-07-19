@@ -304,7 +304,14 @@ class MainActivity : ComponentActivity() {
 
       LaunchedEffect(hasNavEntries) {
         if (!hasNavEntries) {
-          typedBackstack.add(MainScreen)
+          if (pendingSettingsNavigation.value) {
+            // Go straight to Settings without showing MainScreen first —
+            // prevents the brief home screen flash before PreferencesScreen
+            typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
+            pendingSettingsNavigation.value = false
+          } else {
+            typedBackstack.add(MainScreen)
+          }
         }
       }
 
@@ -320,21 +327,6 @@ class MainActivity : ComponentActivity() {
             typedBackstack.add(candidate)
           }
           pendingFolderNavigation.value = null
-        }
-      }
-
-      // Navigate to Settings when triggered from the player's More sheet.
-      val goToSettings = pendingSettingsNavigation.value
-      LaunchedEffect(goToSettings) {
-        if (goToSettings) {
-          // Push PreferencesScreen — the backstack is already empty because
-          // openSettings() uses FLAG_ACTIVITY_CLEAR_TASK which restarts
-          // MainActivity fresh, so there's nothing to clear here.
-          // Back from Settings → MainActivity (empty, auto-pops) → Player.
-          if (typedBackstack.lastOrNull() != app.gyrolet.mpvrx.ui.preferences.PreferencesScreen) {
-            typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
-          }
-          pendingSettingsNavigation.value = false
         }
       }
 
