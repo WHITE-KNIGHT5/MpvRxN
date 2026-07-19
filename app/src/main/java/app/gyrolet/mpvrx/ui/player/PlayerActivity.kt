@@ -1319,11 +1319,15 @@ class PlayerActivity :
    * can navigate to Settings themselves, without having to back out manually.
    */
   fun openSettings() {
+    // Launch MainActivity with Settings in a new task separate from the
+    // player's task. Back from Settings closes that task entirely and
+    // returns focus to the player task naturally — no folder, no home screen.
     val intent = Intent(this, app.gyrolet.mpvrx.MainActivity::class.java).apply {
-      // CLEAR_TASK: MainActivity starts completely fresh with an empty
-      // back-stack, so back from Settings goes directly back to the player
-      // instead of stepping through the folder and home screen first.
-      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+      addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK or
+          Intent.FLAG_ACTIVITY_CLEAR_TASK or
+          Intent.FLAG_ACTIVITY_NO_ANIMATION,
+      )
       putExtra("navigate_to_settings", true)
     }
     startActivity(intent)
