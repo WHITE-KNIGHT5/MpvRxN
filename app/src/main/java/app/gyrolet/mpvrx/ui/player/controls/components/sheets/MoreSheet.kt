@@ -201,7 +201,10 @@ fun MoreSheet(
                 TimePickerDialog(
                   remainingTime = remainingTime,
                   onDismissRequest = { isSleepTimerDialogShown = false },
-                  onTimeSelect = onStartTimer,
+                  onTimeSelect = { seconds ->
+                    onStartTimer(seconds)
+                    onDismissRequest() // close the More sheet after setting timer
+                  },
                 )
               }
             }
