@@ -304,11 +304,11 @@ class MainActivity : ComponentActivity() {
 
       LaunchedEffect(hasNavEntries) {
         if (!hasNavEntries) {
-          if (pendingSettingsNavigation.value) {
-            // Go straight to Settings without showing MainScreen first —
-            // prevents the brief home screen flash before PreferencesScreen
+          // Read directly from the intent here instead of relying on
+          // pendingSettingsNavigation state, which can be missed due to
+          // timing between onCreate and first composition.
+          if (intent.getBooleanExtra("navigate_to_settings", false)) {
             typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
-            pendingSettingsNavigation.value = false
           } else {
             typedBackstack.add(MainScreen)
           }
