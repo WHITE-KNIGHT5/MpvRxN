@@ -275,7 +275,13 @@ class MainActivity : ComponentActivity() {
    */
   @Composable
   fun Navigator() {
-    val backstack = rememberNavBackStack(MainScreen)
+    val goToSettings = intent.getBooleanExtra("navigate_to_settings", false)
+    val initialScreen: Screen = if (goToSettings) {
+      app.gyrolet.mpvrx.ui.preferences.PreferencesScreen
+    } else {
+      MainScreen
+    }
+    val backstack = rememberNavBackStack(initialScreen)
 
     @Suppress("UNCHECKED_CAST")
     val typedBackstack = backstack as NavBackStack<Screen>
@@ -301,19 +307,6 @@ class MainActivity : ComponentActivity() {
       LocalBackStack provides typedBackstack
     ) {
       val hasNavEntries = typedBackstack.size > 0
-
-      LaunchedEffect(hasNavEntries) {
-        if (!hasNavEntries) {
-          // Read directly from the intent here instead of relying on
-          // pendingSettingsNavigation state, which can be missed due to
-          // timing between onCreate and first composition.
-          if (intent.getBooleanExtra("navigate_to_settings", false)) {
-            typedBackstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
-          } else {
-            typedBackstack.add(MainScreen)
-          }
-        }
-      }
 
       // Navigate to the folder we were playing from when returning from the
       // player (e.g. back press after opening a video from a notification).
