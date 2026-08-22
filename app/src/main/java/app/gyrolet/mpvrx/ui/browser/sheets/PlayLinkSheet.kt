@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.sheets
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.sheets
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,9 +41,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import app.gyrolet.mpvrx.database.repository.NetworkStreamEntryRepository
+import app.gyrolet.mpvrx.domain.torrent.isTorrentSource
+import app.gyrolet.mpvrx.domain.torrent.normalizeTorrentSource
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
+import app.gyrolet.mpvrx.utils.media.MediaInfoParser
 import app.gyrolet.mpvrx.utils.media.MediaUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,8 +66,9 @@ fun PlayLinkSheet(
   var linkInputUrl by remember { mutableStateOf("") }
   var isLinkInputUrlValid by remember { mutableStateOf(true) }
   val coroutineScope = rememberCoroutineScope()
+  val streamEntryRepository = koinInject<NetworkStreamEntryRepository>()
 
-  LaunchedEffect(true) {
+  LaunchedEffect(isOpen) {
     if (isOpen) {
       linkInputUrl = ""
       isLinkInputUrlValid = true
@@ -67,18 +82,51 @@ fun PlayLinkSheet(
   val handleConfirm = {
     val url = linkInputUrl.trim()
     if (url.isNotBlank() && MediaUtils.isURLValid(url)) {
-      // Optimistically record in history so it shows up immediately
+      val playableSource = normalizeTorrentSource(url) ?: url
       coroutineScope.launch {
-        val uri = url.toUri()
-        val name = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { url } ?: url
-        RecentlyPlayedOps.addRecentlyPlayed(
-          filePath = url,
-          fileName = name,
-          launchSource = "play_link",
-        )
+        val name = MediaInfoParser.parseStreamTitle(playableSource)
+        if (!isTorrentSource(playableSource)) {
+          try {
+            RecentlyPlayedOps.addRecentlyPlayed(
+              filePath = playableSource,
+              fileName = name,
+              launchSource = "play_link",
+            )
+            streamEntryRepository.saveNormalEntry(
+              canonicalSourceUri = playableSource,
+              fileName = name,
+            )
+
+            // Asynchronously resolve YouTube title & thumbnail
+            val uri = runCatching { android.net.Uri.parse(playableSource) }.getOrNull()
+            if (app.gyrolet.mpvrx.utils.media.HttpUtils.isYouTubeUrl(uri)) {
+              val ytMeta = app.gyrolet.mpvrx.utils.media.HttpUtils.fetchYouTubeMetadata(playableSource)
+              if (ytMeta != null && ytMeta.title.isNotBlank()) {
+                RecentlyPlayedOps.updateVideoMetadata(
+                  filePath = playableSource,
+                  videoTitle = ytMeta.title,
+                  duration = 0L,
+                  fileSize = 0L,
+                  width = 0,
+                  height = 0,
+                )
+                streamEntryRepository.saveNormalEntry(
+                  canonicalSourceUri = playableSource,
+                  fileName = ytMeta.title,
+                  posterUrl = ytMeta.thumbnailUrl,
+                  backdropUrl = ytMeta.thumbnailUrl,
+                )
+              }
+            }
+          } catch (cancellation: CancellationException) {
+            throw cancellation
+          } catch (_: Exception) {
+            // Playback must still open even if optional history persistence fails.
+          }
+        }
+        onPlayLink(playableSource)
+        onDismiss()
       }
-      onPlayLink(url)
-      onDismiss()
     }
   }
 
@@ -100,7 +148,9 @@ fun PlayLinkSheet(
     ) {
       // Title
       Text(
-        text = "Play Link",
+        text =
+          androidx.compose.ui.res
+            .stringResource(app.gyrolet.mpvrx.R.string.ui_play_link),
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Medium,
         color = MaterialTheme.colorScheme.onSurface,
@@ -117,7 +167,12 @@ fun PlayLinkSheet(
             isLinkInputUrlValid = newValue.isBlank() || MediaUtils.isURLValid(newValue)
           },
           modifier = Modifier.fillMaxWidth(),
-          label = { Text("Enter URL") },
+          label = {
+            Text(
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_enter_url),
+            )
+          },
           placeholder = { Text("https://example.com/video.mp4") },
           singleLine = true,
           isError = linkInputUrl.isNotBlank() && !isLinkInputUrlValid,
@@ -130,7 +185,9 @@ fun PlayLinkSheet(
 
         if (linkInputUrl.isNotBlank() && !isLinkInputUrlValid) {
           Text(
-            text = "Unsupported URL protocol",
+            text =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_unsupported_url_protocol),
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
@@ -145,7 +202,9 @@ fun PlayLinkSheet(
       ) {
         TextButton(onClick = handleDismiss) {
           Text(
-            text = "Cancel",
+            text =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.generic_cancel),
             fontWeight = FontWeight.Medium,
           )
         }
@@ -159,7 +218,9 @@ fun PlayLinkSheet(
             ),
         ) {
           Text(
-            text = "Play",
+            text =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_play),
             fontWeight = FontWeight.SemiBold,
           )
         }
@@ -174,19 +235,19 @@ fun PlayLinkSheet(
 private fun ValidationIcon(isValid: Boolean) {
   if (isValid) {
     Icon(
-      Icons.Filled.Check,
-      contentDescription = "Valid URL",
+      Icons.RoundedFilled.Check,
+      contentDescription =
+        androidx.compose.ui.res
+          .stringResource(app.gyrolet.mpvrx.R.string.ui_valid_url),
       tint = MaterialTheme.colorScheme.primary,
     )
   } else {
     Icon(
-      Icons.Filled.Close,
-      contentDescription = "Invalid URL",
+      Icons.RoundedFilled.Close,
+      contentDescription =
+        androidx.compose.ui.res
+          .stringResource(app.gyrolet.mpvrx.R.string.ui_invalid_url),
       tint = MaterialTheme.colorScheme.error,
     )
   }
 }
-
-
-
-

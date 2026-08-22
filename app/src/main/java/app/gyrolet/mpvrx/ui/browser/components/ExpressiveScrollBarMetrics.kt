@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.browser.components
 
 internal class AxisObservationTracker {
@@ -9,8 +18,13 @@ internal class AxisObservationTracker {
   private var representativeItemSizeSampleCount = 0
   private val observedStridesPx = mutableMapOf<Int, Float>()
   private val observedItemSizesPx = mutableMapOf<Int, Float>()
+  private var observedStrideSums = FloatArray(1)
+  private var observedStrideCounts = IntArray(1)
 
-  fun resetIfNeeded(totalItemsCount: Int, spacingPx: Int) {
+  fun resetIfNeeded(
+    totalItemsCount: Int,
+    spacingPx: Int,
+  ) {
     if (trackedTotalItemsCount == totalItemsCount && trackedSpacingPx == spacingPx) {
       return
     }
@@ -23,6 +37,8 @@ internal class AxisObservationTracker {
     representativeItemSizeSampleCount = 0
     observedStridesPx.clear()
     observedItemSizesPx.clear()
+    observedStrideSums = FloatArray(totalItemsCount.coerceAtLeast(0) + 1)
+    observedStrideCounts = IntArray(totalItemsCount.coerceAtLeast(0) + 1)
   }
 
   fun observeRepresentativeSample(
@@ -59,12 +75,23 @@ internal class AxisObservationTracker {
     }
   }
 
-  fun observeItemSize(index: Int, sizePx: Float) {
+  fun observeItemSize(
+    index: Int,
+    sizePx: Float,
+  ) {
     observedItemSizesPx[index] = sizePx.coerceAtLeast(1f)
   }
 
-  fun observeStride(index: Int, stridePx: Float) {
-    observedStridesPx[index] = stridePx.coerceAtLeast(1f)
+  fun observeStride(
+    index: Int,
+    stridePx: Float,
+  ) {
+    if (index !in 0 until trackedTotalItemsCount) return
+
+    val normalizedStridePx = stridePx.coerceAtLeast(1f)
+    val previousStridePx = observedStridesPx.put(index, normalizedStridePx)
+    updateStrideSum(index, normalizedStridePx - (previousStridePx ?: 0f))
+    if (previousStridePx == null) updateStrideCount(index, 1)
   }
 
   fun representativeStridePx(fallbackStridePx: Float): Float =
@@ -81,37 +108,87 @@ internal class AxisObservationTracker {
       fallbackItemSizePx.coerceAtLeast(1f)
     }
 
-  fun distanceBeforeIndex(index: Int, representativeStridePx: Float): Float {
+  fun distanceBeforeIndex(
+    index: Int,
+    representativeStridePx: Float,
+  ): Float {
     if (index <= 0) return 0f
 
-    var correctionPx = 0f
-    observedStridesPx.forEach { (observedIndex, observedStridePx) ->
-      if (observedIndex < index) {
-        correctionPx += observedStridePx - representativeStridePx
-      }
-    }
-
-    return ((index * representativeStridePx) + correctionPx).coerceAtLeast(0f)
+    val observedStridePx = strideSumBefore(index)
+    val observedCount = strideCountBefore(index)
+    val estimatedStridePx = (index - observedCount) * representativeStridePx
+    return (observedStridePx + estimatedStridePx).coerceAtLeast(0f)
   }
 
-  fun itemSizePx(index: Int, representativeItemSizePx: Float): Float =
-    observedItemSizesPx[index] ?: representativeItemSizePx.coerceAtLeast(1f)
+  fun itemSizePx(
+    index: Int,
+    representativeItemSizePx: Float,
+  ): Float = observedItemSizesPx[index] ?: representativeItemSizePx.coerceAtLeast(1f)
+
+  private fun updateStrideSum(
+    index: Int,
+    delta: Float,
+  ) {
+    var treeIndex = index + 1
+    while (treeIndex < observedStrideSums.size) {
+      observedStrideSums[treeIndex] += delta
+      treeIndex += treeIndex and -treeIndex
+    }
+  }
+
+  private fun updateStrideCount(
+    index: Int,
+    delta: Int,
+  ) {
+    var treeIndex = index + 1
+    while (treeIndex < observedStrideCounts.size) {
+      observedStrideCounts[treeIndex] += delta
+      treeIndex += treeIndex and -treeIndex
+    }
+  }
+
+  private fun strideSumBefore(index: Int): Float {
+    var treeIndex = index.coerceIn(0, observedStrideSums.lastIndex)
+    var sum = 0f
+    while (treeIndex > 0) {
+      sum += observedStrideSums[treeIndex]
+      treeIndex -= treeIndex and -treeIndex
+    }
+    return sum
+  }
+
+  private fun strideCountBefore(index: Int): Int {
+    var treeIndex = index.coerceIn(0, observedStrideCounts.lastIndex)
+    var count = 0
+    while (treeIndex > 0) {
+      count += observedStrideCounts[treeIndex]
+      treeIndex -= treeIndex and -treeIndex
+    }
+    return count
+  }
 }
 
 internal fun resolveDragTargetIndex(
   progress: Float,
   maxScrollIndex: Int,
   totalItemsCount: Int,
+  itemsPerLine: Int = 1,
 ): Int {
   if (totalItemsCount <= 1) return 0
 
   val clampedProgress = progress.coerceIn(0f, 1f)
   val lastIndex = totalItemsCount - 1
-  if (clampedProgress >= 1f) return lastIndex
+  val rawTarget =
+    if (clampedProgress >= 1f) {
+      lastIndex
+    } else {
+      (clampedProgress * maxScrollIndex.coerceAtLeast(1))
+        .toInt()
+        .coerceIn(0, lastIndex)
+    }
+  val safeItemsPerLine = itemsPerLine.coerceAtLeast(1)
 
-  return (clampedProgress * maxScrollIndex.coerceAtLeast(1))
-    .toInt()
-    .coerceIn(0, lastIndex)
+  return rawTarget - (rawTarget % safeItemsPerLine)
 }
 
 fun fastScrollGlyph(value: String?): String? {

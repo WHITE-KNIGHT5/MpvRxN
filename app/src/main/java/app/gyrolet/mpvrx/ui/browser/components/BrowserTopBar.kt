@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.components
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -12,15 +18,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
-import app.gyrolet.mpvrx.ui.theme.AppShapeScale
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.AppearancePreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.DarkMode
 import app.gyrolet.mpvrx.ui.theme.LocalThemeTransitionState
 import kotlinx.coroutines.delay
@@ -54,7 +60,7 @@ import org.koin.compose.koinInject
 /**
  * Unified top bar for browser screens that switches between normal and selection modes
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserTopBar(
   title: String,
@@ -72,7 +78,6 @@ fun BrowserTopBar(
   isSingleSelection: Boolean = false,
   onInfoClick: (() -> Unit)? = null,
   onShareClick: (() -> Unit)? = null,
-  onCopyClick: (() -> Unit)? = null,
   onPlayClick: (() -> Unit)? = null,
   onPinClick: (() -> Unit)? = null,
   onBlacklistClick: (() -> Unit)? = null,
@@ -81,8 +86,13 @@ fun BrowserTopBar(
   onDeselectAll: (() -> Unit)? = null,
   additionalActions: @Composable RowScope.() -> Unit = { },
   onTitleLongPress: (() -> Unit)? = null,
+  onTitleDoubleTap: (() -> Unit)? = null,
+  onMoveToSecureClick: (() -> Unit)? = null,
   useRemoveIcon: Boolean = false,
   onAddToPlaylistClick: (() -> Unit)? = null,
+  onRestoreClick: (() -> Unit)? = null,
+  colors: TopAppBarColors? = null,
+  forceHeadlineSmall: Boolean = false,
 ) {
   if (isInSelectionMode) {
     SelectionTopBar(
@@ -94,16 +104,19 @@ fun BrowserTopBar(
       isSingleSelection = isSingleSelection,
       onInfo = onInfoClick,
       onShare = onShareClick,
-      onCopy = onCopyClick,
       onPlay = onPlayClick,
       onPin = onPinClick,
       onBlacklist = onBlacklistClick,
       onSelectAll = onSelectAll,
       onInvertSelection = onInvertSelection,
       onDeselectAll = onDeselectAll,
+      onMoveToSecure = onMoveToSecureClick,
+      onRestore = onRestoreClick,
       modifier = modifier,
       useRemoveIcon = useRemoveIcon,
       onAddToPlaylist = onAddToPlaylistClick,
+      colors = colors,
+      additionalActions = additionalActions,
     )
   } else {
     NormalTopBar(
@@ -115,6 +128,9 @@ fun BrowserTopBar(
       additionalActions = additionalActions,
       modifier = modifier,
       onTitleLongPress = onTitleLongPress,
+      onTitleDoubleTap = onTitleDoubleTap,
+      colors = colors,
+      forceHeadlineSmall = forceHeadlineSmall,
     )
   }
 }
@@ -122,7 +138,7 @@ fun BrowserTopBar(
 /**
  * Normal mode top bar
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NormalTopBar(
   title: String,
@@ -133,80 +149,99 @@ private fun NormalTopBar(
   additionalActions: @Composable RowScope.() -> Unit,
   modifier: Modifier = Modifier,
   onTitleLongPress: (() -> Unit)?,
+  onTitleDoubleTap: (() -> Unit)? = null,
+  colors: TopAppBarColors? = null,
+  forceHeadlineSmall: Boolean = false,
 ) {
   val preferences = koinInject<AppearancePreferences>()
   val darkMode by preferences.darkMode.collectAsState()
   val darkTheme = isSystemInDarkTheme()
   val themeTransition = LocalThemeTransitionState.current
   val coroutineScope = rememberCoroutineScope()
-  
+
   // Track title bounds for animation position
   val titleBounds = remember { mutableStateOf(Rect.Zero) }
-  
+
   // Helper function to toggle dark mode
   fun toggleDarkMode() {
     when (darkMode) {
-      DarkMode.System -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.Light)
-      } else {
-        preferences.darkMode.set(DarkMode.Dark)
-      }
-      DarkMode.Light -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.System)
-      } else {
-        preferences.darkMode.set(DarkMode.Dark)
-      }
-      DarkMode.Dark -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.Light)
-      } else {
-        preferences.darkMode.set(DarkMode.System)
-      }
+      DarkMode.System ->
+        if (darkTheme) {
+          preferences.darkMode.set(DarkMode.Light)
+        } else {
+          preferences.darkMode.set(DarkMode.Dark)
+        }
+      DarkMode.Light ->
+        if (darkTheme) {
+          preferences.darkMode.set(DarkMode.System)
+        } else {
+          preferences.darkMode.set(DarkMode.Dark)
+        }
+      DarkMode.Dark ->
+        if (darkTheme) {
+          preferences.darkMode.set(DarkMode.Light)
+        } else {
+          preferences.darkMode.set(DarkMode.System)
+        }
     }
   }
 
   TopAppBar(
-    colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = if (MaterialTheme.colorScheme.background == Color.Black) {
-        Color.Black
-      } else {
-        MaterialTheme.colorScheme.surfaceContainer
-      },
-    ),
+    colors =
+      colors ?: TopAppBarDefaults.topAppBarColors(
+        containerColor =
+          if (MaterialTheme.colorScheme.background == Color.Black) {
+            Color.Black
+          } else {
+            MaterialTheme.colorScheme.surfaceContainer
+          },
+      ),
     title = {
-      val titleModifier = Modifier
-        .onGloballyPositioned { coordinates ->
-          titleBounds.value = coordinates.boundsInWindow()
-        }
-        .pointerInput(onTitleLongPress) {
-          detectTapGestures(
-            onTap = { localOffset ->
-              // Don't allow theme change if animation is in progress
-              if (themeTransition?.isAnimating == true) return@detectTapGestures
-              
-              // Calculate window position for circular reveal
-              val windowOffset = Offset(
-                titleBounds.value.left + localOffset.x,
-                titleBounds.value.top + localOffset.y
-              )
-              themeTransition?.startTransition(windowOffset)
-              // Delay theme change to allow overlay to display first
-              coroutineScope.launch {
-                toggleDarkMode()
-              }
-            },
-            onLongPress = if (onTitleLongPress != null) {
-              { onTitleLongPress() }
-            } else null
-          )
-        }
+      val titleModifier =
+        Modifier
+          .onGloballyPositioned { coordinates ->
+            titleBounds.value = coordinates.boundsInWindow()
+          }.pointerInput(onTitleLongPress, onTitleDoubleTap) {
+            detectTapGestures(
+              onTap = { localOffset ->
+                // Don't allow theme change if animation is in progress
+                if (themeTransition?.isAnimating == true) return@detectTapGestures
+
+                // Calculate window position for circular reveal
+                val windowOffset =
+                  Offset(
+                    titleBounds.value.left + localOffset.x,
+                    titleBounds.value.top + localOffset.y,
+                  )
+                themeTransition?.startTransition(windowOffset)
+                // Delay theme change to allow overlay to display first
+                coroutineScope.launch {
+                  delay(50)
+                  toggleDarkMode()
+                }
+              },
+              onDoubleTap =
+                if (onTitleDoubleTap != null) {
+                  { onTitleDoubleTap() }
+                } else {
+                  null
+                },
+              onLongPress =
+                if (onTitleLongPress != null) {
+                  { onTitleLongPress() }
+                } else {
+                  null
+                },
+            )
+          }
 
       Text(
         title,
         style =
-          if (onBackClick == null) {
-            MaterialTheme.typography.headlineMediumEmphasized
-          } else {
+          if (forceHeadlineSmall || onBackClick != null) {
             MaterialTheme.typography.headlineSmall
+          } else {
+            MaterialTheme.typography.headlineMedium
           },
         fontWeight = FontWeight.ExtraBold,
         color = MaterialTheme.colorScheme.primary,
@@ -229,7 +264,7 @@ private fun NormalTopBar(
           modifier = Modifier.padding(horizontal = 2.dp),
         ) {
           Icon(
-            Icons.Filled.ArrowBack,
+            Icons.RoundedFilled.ArrowBack,
             contentDescription = stringResource(R.string.back),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
@@ -238,15 +273,17 @@ private fun NormalTopBar(
       }
     },
     actions = {
-      additionalActions()
       if (onSearchClick != null) {
         IconButton(
           onClick = onSearchClick,
           modifier = Modifier.padding(horizontal = 2.dp),
         ) {
           Icon(
-            Icons.Filled.Search,
-            contentDescription = "Search",
+            Icons.RoundedFilled.Search,
+            contentDescription =
+              androidx.compose.ui.res.stringResource(
+                app.gyrolet.mpvrx.R.string.settings_search_title,
+              ),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
@@ -258,21 +295,24 @@ private fun NormalTopBar(
           modifier = Modifier.padding(horizontal = 2.dp),
         ) {
           Icon(
-            Icons.Filled.SortByAlpha,
+            Icons.RoundedFilled.SortByAlpha,
             contentDescription = stringResource(R.string.sort),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
         }
       }
+      additionalActions()
       if (onSettingsClick != null) {
         IconButton(
           onClick = onSettingsClick,
           modifier = Modifier.padding(horizontal = 2.dp),
         ) {
           Icon(
-            Icons.Filled.Settings,
-            contentDescription = "Settings",
+            Icons.RoundedFilled.Settings,
+            contentDescription =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_settings),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
@@ -286,7 +326,7 @@ private fun NormalTopBar(
 /**
  * Selection mode top bar
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectionTopBar(
   selectedCount: Int,
@@ -297,7 +337,6 @@ private fun SelectionTopBar(
   isSingleSelection: Boolean,
   onInfo: (() -> Unit)?,
   onShare: (() -> Unit)?,
-  onCopy: (() -> Unit)?,
   onPlay: (() -> Unit)?,
   onPin: (() -> Unit)?,
   onBlacklist: (() -> Unit)?,
@@ -307,17 +346,23 @@ private fun SelectionTopBar(
   modifier: Modifier = Modifier,
   useRemoveIcon: Boolean = false,
   onAddToPlaylist: (() -> Unit)? = null,
+  onMoveToSecure: (() -> Unit)? = null,
+  onRestore: (() -> Unit)? = null,
+  colors: TopAppBarColors? = null,
+  additionalActions: @Composable RowScope.() -> Unit = { },
 ) {
   var showDropdown by remember { mutableStateOf(false) }
 
   TopAppBar(
-    colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = if (MaterialTheme.colorScheme.background == Color.Black) {
-        Color.Black
-      } else {
-        MaterialTheme.colorScheme.surfaceContainer
-      },
-    ),
+    colors =
+      colors ?: TopAppBarDefaults.topAppBarColors(
+        containerColor =
+          if (MaterialTheme.colorScheme.background == Color.Black) {
+            Color.Black
+          } else {
+            MaterialTheme.colorScheme.surfaceContainer
+          },
+      ),
     title = {
       Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -331,7 +376,7 @@ private fun SelectionTopBar(
           overflow = TextOverflow.Ellipsis,
         )
         Icon(
-          Icons.Filled.ArrowDropDown,
+          Icons.RoundedFilled.ArrowDropDown,
           contentDescription = stringResource(R.string.selection_options),
           modifier = Modifier.size(24.dp),
           tint = MaterialTheme.colorScheme.primary,
@@ -377,7 +422,7 @@ private fun SelectionTopBar(
         modifier = Modifier.padding(horizontal = 2.dp),
       ) {
         Icon(
-          Icons.Filled.Close,
+          Icons.RoundedFilled.Close,
           contentDescription = stringResource(R.string.generic_cancel),
           modifier = Modifier.size(28.dp),
           tint = MaterialTheme.colorScheme.secondary,
@@ -385,15 +430,31 @@ private fun SelectionTopBar(
       }
     },
     actions = {
+      additionalActions()
+      if (onRestore != null) {
+        IconButton(
+          onClick = onRestore,
+          modifier = Modifier.padding(horizontal = 1.dp),
+        ) {
+          Icon(
+            Icons.RoundedFilled.Restore,
+            contentDescription = stringResource(R.string.secure_folder_restore),
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.secondary,
+          )
+        }
+      }
       // Play icon
       if (onPlay != null) {
         IconButton(
           onClick = onPlay,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.PlayArrow,
-            contentDescription = "Play",
+            Icons.RoundedFilled.PlayArrow,
+            contentDescription =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_play),
             modifier = Modifier.size(28.dp),
             tint = MaterialTheme.colorScheme.primary,
           )
@@ -403,11 +464,13 @@ private fun SelectionTopBar(
       if (onPin != null) {
         IconButton(
           onClick = onPin,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.PushPin,
-            contentDescription = "Pin folders",
+            Icons.RoundedFilled.PushPin,
+            contentDescription =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_pin_folders),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
@@ -418,11 +481,13 @@ private fun SelectionTopBar(
       if (onAddToPlaylist != null) {
         IconButton(
           onClick = onAddToPlaylist,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.PlaylistAdd,
-            contentDescription = "Add to Playlist",
+            Icons.RoundedFilled.PlaylistAdd,
+            contentDescription =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_add_to_playlist),
             modifier = Modifier.size(28.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
@@ -434,10 +499,10 @@ private fun SelectionTopBar(
         IconButton(
           onClick = onRename,
           enabled = isSingleSelection,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.DriveFileRenameOutline,
+            Icons.RoundedFilled.DriveFileRenameOutline,
             contentDescription = stringResource(R.string.rename),
             modifier = Modifier.size(24.dp),
             tint =
@@ -455,10 +520,10 @@ private fun SelectionTopBar(
         IconButton(
           onClick = onInfo,
           enabled = isSingleSelection,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.Info,
+            Icons.RoundedFilled.Info,
             contentDescription = stringResource(R.string.info),
             modifier = Modifier.size(24.dp),
             tint =
@@ -475,10 +540,10 @@ private fun SelectionTopBar(
       if (onShare != null) {
         IconButton(
           onClick = onShare,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.Share,
+            Icons.RoundedFilled.Share,
             contentDescription = stringResource(R.string.generic_share),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
@@ -486,14 +551,16 @@ private fun SelectionTopBar(
         }
       }
 
-      if (onCopy != null) {
+
+      // Move to Secure Folder icon
+      if (onMoveToSecure != null) {
         IconButton(
-          onClick = onCopy,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          onClick = onMoveToSecure,
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.ContentCopy,
-            contentDescription = "Copy path",
+            Icons.RoundedFilled.Lock,
+            contentDescription = stringResource(R.string.secure_folder_move_to),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
           )
@@ -504,10 +571,10 @@ private fun SelectionTopBar(
       if (onBlacklist != null) {
         IconButton(
           onClick = onBlacklist,
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 1.dp),
         ) {
           Icon(
-            Icons.Filled.Block,
+            Icons.RoundedFilled.Block,
             contentDescription = stringResource(R.string.pref_folders_blacklist),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.secondary,
@@ -522,7 +589,7 @@ private fun SelectionTopBar(
           modifier = Modifier.padding(horizontal = 2.dp),
         ) {
           Icon(
-            imageVector = if (useRemoveIcon) Icons.Filled.RemoveCircle else Icons.Filled.Delete,
+            imageVector = if (useRemoveIcon) Icons.RoundedFilled.RemoveCircle else Icons.RoundedFilled.Delete,
             contentDescription = stringResource(R.string.delete),
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.error,
@@ -530,10 +597,9 @@ private fun SelectionTopBar(
         }
       }
     },
-    modifier = modifier.clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp)),
+    modifier =
+      modifier.clip(
+        RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp),
+      ),
   )
 }
-
-
-
-

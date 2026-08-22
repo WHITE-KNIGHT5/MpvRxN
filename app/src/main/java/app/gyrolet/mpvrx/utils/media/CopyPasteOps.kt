@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.media
 
 import android.content.ContentValues
@@ -85,8 +94,7 @@ object CopyPasteOps {
    * Check if we can use direct file operations
    * Play Store flavor uses scoped/SAF path; other flavors keep classic direct file behavior.
    */
-  fun canUseDirectFileOperations(): Boolean =
-    hasManageStoragePermission()
+  fun canUseDirectFileOperations(): Boolean = hasManageStoragePermission()
 
   // ============================================================================
   // Operation Control
@@ -1088,24 +1096,27 @@ object CopyPasteOps {
  * ```
  */
 class OpenDocumentTreeContract : ActivityResultContract<Uri?, Uri?>() {
-
-  override fun createIntent(context: Context, input: Uri?): Intent {
+  override fun createIntent(
+    context: Context,
+    input: Uri?,
+  ): Intent {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
 
     // Always start at root by setting EXTRA_INITIAL_URI to the primary external storage root
     // This prevents the picker from remembering the last location
     // Use the primary external storage root URI to force starting at root
-    val rootUri = DocumentsContract.buildRootUri(
-      "com.android.externalstorage.documents",
-      "primary"
-    )
+    val rootUri =
+      DocumentsContract.buildRootUri(
+        "com.android.externalstorage.documents",
+        "primary",
+      )
     intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, rootUri)
 
     return intent
   }
 
-  override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-    return intent?.data
-  }
+  override fun parseResult(
+    resultCode: Int,
+    intent: Intent?,
+  ): Uri? = intent?.data
 }
-

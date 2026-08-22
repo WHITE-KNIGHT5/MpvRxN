@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.preferences
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.preferences
 
 import android.content.Intent
 import android.widget.Toast
@@ -10,7 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,12 +30,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.AdvancedPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.lua.LuaRuntimeStatusCard
 import app.gyrolet.mpvrx.ui.lua.LuaScriptToggleCard
 import app.gyrolet.mpvrx.ui.lua.LuaScriptsEmptyState
@@ -40,9 +50,9 @@ import app.gyrolet.mpvrx.ui.lua.rememberLuaScriptsCatalog
 import app.gyrolet.mpvrx.ui.theme.spacing
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import app.gyrolet.mpvrx.ui.utils.popSafely
-import java.io.File
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
+import java.io.File
 
 @Serializable
 object LuaScriptsScreen : Screen {
@@ -68,11 +78,12 @@ object LuaScriptsScreen : Screen {
       val isEnabled = selectedScripts.contains(scriptName)
       val newSelection =
         if (isEnabled) {
-          Toast.makeText(
-            context,
-            "$scriptName disabled. Reopen the video if the script stays active.",
-            Toast.LENGTH_LONG,
-          ).show()
+          Toast
+            .makeText(
+              context,
+              "$scriptName disabled. Reopen the video if the script stays active.",
+              Toast.LENGTH_LONG,
+            ).show()
           selectedScripts - scriptName
         } else {
           selectedScripts + scriptName
@@ -82,7 +93,12 @@ object LuaScriptsScreen : Screen {
 
     fun shareScript(scriptName: String) {
       if (mpvConfStorageLocation.isBlank()) {
-        Toast.makeText(context, "No storage location configured", Toast.LENGTH_SHORT).show()
+        Toast
+          .makeText(
+            context,
+            context.getString(app.gyrolet.mpvrx.R.string.ui_no_storage_location_configured),
+            Toast.LENGTH_SHORT,
+          ).show()
         return
       }
 
@@ -124,11 +140,24 @@ object LuaScriptsScreen : Screen {
 
             context.startActivity(Intent.createChooser(shareIntent, "Share script"))
           } else {
-            Toast.makeText(context, "Script file not found", Toast.LENGTH_SHORT).show()
+            Toast
+              .makeText(
+                context,
+                context.getString(app.gyrolet.mpvrx.R.string.ui_script_file_not_found),
+                Toast.LENGTH_SHORT,
+              ).show()
           }
         }
       }.onFailure { error ->
-        Toast.makeText(context, "Error sharing script: ${error.message}", Toast.LENGTH_LONG).show()
+        Toast
+          .makeText(
+            context,
+            context.getString(
+              R.string.toast_error_sharing_script,
+              error.message ?: context.getString(R.string.generic_unknown_error),
+            ),
+            Toast.LENGTH_LONG,
+          ).show()
       }
     }
 
@@ -137,15 +166,19 @@ object LuaScriptsScreen : Screen {
         TopAppBar(
           title = {
             Text(
-              text = "Scripts (Lua / JS)",
+              text =
+                androidx.compose.ui.res
+                  .stringResource(app.gyrolet.mpvrx.R.string.pref_section_scripts),
               style = MaterialTheme.typography.headlineSmall,
             )
           },
           navigationIcon = {
             IconButton(onClick = { backStack.popSafely() }) {
               Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Back",
+                imageVector = Icons.RoundedFilled.ArrowBack,
+                contentDescription =
+                  androidx.compose.ui.res
+                    .stringResource(app.gyrolet.mpvrx.R.string.back),
               )
             }
           },
@@ -157,8 +190,11 @@ object LuaScriptsScreen : Screen {
           containerColor = MaterialTheme.colorScheme.primary,
         ) {
           Icon(
-            imageVector = Icons.Default.Add,
-            contentDescription = "Create new script",
+            imageVector = Icons.RoundedFilled.Add,
+            contentDescription =
+              androidx.compose.ui.res.stringResource(
+                app.gyrolet.mpvrx.R.string.ui_create_new_script,
+              ),
             tint = MaterialTheme.colorScheme.onPrimary,
           )
         }
@@ -169,13 +205,14 @@ object LuaScriptsScreen : Screen {
           Modifier
             .fillMaxSize()
             .padding(padding),
-        contentPadding = PaddingValues(
-          start = MaterialTheme.spacing.medium,
-          top = MaterialTheme.spacing.medium,
-          end = MaterialTheme.spacing.medium,
-          // Extra clearance so the FAB doesn't overlap the last item
-          bottom = MaterialTheme.spacing.medium + 80.dp,
-        ),
+        contentPadding =
+          PaddingValues(
+            start = MaterialTheme.spacing.medium,
+            top = MaterialTheme.spacing.medium,
+            end = MaterialTheme.spacing.medium,
+            // Extra clearance so the FAB doesn't overlap the last item
+            bottom = MaterialTheme.spacing.medium + 80.dp,
+          ),
         verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
       ) {
         item {
@@ -197,7 +234,7 @@ object LuaScriptsScreen : Screen {
           mpvConfStorageLocation.isBlank() -> {
             item {
               LuaScriptsEmptyState(
-                title = "No MPV folder selected",
+                title = stringResource(R.string.lua_no_mpv_folder),
                 summary = "Choose an MPV config folder in Advanced settings to browse and manage scripts.",
               )
             }
@@ -205,13 +242,13 @@ object LuaScriptsScreen : Screen {
           catalog.availableScripts.isEmpty() -> {
             item {
               LuaScriptsEmptyState(
-                title = "No scripts found",
+                title = stringResource(R.string.lua_no_scripts_found),
                 summary = "Put your .lua or .js files inside the MPV scripts folder to manage them here.",
               )
             }
           }
           else -> {
-            items(catalog.availableScripts) { scriptName ->
+            items(catalog.availableScripts, key = { it }) { scriptName ->
               LuaScriptToggleCard(
                 scriptName = scriptName,
                 selected = selectedScripts.contains(scriptName),
@@ -220,15 +257,20 @@ object LuaScriptsScreen : Screen {
                 trailingContent = {
                   IconButton(onClick = { shareScript(scriptName) }) {
                     Icon(
-                      imageVector = Icons.Default.Share,
-                      contentDescription = "Share",
+                      imageVector = Icons.RoundedFilled.Share,
+                      contentDescription =
+                        androidx.compose.ui.res.stringResource(
+                          app.gyrolet.mpvrx.R.string.generic_share,
+                        ),
                       tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                   }
                   IconButton(onClick = { backStack.add(LuaScriptEditorScreen(scriptName = scriptName)) }) {
                     Icon(
-                      imageVector = Icons.Default.Edit,
-                      contentDescription = "Edit",
+                      imageVector = Icons.RoundedFilled.Edit,
+                      contentDescription =
+                        androidx.compose.ui.res
+                          .stringResource(app.gyrolet.mpvrx.R.string.ui_edit),
                       tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                   }
@@ -249,4 +291,3 @@ object LuaScriptsScreen : Screen {
     }
   }
 }
-

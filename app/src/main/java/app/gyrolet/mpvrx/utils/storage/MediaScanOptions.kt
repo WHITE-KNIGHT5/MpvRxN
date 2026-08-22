@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.storage
 
 import android.util.Log
@@ -6,13 +15,18 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class MediaScanOptions(
   val includeNoMediaFolders: Boolean = false,
-  val includeAudioFiles: Boolean = false,
+  val includeAudio: Boolean = false,
+  val minimumAudioDurationSeconds: Int = 0,
 ) {
   val excludeNoMediaFolders: Boolean
     get() = !includeNoMediaFolders
 
   val cacheKey: String
-    get() = "includeNoMedia=$includeNoMediaFolders,includeAudio=$includeAudioFiles"
+    get() =
+      "includeNoMedia=$includeNoMediaFolders|includeAudio=$includeAudio|minAudio=$minimumAudioDurationSeconds"
+
+  fun includesAudioDuration(durationMs: Long): Boolean =
+    minimumAudioDurationSeconds == 0 || durationMs >= minimumAudioDurationSeconds * 1000L
 }
 
 class NoMediaPathFilter(

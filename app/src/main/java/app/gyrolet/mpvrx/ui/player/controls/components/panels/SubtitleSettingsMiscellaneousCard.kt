@@ -1,7 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,12 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.gyrolet.mpvrx.R
@@ -28,26 +36,35 @@ import app.gyrolet.mpvrx.preferences.SubtitlesPreferences
 import app.gyrolet.mpvrx.preferences.preference.deleteAndGet
 import app.gyrolet.mpvrx.presentation.components.ExpandableCard
 import app.gyrolet.mpvrx.presentation.components.SliderItem
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.applySubtitleLayout
 import app.gyrolet.mpvrx.ui.player.controls.CARDS_MAX_WIDTH
 import app.gyrolet.mpvrx.ui.player.controls.components.sheets.toFixed
 import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
-import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
-import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
+import app.gyrolet.mpvrx.ui.theme.spacing
+import app.gyrolet.mpvrx.ui.utils.currentMpvConfigOverrideOptions
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import org.koin.compose.koinInject
 
 @Composable
 fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
   val preferences = koinInject<SubtitlesPreferences>()
   val playerPreferences = koinInject<PlayerPreferences>()
+  val configOwnedOptions = currentMpvConfigOverrideOptions()
+  val layoutOptions = setOf("sub-ass-override", "secondary-sub-ass-override", "sub-pos", "secondary-sub-pos")
+  val scaleOptions = setOf("sub-scale", "secondary-sub-scale")
+  val scaleByWindowOptions =
+    setOf("sub-scale-by-window", "sub-use-margins", "secondary-sub-scale-by-window", "secondary-sub-use-margins")
+  val blendOptions = setOf("blend-subtitles")
+  val miscellaneousOptions = layoutOptions + scaleOptions + scaleByWindowOptions + blendOptions
   var isExpanded by remember { mutableStateOf(true) }
   ExpandableCard(
     isExpanded,
     title = {
       Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium)) {
-        Icon(Icons.Default.Tune, null)
+        Icon(Icons.RoundedFilled.Tune, null)
         Text(stringResource(R.string.player_sheets_sub_misc_card_title))
       }
     },
@@ -65,26 +82,28 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
         }
         SwitchPreference(
           overrideAssSubs,
+          enabled = layoutOptions.none(configOwnedOptions::contains),
           onValueChange = {
             overrideAssSubs = it
             preferences.overrideAssSubs.set(it)
-            applySubtitleLayout(MPVLib.getPropertyInt("sub-pos") ?: preferences.subPos.get(), it)
+            applySubtitleLayout(PlaybackSession.getPropertyInt("sub-pos") ?: preferences.subPos.get(), it)
           },
-          { Text(stringResource(R.string.player_sheets_sub_override_ass)) },
+          title = { Text(stringResource(R.string.player_sheets_sub_override_ass)) },
         )
         var scaleByWindow by remember {
-          mutableStateOf(MPVLib.getPropertyString("sub-scale-by-window") == "yes")
+          mutableStateOf(PlaybackSession.getPropertyString("sub-scale-by-window") == "yes")
         }
         SwitchPreference(
           scaleByWindow,
+          enabled = scaleByWindowOptions.none(configOwnedOptions::contains),
           onValueChange = {
             scaleByWindow = it
             preferences.scaleByWindow.set(it)
             val value = if (it) "yes" else "no"
-            MPVLib.setPropertyString("sub-scale-by-window", value)
-            MPVLib.setPropertyString("sub-use-margins", value)
+            PlaybackSession.setPropertyString("sub-scale-by-window", value)
+            PlaybackSession.setPropertyString("sub-use-margins", value)
           },
-          { Text(stringResource(R.string.player_sheets_sub_scale_by_window)) },
+          title = { Text(stringResource(R.string.player_sheets_sub_scale_by_window)) },
           summary = { Text(stringResource(R.string.player_sheets_sub_scale_by_window_summary)) },
         )
         var blendSubtitlesWithVideo by remember {
@@ -92,29 +111,31 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
         }
         SwitchPreference(
           blendSubtitlesWithVideo,
+          enabled = blendOptions.none(configOwnedOptions::contains),
           onValueChange = {
             blendSubtitlesWithVideo = it
             preferences.blendSubtitlesWithVideo.set(it)
             val blendMode = if (it && playerPreferences.isAmbientEnabled.get()) "video" else "no"
-            MPVLib.setPropertyString("blend-subtitles", blendMode)
+            PlaybackSession.setPropertyString("blend-subtitles", blendMode)
           },
-          { Text(stringResource(R.string.player_sheets_sub_blend_with_video)) },
+          title = { Text(stringResource(R.string.player_sheets_sub_blend_with_video)) },
           summary = { Text(stringResource(R.string.player_sheets_sub_blend_with_video_summary)) },
         )
-        val subScale by MPVLib.propFloat["sub-scale"].collectAsState()
-        val subPos by MPVLib.propInt["sub-pos"].collectAsState()
+        val subScale by PlaybackSession.propFloat["sub-scale"].collectAsState()
+        val subPos by PlaybackSession.propInt["sub-pos"].collectAsState()
         SliderItem(
           label = stringResource(R.string.player_sheets_sub_scale),
           value = subScale ?: preferences.subScale.get(),
           valueText = (subScale ?: preferences.subScale.get()).toFixed(2).toString(),
           onChange = {
             preferences.subScale.set(it)
-            MPVLib.setPropertyFloat("sub-scale", it)
+            PlaybackSession.setPropertyFloat("sub-scale", it)
           },
           max = 5f,
+          enabled = scaleOptions.none(configOwnedOptions::contains),
           icon = {
             Icon(
-              Icons.Default.FormatSize,
+              Icons.RoundedFilled.FormatSize,
               null,
             )
           },
@@ -128,9 +149,10 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
             applySubtitleLayout(it, preferences.overrideAssSubs.get())
           },
           max = 150,
+          enabled = layoutOptions.none(configOwnedOptions::contains),
           icon = {
             Icon(
-              Icons.Default.AlignVerticalCenter,
+              Icons.RoundedFilled.AlignVerticalCenter,
               null,
             )
           },
@@ -143,10 +165,11 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
           horizontalArrangement = Arrangement.End,
         ) {
           TextButton(
+            enabled = miscellaneousOptions.none(configOwnedOptions::contains),
             onClick = {
               val defaultSubPos = preferences.subPos.deleteAndGet()
               preferences.subScale.deleteAndGet().let {
-                MPVLib.setPropertyFloat("sub-scale", it)
+                PlaybackSession.setPropertyFloat("sub-scale", it)
               }
               val defaultOverride = preferences.overrideAssSubs.deleteAndGet()
               overrideAssSubs = defaultOverride
@@ -154,16 +177,16 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
               val defaultScaleByWindow = preferences.scaleByWindow.deleteAndGet()
               scaleByWindow = defaultScaleByWindow
               val scaleValue = if (defaultScaleByWindow) "yes" else "no"
-              MPVLib.setPropertyString("sub-scale-by-window", scaleValue)
-              MPVLib.setPropertyString("sub-use-margins", scaleValue)
+              PlaybackSession.setPropertyString("sub-scale-by-window", scaleValue)
+              PlaybackSession.setPropertyString("sub-use-margins", scaleValue)
               val defaultBlendSubtitles = preferences.blendSubtitlesWithVideo.deleteAndGet()
               blendSubtitlesWithVideo = defaultBlendSubtitles
               val blendMode = if (defaultBlendSubtitles && playerPreferences.isAmbientEnabled.get()) "video" else "no"
-              MPVLib.setPropertyString("blend-subtitles", blendMode)
+              PlaybackSession.setPropertyString("blend-subtitles", blendMode)
             },
           ) {
             Row {
-              Icon(Icons.Default.EditOff, null)
+              Icon(Icons.RoundedFilled.EditOff, null)
               Text(stringResource(R.string.generic_reset))
             }
           }
@@ -172,7 +195,3 @@ fun SubtitlesMiscellaneousCard(modifier: Modifier = Modifier) {
     }
   }
 }
-
-
-
-

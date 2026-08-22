@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 @file:Suppress("DEPRECATION")
 
 package app.gyrolet.mpvrx.presentation.components
@@ -16,8 +25,6 @@ import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
-import androidx.compose.foundation.gestures.snapTo
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -46,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -79,21 +87,27 @@ fun PlayerSheet(
   val scope = rememberCoroutineScope()
   val density = LocalDensity.current
   val latestOnDismissRequest by rememberUpdatedState(onDismissRequest)
-  val maxWidth = customMaxWidth ?:
-  if (LocalConfiguration.current.orientation == ORIENTATION_LANDSCAPE) {
-    640.dp
-  } else {
-    420.dp
-  }
+  val maxWidth =
+    customMaxWidth
+      ?: if (LocalConfiguration.current.orientation == ORIENTATION_LANDSCAPE) {
+        640.dp
+      } else {
+        420.dp
+      }
   val isImeVisible = WindowInsets.ime.getBottom(density) > 0
-  val maxHeight = customMaxHeight ?: when {
-    isImeVisible -> LocalConfiguration.current.screenHeightDp.dp
-    LocalConfiguration.current.orientation == ORIENTATION_PORTRAIT ->
-      LocalConfiguration.current.screenHeightDp.dp * .90f
-    else -> LocalConfiguration.current.screenHeightDp.dp
-  }
+  val maxHeight =
+    customMaxHeight ?: when {
+      isImeVisible -> LocalConfiguration.current.screenHeightDp.dp
+      LocalConfiguration.current.orientation == ORIENTATION_PORTRAIT ->
+        LocalConfiguration.current.screenHeightDp.dp * .90f
+      else -> LocalConfiguration.current.screenHeightDp.dp
+    }
 
-  val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+  val screenHeightPx =
+    with(density) {
+      LocalConfiguration.current.screenHeightDp.dp
+        .toPx()
+    }
   val decayAnimationSpec = rememberSplineBasedDecay<Float>()
   val anchoredDraggableState =
     remember {
@@ -107,15 +121,23 @@ fun PlayerSheet(
     }
 
   val scaledSwipeOffset = swipeOffset * 2f
-  val height = if (anchoredDraggableState.anchors.size > 0) anchoredDraggableState.anchors.positionOf(1) else screenHeightPx
+  val height =
+    if (anchoredDraggableState.anchors.size >
+      0
+    ) {
+      anchoredDraggableState.anchors.positionOf(1)
+    } else {
+      screenHeightPx
+    }
   val swipeProgress = if (height > 0) (-scaledSwipeOffset / height).coerceIn(0f, 1f) else 0f
-  val targetAlpha = if (isSwipeActive) {
-    if (anchoredDraggableState.anchors.size > 0) 0.5f * swipeProgress else 0f
-  } else if (anchoredDraggableState.targetValue == 0) {
-    0.5f
-  } else {
-    0f
-  }
+  val targetAlpha =
+    if (isSwipeActive) {
+      if (anchoredDraggableState.anchors.size > 0) 0.5f * swipeProgress else 0f
+    } else if (anchoredDraggableState.targetValue == 0) {
+      0.5f
+    } else {
+      0f
+    }
   val alpha by animateFloatAsState(
     targetAlpha,
     animationSpec = sheetAnimationSpec,
@@ -162,15 +184,14 @@ fun PlayerSheet(
             },
           ).then(modifier)
           .offset {
-            val baseOffset = anchoredDraggableState.offset
-              .takeIf { it.isFinite() }
-              ?: screenHeightPx
+            val baseOffset =
+              anchoredDraggableState.offset
+                .takeIf { it.isFinite() }
+                ?: screenHeightPx
             IntOffset(0, baseOffset.roundToInt())
-          }
-          .graphicsLayer {
+          }.graphicsLayer {
             this.alpha = if (anchoredDraggableState.anchors.size > 0) 1f else 0f
-          }
-          .anchoredDraggable(
+          }.anchoredDraggable(
             state = anchoredDraggableState,
             orientation = Orientation.Vertical,
           ).windowInsetsPadding(
@@ -291,5 +312,3 @@ private fun <T> AnchoredDraggableState<T>.preUpPostDownNestedScrollConnection() 
 
     private fun Offset.toFloat(): Float = y
   }
-
-

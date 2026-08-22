@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.player.controls
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.player.controls
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -21,14 +27,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.PlayerButton
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.Panels
 import app.gyrolet.mpvrx.ui.player.PlayerActivity
 import app.gyrolet.mpvrx.ui.player.PlayerViewModel
@@ -63,7 +75,7 @@ fun TopLeftPlayerControlsLandscape(
       horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
     ) {
       ControlsButton(
-        icon = Icons.Default.ArrowBack,
+        icon = Icons.RoundedFilled.ArrowBack,
         onClick = onBackPress,
         color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.size(45.dp),
@@ -142,6 +154,40 @@ fun TopLeftPlayerControlsLandscape(
       }
     }
 
+    val syncplayManager = org.koin.compose.koinInject<app.gyrolet.mpvrx.domain.syncplay.SyncplayManager>()
+    val syncplayState by syncplayManager.state.collectAsState()
+
+    androidx.compose.animation.AnimatedVisibility(
+      visible = syncplayState.isConnected,
+      enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
+      exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it },
+    ) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(start = MaterialTheme.spacing.medium, top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
+        Icon(
+          imageVector = Icons.RoundedFilled.CloudDownload,
+          contentDescription = null,
+          modifier = Modifier.size(14.dp),
+          tint = MaterialTheme.colorScheme.tertiary,
+        )
+        Text(
+          text =
+            stringResource(
+              R.string.syncplay_player_status,
+              syncplayState.room.orEmpty(),
+              syncplayState.users.size,
+            ),
+          style = MaterialTheme.typography.labelSmall,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          color = MaterialTheme.colorScheme.tertiary,
+        )
+      }
+    }
+
     androidx.compose.animation.AnimatedVisibility(
       visible = isTranslatingSub || isRealtimeSubsActive,
       enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
@@ -153,17 +199,18 @@ fun TopLeftPlayerControlsLandscape(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
       ) {
         Icon(
-          imageVector = Icons.Default.Translate,
+          imageVector = Icons.RoundedFilled.Translate,
           contentDescription = null,
           modifier = Modifier.size(14.dp),
           tint = MaterialTheme.colorScheme.tertiary,
         )
         Text(
-          text = if (isRealtimeSubsActive) {
-            "Real-time subs: ${realtimeSubsLanguage.ifBlank { "?" }} ${translationStatus.ifBlank { "" }}"
-          } else {
-            "Translating ${translatingTrackName.ifBlank { "subs" }} ${translationStatus.ifBlank { "" }}"
-          },
+          text =
+            if (isRealtimeSubsActive) {
+              "Real-time subs: ${realtimeSubsLanguage.ifBlank { "?" }} ${translationStatus.ifBlank { "" }}"
+            } else {
+              "Translating ${translatingTrackName.ifBlank { "subs" }} ${translationStatus.ifBlank { "" }}"
+            },
           style = MaterialTheme.typography.labelSmall,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
@@ -191,18 +238,12 @@ fun TopRightPlayerControlsLandscape(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
-  areControlsLocked: Boolean = false,
-  easyUnlock: Boolean = false,
-  onUnlock: () -> Unit = {},
 ) {
-  val visibleButtons = if (areControlsLocked && easyUnlock) {
-    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
-  } else buttons
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
-    visibleButtons.forEach { button ->
+    buttons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -221,9 +262,6 @@ fun TopRightPlayerControlsLandscape(
         viewModel = viewModel,
         activity = activity,
         buttonSize = 45.dp,
-        areControlsLocked = areControlsLocked,
-        easyUnlock = easyUnlock,
-        onUnlock = onUnlock,
       )
     }
   }
@@ -246,18 +284,12 @@ fun BottomRightPlayerControlsLandscape(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
-  areControlsLocked: Boolean = false,
-  easyUnlock: Boolean = false,
-  onUnlock: () -> Unit = {},
 ) {
-  val visibleButtons = if (areControlsLocked && easyUnlock) {
-    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
-  } else buttons
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
-    visibleButtons.forEach { button ->
+    buttons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -276,9 +308,6 @@ fun BottomRightPlayerControlsLandscape(
         viewModel = viewModel,
         activity = activity,
         buttonSize = 45.dp,
-        areControlsLocked = areControlsLocked,
-        easyUnlock = easyUnlock,
-        onUnlock = onUnlock,
       )
     }
   }
@@ -301,18 +330,12 @@ fun BottomLeftPlayerControlsLandscape(
   onOpenPanel: (Panels) -> Unit,
   viewModel: PlayerViewModel,
   activity: PlayerActivity,
-  areControlsLocked: Boolean = false,
-  easyUnlock: Boolean = false,
-  onUnlock: () -> Unit = {},
 ) {
-  val visibleButtons = if (areControlsLocked && easyUnlock) {
-    buttons.filter { it == PlayerButton.LOCK_CONTROLS }
-  } else buttons
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
-    visibleButtons.forEach { button ->
+    buttons.forEach { button ->
       RenderPlayerButton(
         button = button,
         chapters = chapters,
@@ -331,14 +354,7 @@ fun BottomLeftPlayerControlsLandscape(
         viewModel = viewModel,
         activity = activity,
         buttonSize = 45.dp,
-        areControlsLocked = areControlsLocked,
-        easyUnlock = easyUnlock,
-        onUnlock = onUnlock,
       )
     }
   }
 }
-
-
-
-

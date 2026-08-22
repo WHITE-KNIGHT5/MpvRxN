@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import java.util.Locale
@@ -9,6 +18,14 @@ import kotlin.math.sqrt
 data class AmbientRenderContext(
   val scaleX: Double,
   val scaleY: Double,
+  /**
+   * True when mpv is running in Linear HDR mode (target-colorspace-hint=yes on Vulkan
+   * gpu-next swapchain).  HOOKED_tex samples are raw linear-light values where reference
+   * white = 1.0 = 203 nits.  The ambient shader must work in perceptual space for its
+   * blur/saturation math, then convert back to linear at the correct nit budget before
+   * output — otherwise the glow is 40× too dark and effectively invisible.
+   */
+  val isLinearHdr: Boolean = false,
 )
 
 data class AmbientSharedShaderConfig(
@@ -22,6 +39,7 @@ enum class AmbientVisualMode(
 ) {
   GLOW("Glow"),
   FRAME_EXTEND("Frame Extend"),
+  YOUTUBE("YouTube"),
 }
 
 sealed interface AmbientShaderSpec {
@@ -38,7 +56,6 @@ data class AmbientGlowShaderSpec(
   val satBoost: Float,
   val warmth: Float,
   val fadeCurve: Float,
-  val ecoMode: Boolean = false,
 ) : AmbientShaderSpec
 
 data class AmbientFrameExtendShaderSpec(
@@ -49,7 +66,11 @@ data class AmbientFrameExtendShaderSpec(
   val detailProtection: Float,
   val glowMix: Float,
   val ditherNoise: Float,
-  val ecoMode: Boolean = false,
+) : AmbientShaderSpec
+
+data class AmbientYouTubeShaderSpec(
+  override val context: AmbientRenderContext,
+  override val shared: AmbientSharedShaderConfig,
 ) : AmbientShaderSpec
 
 data class AmbientGlowPreset(
@@ -61,7 +82,6 @@ data class AmbientGlowPreset(
   val warmth: Float,
   val fadeCurve: Float,
   val opacity: Float,
-  val ecoMode: Boolean = false,
 )
 
 data class AmbientFrameExtendPreset(
@@ -73,7 +93,6 @@ data class AmbientFrameExtendPreset(
   val bezelDepth: Float,
   val vignetteStrength: Float,
   val opacity: Float,
-  val ecoMode: Boolean = false,
 )
 
 object AmbientShaderPresets {
@@ -148,32 +167,6 @@ object AmbientShaderPresets {
       vignetteStrength = 0.62f,
       opacity = 1.0f,
     )
-
-  val glowEco =
-    AmbientGlowPreset(
-      blurSamples = 4,
-      maxRadius = 0.15f,
-      glowIntensity = 1.2f,
-      satBoost = 1.0f,
-      vignetteStrength = 0.0f,
-      warmth = 0.0f,
-      fadeCurve = 1.0f,
-      opacity = 0.7f,
-      ecoMode = true,
-    )
-
-  val frameExtendEco =
-    AmbientFrameExtendPreset(
-      sampleBudget = 8,
-      extendStrength = 0.40f,
-      detailProtection = 0.90f,
-      glowMix = 0.50f,
-      ditherNoise = 0.0f,
-      bezelDepth = 0.0f,
-      vignetteStrength = 0.0f,
-      opacity = 0.6f,
-      ecoMode = true,
-    )
 }
 
 fun matchesGlowPreset(
@@ -194,8 +187,7 @@ fun matchesGlowPreset(
     closeTo(vignetteStrength, preset.vignetteStrength) &&
     closeTo(warmth, preset.warmth) &&
     closeTo(fadeCurve, preset.fadeCurve) &&
-    closeTo(opacity, preset.opacity) &&
-    preset.ecoMode == (blurSamples <= 4)
+    closeTo(opacity, preset.opacity)
 
 fun matchesFrameExtendPreset(
   preset: AmbientFrameExtendPreset,
@@ -215,8 +207,7 @@ fun matchesFrameExtendPreset(
     closeTo(ditherNoise, preset.ditherNoise, 0.001f) &&
     closeTo(bezelDepth, preset.bezelDepth, 0.001f) &&
     closeTo(vignetteStrength, preset.vignetteStrength) &&
-    closeTo(opacity, preset.opacity) &&
-    preset.ecoMode == (sampleBudget <= 8)
+    closeTo(opacity, preset.opacity)
 
 fun closeTo(
   left: Float,
@@ -228,9 +219,11 @@ private const val GOLDEN_ANGLE = 2.399963229728653
 
 private fun glslFloat(value: Double): String {
   val normalized = if (abs(value) < 0.0000005) 0.0 else value
-  val formatted = String.format(Locale.US, "%.8f", normalized)
-    .trimEnd('0')
-    .trimEnd('.')
+  val formatted =
+    String
+      .format(Locale.US, "%.8f", normalized)
+      .trimEnd('0')
+      .trimEnd('.')
   return if (formatted.contains('.')) formatted else "$formatted.0"
 }
 
@@ -252,71 +245,146 @@ private fun buildSpiralTapTable(
   return "const vec3 $name[$count] = vec3[$count](\n$taps\n);"
 }
 
+private fun halton(
+  index: Int,
+  base: Int,
+): Double {
+  var result = 0.0
+  var f = 1.0
+  var i = index
+  while (i > 0) {
+    f /= base
+    result += f * (i % base)
+    i /= base
+  }
+  return result
+}
+
 object AmbientShaderBuilder {
+  // ConcurrentHashMap: updateAmbientStretch() can be invoked concurrently from
+  // renderPrepDispatcher, orientation callbacks, and thermal-monitor ticks.
+  private val glowTapCache = java.util.concurrent.ConcurrentHashMap<Int, String>()
+  private val frameGlowTapCache = java.util.concurrent.ConcurrentHashMap<Int, String>()
+
+  private fun getGlowTaps(samples: Int): String =
+    glowTapCache.getOrPut(samples) {
+      buildSpiralTapTable("GLOW_TAPS", samples) { radiusNorm, _ -> radiusNorm }
+    }
+
+  private fun getFrameGlowTaps(glowSamples: Int): String =
+    frameGlowTapCache.getOrPut(glowSamples) {
+      buildSpiralTapTable("FRAME_GLOW_TAPS", glowSamples) { _, indexNorm -> indexNorm }
+    }
+
+  private val youtubeTapTable: String by lazy {
+    val taps =
+      (1..8).joinToString(",\n") { i ->
+        "    vec2(${glslFloat(halton(i, 2))}, ${glslFloat(halton(i, 3))})"
+      }
+    "const vec2 YOUTUBE_TAPS[8] = vec2[8](\n$taps\n);"
+  }
+
   fun build(spec: AmbientShaderSpec): String =
     when (spec) {
       is AmbientGlowShaderSpec -> buildGlow(spec)
       is AmbientFrameExtendShaderSpec -> buildFrameExtend(spec)
+      is AmbientYouTubeShaderSpec -> buildYouTube(spec)
     }
 
-  private fun buildGlow(spec: AmbientGlowShaderSpec): String =
-    if (spec.ecoMode) buildGlowEco(spec) else buildGlowFull(spec)
-
-  private fun buildGlowEco(spec: AmbientGlowShaderSpec): String =
+  private fun buildYouTube(spec: AmbientYouTubeShaderSpec): String =
     """
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC True Ambient Mode (Eco)
+//!DESC YouTube-Style Ambient Mode
 
-#define BLUR_SAMPLES     ${spec.blurSamples}
-#define MAX_RADIUS       ${spec.maxRadius}
-#define GLOW_INTENSITY   ${spec.glowIntensity}
-#define SAT_BOOST        ${spec.satBoost}
-#define OPACITY          ${spec.shared.opacity}
-#define SCALE_X          ${spec.context.scaleX}
-#define SCALE_Y          ${spec.context.scaleY}
+#define SCALE_X       ${spec.context.scaleX}
+#define SCALE_Y       ${spec.context.scaleY}
+// IS_LINEAR_HDR=1 → Vulkan gpu-next linear swapchain (target-colorspace-hint=yes).
+// HOOKED_tex values are raw linear-light where 1.0 = 203 nits.  We must work in
+// perceptual space (sqrt ≈ γ0.5) for colour averaging so bright highlights do not
+// overwhelm dark colours, then convert back to linear and scale to ~0.08 linear
+// (≈16 nits) for a visible but non-blinding ambient glow.
+#define IS_LINEAR_HDR ${if (spec.context.isLinearHdr) 1 else 0}
 
-${buildSpiralTapTable("GLOW_TAPS", spec.blurSamples) { radiusNorm, _ -> radiusNorm }}
+#if IS_LINEAR_HDR
+vec3 to_perceptual(vec3 c) { return sqrt(max(c, vec3(0.0))); }
+vec3 to_linear(vec3 c)     { return c * c; }
+#endif
+
+// 8 Halton(2,3) positions precomputed in Kotlin — better spatial coverage than
+// 20 pseudo-random scatter points, 60% fewer texture fetches per ambient pixel.
+${youtubeTapTable}
+
+// Colour math is mediump (fp16) — cheaper on mobile, no perceptual quality loss.
+// UV coordinate variables below are explicitly highp (fp32): on 1080p+ screens
+// mediump step size (~0.001) is coarser than a pixel (~0.0004), causing the
+// video_uv remapping to jump in 2-3 pixel blocks and damage fine video lines.
+precision mediump float;
 
 vec4 hook() {
-    vec2 uv = HOOKED_pos;
-    vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
+    highp vec2 uv = HOOKED_pos;
+    highp vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
 
+    // Return video pixel if inside video bounds
     if (video_uv.x >= 0.0 && video_uv.x <= 1.0 &&
         video_uv.y >= 0.0 && video_uv.y <= 1.0) {
         return HOOKED_tex(video_uv);
     }
 
-    vec2 edge_origin = clamp(video_uv, 0.0, 1.0);
-    float edge_fade = exp(-length(video_uv - edge_origin) * (3.0 / max(MAX_RADIUS, 0.001)));
-
-    vec3 acc_color = vec3(0.0);
-    float acc_weight = 0.0;
-
-    for (int i = 0; i < BLUR_SAMPLES; i++) {
-        vec3 tap = GLOW_TAPS[i];
-        vec2 offset = tap.xy * MAX_RADIUS;
-        vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
-        vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
-
-        float weight = 1.0 / (1.0 + tap.z * 20.0);
-        acc_color += sample_rgb * weight;
-        acc_weight += weight;
+    // Sample 8 well-distributed positions across the entire video frame.
+    // In Linear HDR mode: convert to perceptual space before averaging so that
+    // bright linear highlights do not dominate dark colours in the blend.
+    vec3 avg_color = vec3(0.0);
+    for (int i = 0; i < 8; i++) {
+#if IS_LINEAR_HDR
+        avg_color += to_perceptual(HOOKED_tex(YOUTUBE_TAPS[i]).rgb);
+#else
+        avg_color += HOOKED_tex(YOUTUBE_TAPS[i]).rgb;
+#endif
     }
+    avg_color /= 8.0;
 
-    vec3 glow = (acc_color / max(acc_weight, 1e-5)) * GLOW_INTENSITY;
-    glow = mix(vec3(dot(glow, vec3(0.2126, 0.7152, 0.0722))), glow, SAT_BOOST);
-    glow *= edge_fade;
+    // Boost saturation slightly for more vibrant glow
+    float luma = dot(avg_color, vec3(0.2126, 0.7152, 0.0722));
+    avg_color = mix(vec3(luma), avg_color, 1.3); // 30% saturation boost
 
-    return vec4(glow * OPACITY, 1.0);
+#if IS_LINEAR_HDR
+    // Reference white in gpu-next linear light = 1.0 = 203 nits.
+    // 0.08 was too conservative (~2-5 nits after edge_fade): invisible on OLED.
+    // 0.40 targets ~70-85 nits at the video edge for a mid-bright scene:
+    //   avg perceptual ~0.65 → to_linear = 0.42 → 0.42 * 0.40 * 203 ≈ 34 nits base,
+    //   before edge falloff.  Adjust down if content is too bright on your display.
+    avg_color = to_linear(avg_color) * 0.40;
+#else
+    // SDR / hdr-toys mode: values are already gamma-encoded, scale normally.
+    avg_color *= 0.30;
+#endif
+
+    // Smooth fade based on distance from video edge
+    highp vec2 edge_uv = clamp(video_uv, 0.0, 1.0);
+    float dist = length(video_uv - edge_uv);
+    float fade = exp(-dist * 2.5);
+    avg_color *= fade;
+
+    // Debanding via Interleaved Gradient Noise (Jimenez 2014).
+    // Replaces the previous sin-based hash() — uses only fract + dot,
+    // eliminating the last GPU sin() call from this shader.
+    highp vec2 screen_pos = floor(uv * HOOKED_size);
+    float ign = fract(dot(screen_pos, vec2(0.75487766, 0.56984029)));
+    avg_color = clamp(avg_color + (ign - 0.5) * 0.004, 0.0, 1.0);
+
+    return vec4(avg_color, 1.0);
 }
     """.trimIndent()
+
+  private fun buildGlow(spec: AmbientGlowShaderSpec): String = buildGlowFull(spec)
 
   private fun buildGlowFull(spec: AmbientGlowShaderSpec): String =
     """
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC True Ambient Mode
+precision mediump float;
 
 #define BLUR_SAMPLES     ${spec.blurSamples}
 #define MAX_RADIUS       ${spec.maxRadius}
@@ -329,13 +397,19 @@ vec4 hook() {
 #define OPACITY          ${spec.shared.opacity}
 #define SCALE_X          ${spec.context.scaleX}
 #define SCALE_Y          ${spec.context.scaleY}
+// IS_LINEAR_HDR=1 → Vulkan gpu-next linear swapchain (target-colorspace-hint=yes).
+// Samples from HOOKED_tex are raw linear-light (1.0 = 203 nits).  Convert to
+// perceptual space (sqrt) for accumulation/saturation math, then back to linear
+// (x²) and scale to ~0.08 linear (≈16 nits) on output so the glow is visible.
+#define IS_LINEAR_HDR    ${if (spec.context.isLinearHdr) 1 else 0}
+
+#if IS_LINEAR_HDR
+vec3 to_perceptual(vec3 c) { return sqrt(max(c, vec3(0.0))); }
+vec3 to_linear(vec3 c)     { return c * c; }
+#endif
 
 const float PI  = 3.14159265358979;
-${buildSpiralTapTable("GLOW_TAPS", spec.blurSamples) { radiusNorm, _ -> radiusNorm }}
-
-float rand(vec2 seed) {
-    return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
-}
+${getGlowTaps(spec.blurSamples)}
 
 float luma(vec3 rgb) {
     return dot(rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -353,19 +427,25 @@ vec3 apply_warmth(vec3 rgb, float amount) {
 }
 
 vec4 hook() {
-    vec2 uv = HOOKED_pos;
-    vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
+    // Coordinate variables are highp (fp32) to prevent mediump fp16 step
+    // quantization on 1080p+ displays — mediump precision (~1/1024) is coarser
+    // than a pixel on a full-HD screen (~1/2400), causing staircase aliasing
+    // on video lines.  Colour accumulators (acc_color etc.) stay in mediump.
+    highp vec2 uv = HOOKED_pos;
+    highp vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
 
     if (video_uv.x >= 0.0 && video_uv.x <= 1.0 &&
         video_uv.y >= 0.0 && video_uv.y <= 1.0) {
         return HOOKED_tex(video_uv);
     }
 
-    vec2 edge_origin = clamp(video_uv, 0.0, 1.0);
+    highp vec2 edge_origin = clamp(video_uv, 0.0, 1.0);
     float edge_dist = length(video_uv - edge_origin);
     float edge_fade = exp(-edge_dist * (3.0 / max(MAX_RADIUS, 0.001)));
 
-    float jitter = rand(uv * HOOKED_size) * (PI * 2.0);
+    // Interleaved Gradient Noise (Jimenez 2014) — no GPU sin() call,
+    // better spatial distribution than sin-hash, consistent with YouTube mode.
+    float jitter = fract(dot(floor(uv * HOOKED_size), vec2(0.75487766, 0.56984029))) * (PI * 2.0);
     float jitter_s = sin(jitter);
     float jitter_c = cos(jitter);
     vec2 aspect_fix = vec2(HOOKED_size.y / HOOKED_size.x, 1.0);
@@ -382,8 +462,15 @@ vec4 hook() {
             base_offset.x * jitter_c - base_offset.y * jitter_s,
             base_offset.x * jitter_s + base_offset.y * jitter_c
         ) * aspect_fix;
-        vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
+        highp vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
+        // In Linear HDR mode: convert to perceptual space so luma weighting
+        // and saturation math operate on visually uniform values, not raw
+        // energy-linear values where highlights dominate by 40x.
+#if IS_LINEAR_HDR
+        vec3 sample_rgb = to_perceptual(HOOKED_tex(sample_uv).rgb);
+#else
         vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
+#endif
 
         float dist_w = pow(max(1.0 / (1.0 + r * 40.0), 0.0), FADE_CURVE);
         float luma_w = 1.0 + luma(sample_rgb) * 2.0;
@@ -393,7 +480,17 @@ vec4 hook() {
         acc_weight += weight;
     }
 
+    // In Linear HDR: glow is still in perceptual space here — convert to linear
+    // and scale to 203-nit reference budget before applying GLOW_INTENSITY.
+    // Unlike YouTube mode, Glow applies edge_fade + vignette AFTER this scale,
+    // reducing effective brightness by ~50-70%.  0.45 base compensates for that:
+    //   0.45 * GLOW_INTENSITY (1.2-1.5) * avg_linear (0.42) * 203 ≈ 46-58 nits
+    //   at the video boundary — nicely visible on HDR OLED.
+#if IS_LINEAR_HDR
+    vec3 glow = to_linear(acc_color / max(acc_weight, 1e-5)) * 0.45 * GLOW_INTENSITY;
+#else
     vec3 glow = (acc_color / max(acc_weight, 1e-5)) * GLOW_INTENSITY;
+#endif
     glow = adjust_saturation(glow, SAT_BOOST);
     glow = apply_warmth(glow, WARMTH);
     glow *= edge_fade;
@@ -412,84 +509,7 @@ vec4 hook() {
 }
     """.trimIndent()
 
-  private fun buildFrameExtend(spec: AmbientFrameExtendShaderSpec): String =
-    if (spec.ecoMode) buildFrameExtendEco(spec) else buildFrameExtendFull(spec)
-
-  private fun buildFrameExtendEco(spec: AmbientFrameExtendShaderSpec): String {
-    val glowSamples = 4
-    return """
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!DESC Frame Extend Ambient Mode (Eco)
-
-#define EXTEND_STEPS      3
-#define GLOW_SAMPLES      $glowSamples
-#define EXTEND_STRENGTH   ${spec.extendStrength}
-#define DETAIL_PROTECT    ${spec.detailProtection}
-#define GLOW_MIX          ${spec.glowMix}
-#define OPACITY           ${spec.shared.opacity}
-#define SCALE_X           ${spec.context.scaleX}
-#define SCALE_Y           ${spec.context.scaleY}
-
-${buildSpiralTapTable("FRAME_GLOW_TAPS", glowSamples) { _, indexNorm -> indexNorm }}
-
-vec4 hook() {
-    vec2 uv = HOOKED_pos;
-    vec2 video_uv = (uv - 0.5) * vec2(SCALE_X, SCALE_Y) + 0.5;
-
-    if (video_uv.x >= 0.0 && video_uv.x <= 1.0 &&
-        video_uv.y >= 0.0 && video_uv.y <= 1.0) {
-        return HOOKED_tex(video_uv);
-    }
-
-    vec2 edge_origin = clamp(video_uv, 0.0, 1.0);
-    vec2 overflow = video_uv - edge_origin;
-    bool horizontal = abs(overflow.x) >= abs(overflow.y);
-
-    vec2 inward_dir = horizontal
-        ? vec2(overflow.x < 0.0 ? 1.0 : -1.0, 0.0)
-        : vec2(0.0, overflow.y < 0.0 ? 1.0 : -1.0);
-
-    float bar_extent = horizontal
-        ? max((SCALE_X - 1.0) * 0.5, 0.001)
-        : max((SCALE_Y - 1.0) * 0.5, 0.001);
-    float dist_to_edge = horizontal ? abs(overflow.x) : abs(overflow.y);
-    float outside_norm = clamp(dist_to_edge / bar_extent, 0.0, 1.0);
-
-    vec3 edge_rgb = HOOKED_tex(edge_origin).rgb;
-
-    vec3 acc = vec3(0.0);
-    float acc_weight = 0.0;
-    for (int i = 0; i < EXTEND_STEPS; i++) {
-        float fi = float(i + 1) / 3.0;
-        vec2 sample_uv = clamp(edge_origin + inward_dir * (0.02 * fi * EXTEND_STRENGTH), 0.0, 1.0);
-        vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
-        float weight = 1.0 - fi;
-        acc += sample_rgb * weight;
-        acc_weight += weight;
-    }
-    vec3 extend_rgb = acc / max(acc_weight, 1e-5);
-
-    vec3 glow_acc = vec3(0.0);
-    float glow_w = 0.0;
-    for (int i = 0; i < GLOW_SAMPLES; i++) {
-        vec3 tap = FRAME_GLOW_TAPS[i];
-        vec2 offset = tap.xy * mix(0.01, 0.04, outside_norm);
-        vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
-        vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
-        float weight = 1.0 - tap.z;
-        glow_acc += sample_rgb * weight;
-        glow_w += weight;
-    }
-    vec3 glow_rgb = glow_acc / max(glow_w, 1e-5);
-
-    vec3 fill_rgb = mix(extend_rgb, glow_rgb, GLOW_MIX);
-    fill_rgb = mix(edge_rgb, fill_rgb, smoothstep(0.1, 0.8, outside_norm));
-
-    return vec4(fill_rgb * OPACITY, 1.0);
-}
-    """.trimIndent()
-  }
+  private fun buildFrameExtend(spec: AmbientFrameExtendShaderSpec): String = buildFrameExtendFull(spec)
 
   private fun buildFrameExtendFull(spec: AmbientFrameExtendShaderSpec): String {
     val effectiveBudget = spec.sampleBudget.coerceIn(8, 32)
@@ -501,6 +521,11 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC Frame Extend Ambient Mode
+// Frame Extend UV coords thread through multiple helper functions (edge_risk,
+// trace_anchor_strip, sample_predictive_fill, sample_soft_glow).  Promoting
+// only local variables is impractical here, so elevate the global float
+// precision to highp (fp32) to prevent staircase aliasing at 1080p+.
+precision highp float;
 
 #define EXTEND_STEPS      $extendSteps
 #define GLOW_SAMPLES      $glowSamples
@@ -515,20 +540,26 @@ vec4 hook() {
 #define OPACITY           ${spec.shared.opacity}
 #define SCALE_X           ${spec.context.scaleX}
 #define SCALE_Y           ${spec.context.scaleY}
+// IS_LINEAR_HDR=1 → Vulkan gpu-next linear swapchain (target-colorspace-hint=yes).
+// The fallback soft-glow uses perceptual (sqrt) sampling for correct brightness;
+// the predictive-fill path extends real edge colours and is already linear-correct.
+#define IS_LINEAR_HDR     ${if (spec.context.isLinearHdr) 1 else 0}
+
+#if IS_LINEAR_HDR
+vec3 to_perceptual(vec3 c) { return sqrt(max(c, vec3(0.0))); }
+vec3 to_linear(vec3 c)     { return c * c; }
+#endif
 
 const float PI = 3.14159265358979;
-${buildSpiralTapTable("FRAME_GLOW_TAPS", glowSamples) { _, indexNorm -> indexNorm }}
-
-float rand(vec2 seed) {
-    return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
-}
+${getFrameGlowTaps(glowSamples)}
 
 float luma(vec3 rgb) {
     return dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 }
 
+// IGN-based noise — no GPU sin(), better spatial distribution than sin-hash.
 float noise_value(vec2 uv) {
-    return rand(uv * HOOKED_size + vec2(11.0, 47.0)) - 0.5;
+    return fract(dot(floor(uv * HOOKED_size + vec2(11.0, 47.0)), vec2(0.75487766, 0.56984029))) - 0.5;
 }
 
 vec3 apply_dither(vec3 rgb, vec2 uv, float flatness) {
@@ -550,7 +581,8 @@ float edge_risk(vec2 edge_origin, vec3 edge, vec2 inward_dir, vec2 ortho_dir) {
 }
 
 vec3 sample_soft_glow(vec2 edge_origin, vec2 uv, float outside_norm) {
-    float jitter = rand(uv * HOOKED_size) * (PI * 2.0);
+    // IGN for tap rotation jitter — eliminates sin-hash GPU cost.
+    float jitter = fract(dot(floor(uv * HOOKED_size), vec2(0.75487766, 0.56984029))) * (PI * 2.0);
     float jitter_s = sin(jitter);
     float jitter_c = cos(jitter);
     float radius = mix(0.016, 0.095, outside_norm);
@@ -567,13 +599,27 @@ vec3 sample_soft_glow(vec2 edge_origin, vec2 uv, float outside_norm) {
             base_offset.x * jitter_s + base_offset.y * jitter_c
         ) * aspect_fix;
         vec2 sample_uv = clamp(edge_origin + offset, 0.0, 1.0);
+        // Linear HDR: sample in perceptual space so luma weighting is perceptually
+        // uniform; the result is converted back to linear at the call-site below.
+#if IS_LINEAR_HDR
+        vec3 sample_rgb = to_perceptual(HOOKED_tex(sample_uv).rgb);
+#else
         vec3 sample_rgb = HOOKED_tex(sample_uv).rgb;
+#endif
         float weight = (1.15 - fi) * (0.8 + luma(sample_rgb));
         acc += sample_rgb * weight;
         acc_weight += weight;
     }
 
+    // In Linear HDR: result is in perceptual space — convert back to linear.
+    // 0.08 was too dim; 0.28 gives ~55-70 nits at the video edge on mid-bright HDR
+    // content.  This path is the fallback glow when frame-extend confidence is low.
+    // In SDR/hdr-toys: pass through; callers blend this with the extend path.
+#if IS_LINEAR_HDR
+    return to_linear(acc / max(acc_weight, 1e-5)) * 0.28;
+#else
     return acc / max(acc_weight, 1e-5);
+#endif
 }
 
 vec4 trace_anchor_strip(vec2 anchor_uv, vec3 anchor_edge, vec2 inward_dir, vec2 ortho_dir, float outside_norm) {
@@ -709,7 +755,6 @@ vec4 hook() {
     vec4 ambient_out = vec4(fill_rgb * OPACITY, 1.0);
     return mix(vec4(edge_rgb, 1.0), ambient_out, bezel_alpha);
 }
-    """.trimIndent()
+      """.trimIndent()
   }
 }
-

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.repository.subtitlehub
 
 import android.net.Uri
@@ -11,9 +20,11 @@ import app.gyrolet.mpvrx.repository.subtitle.SUBDL_GROUP_EPISODE_END_KEY
 import app.gyrolet.mpvrx.repository.subtitle.SUBDL_GROUP_EPISODE_START_KEY
 import app.gyrolet.mpvrx.repository.subtitle.SubtitleProvider
 import app.gyrolet.mpvrx.repository.wyzie.WyzieLanguages
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -42,6 +53,12 @@ class MpvRxSubtitleHubRepository(
   @Volatile private var buildId: String? = null
 
   override suspend fun search(request: OnlineSubtitleSearchRequest): Result<List<OnlineSubtitle>> =
+    searchIncrementally(request) {}
+
+  override suspend fun searchIncrementally(
+    request: OnlineSubtitleSearchRequest,
+    onResults: suspend (List<OnlineSubtitle>) -> Unit,
+  ): Result<List<OnlineSubtitle>> =
     withContext(Dispatchers.IO) {
       try {
         val selectedSources =
@@ -49,42 +66,54 @@ class MpvRxSubtitleHubRepository(
             request = request,
             selectedSources = MpvRxSubtitleHubSources.resolveSelected(preferences.subtitleHubSources.get()),
           )
-        val results = coroutineScope {
-          selectedSources.map { source ->
-            async {
-              runCatching {
-                when (source) {
-                  "subdl_com" -> searchSubdlCom(request)
-                  "subtitlecat_com" -> searchSubtitleCat(request.withEpisodeSearchQuery())
-                  "moviesubtitles_org" -> searchMovieSubtitlesOrg(request)
-                  "moviesubtitlesrt_com" -> searchMovieSubtitlesRt(request)
-                  "my_subs_co" -> searchMySubs(request)
-                  "tvsubtitles_net" -> searchTvSubtitles(request)
-                  else -> emptyList()
-                }
-              }.getOrElse { error ->
-                Log.w(TAG, "Skipping $source after provider failure", error)
-                emptyList()
+        val results =
+          coroutineScope {
+            val completedSources = Channel<List<OnlineSubtitle>>(selectedSources.size)
+            selectedSources.forEach { source ->
+              launch {
+                runCatching {
+                  when (source) {
+                    "subdl_com" -> searchSubdlCom(request)
+                    "subtitlecat_com" -> searchSubtitleCat(request.withEpisodeSearchQuery())
+                    "moviesubtitles_org" -> searchMovieSubtitlesOrg(request)
+                    "moviesubtitlesrt_com" -> searchMovieSubtitlesRt(request)
+                    "my_subs_co" -> searchMySubs(request)
+                    "tvsubtitles_net" -> searchTvSubtitles(request)
+                    else -> emptyList()
+                  }
+                }.getOrElse { error ->
+                  Log.w(TAG, "Skipping $source after provider failure", error)
+                  emptyList()
+                }.let { completedSources.send(it) }
               }
             }
-          }.flatMap { it.await() }
-        }
 
-        Result.success(
-          results
-            .distinctBy { it.url.lowercase() }
-            .filterNot { it.format.equals("html", ignoreCase = true) }
-            .sortedWith(
-              compareByDescending<OnlineSubtitle> { it.downloadCount ?: 0 }
-                .thenBy { it.source ?: "" }
-                .thenBy { it.displayName.lowercase() },
-            ),
-        )
+            buildList {
+              repeat(selectedSources.size) {
+                addAll(completedSources.receive())
+                onResults(normalizeSearchResults(this))
+              }
+            }
+          }
+
+        Result.success(normalizeSearchResults(results))
+      } catch (e: CancellationException) {
+        throw e
       } catch (e: Exception) {
-        Log.e(TAG, "MpvRx SubtitleHub search failed", e)
+        Log.e(TAG, "mpvRx SubtitleHub search failed", e)
         Result.failure(e)
       }
     }
+
+  private fun normalizeSearchResults(results: List<OnlineSubtitle>): List<OnlineSubtitle> =
+    results
+      .distinctBy { it.url.lowercase() }
+      .filterNot { it.format.equals("html", ignoreCase = true) }
+      .sortedWith(
+        compareByDescending<OnlineSubtitle> { it.downloadCount ?: 0 }
+          .thenBy { it.source ?: "" }
+          .thenBy { it.displayName.lowercase() },
+      )
 
   override suspend fun download(
     subtitle: OnlineSubtitle,
@@ -94,19 +123,19 @@ class MpvRxSubtitleHubRepository(
       try {
         val resolved = resolveDownloadIfNeeded(subtitle)
         val request =
-          Request.Builder()
+          Request
+            .Builder()
             .url(resolved.url)
             .header("User-Agent", USER_AGENT)
             .apply {
               resolved.referer?.let { header("Referer", it) }
-            }
-            .build()
+            }.build()
         client.newCall(request).execute().use { response ->
           if (!response.isSuccessful) return@withContext Result.failure(Exception("Download failed: ${response.code}"))
           Result.success(fileStore.save(response.body.bytes(), subtitle, mediaTitle))
         }
       } catch (e: Exception) {
-        Log.e(TAG, "MpvRx SubtitleHub download failed", e)
+        Log.e(TAG, "mpvRx SubtitleHub download failed", e)
         Result.failure(e)
       }
     }
@@ -121,36 +150,36 @@ class MpvRxSubtitleHubRepository(
     return listings
       .filter { listing -> SubtitleHubSearchMatcher.matchesQueryTitle(request.query, listing.title) }
       .flatMap { listing ->
-      val detailsUrl = subtitleCatAbsoluteUrl(listing.path)
-      runCatching {
-        val detailHtml = fetchText(detailsUrl, "text/html")
-        SubtitleCatHtmlParser.parseDownloadLinks(detailHtml)
-          .asSequence()
-          .filter { link -> languages == null || languages.any { it.codeEquals(link.languageCode) } }
-          .map { link ->
-            val downloadUrl = subtitleCatAbsoluteUrl(link.path)
-            val languageCode = link.languageCode.toLanguageCode()
-            OnlineSubtitle(
-              provider = provider,
-              id = "subtitlecat_com:${listing.path}:${link.languageCode}",
-              url = downloadUrl,
-              fileName = link.fileName,
-              release = listing.title,
-              displayName = link.fileName ?: listing.title,
-              displayLanguage = link.languageLabel ?: WyzieLanguages.ALL[languageCode] ?: link.languageCode,
-              language = languageCode,
-              source = "SubtitleCat",
-              format = SubtitleHubSearchMatcher.displayFormat(extensionFromName(downloadUrl)),
-              downloadCount = listing.downloads.takeIf { it > 0 },
-              metadata = mapOf("detailsUrl" to detailsUrl),
-            )
-          }
-          .toList()
-      }.getOrElse { error ->
-        Log.w(TAG, "Skipping SubtitleCat listing ${listing.path}", error)
-        emptyList()
+        val detailsUrl = subtitleCatAbsoluteUrl(listing.path)
+        runCatching {
+          val detailHtml = fetchText(detailsUrl, "text/html")
+          SubtitleCatHtmlParser
+            .parseDownloadLinks(detailHtml)
+            .asSequence()
+            .filter { link -> languages == null || languages.any { it.codeEquals(link.languageCode) } }
+            .map { link ->
+              val downloadUrl = subtitleCatAbsoluteUrl(link.path)
+              val languageCode = link.languageCode.toLanguageCode()
+              OnlineSubtitle(
+                provider = provider,
+                id = "subtitlecat_com:${listing.path}:${link.languageCode}",
+                url = downloadUrl,
+                fileName = link.fileName,
+                release = listing.title,
+                displayName = link.fileName ?: listing.title,
+                displayLanguage = link.languageLabel ?: WyzieLanguages.ALL[languageCode] ?: link.languageCode,
+                language = languageCode,
+                source = "SubtitleCat",
+                format = SubtitleHubSearchMatcher.displayFormat(extensionFromName(downloadUrl)),
+                downloadCount = listing.downloads.takeIf { it > 0 },
+                metadata = mapOf("detailsUrl" to detailsUrl),
+              )
+            }.toList()
+        }.getOrElse { error ->
+          Log.w(TAG, "Skipping SubtitleCat listing ${listing.path}", error)
+          emptyList()
+        }
       }
-    }
   }
 
   private fun searchMovieSubtitlesRt(request: OnlineSubtitleSearchRequest): List<OnlineSubtitle> {
@@ -159,7 +188,8 @@ class MpvRxSubtitleHubRepository(
     val doc = Jsoup.parse(html, MOVIESUBTITLESRT_BASE_URL)
     val selectedLanguages = selectedLanguages()
     val pages =
-      doc.select("div.inside-article header h2 a[href], article h2 a[href]")
+      doc
+        .select("div.inside-article header h2 a[href], article h2 a[href]")
         .asSequence()
         .map { it.text().trim() to it.absUrl("href") }
         .filter { (title, url) -> title.isNotBlank() && url.isNotBlank() }
@@ -171,13 +201,19 @@ class MpvRxSubtitleHubRepository(
     return pages.mapNotNull { (listingTitle, pageUrl) ->
       runCatching {
         val page = Jsoup.parse(fetchText(pageUrl, "text/html"), pageUrl)
-        val title = page.selectFirst("h1")?.text()?.trim()?.takeIf { it.isNotBlank() } ?: listingTitle
+        val title =
+          page
+            .selectFirst("h1")
+            ?.text()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() } ?: listingTitle
         val metadata = parseLabelValueRows(page)
         val languageRaw = metadata["language"] ?: metadata["subtitle language"]
         if (!matchesSelectedLanguage(languageRaw, selectedLanguages)) return@runCatching null
 
         val downloadUrl =
-          page.selectFirst("a[href$=.zip], a[href*=.zip], a[href*=wp-content][href*=zip]")
+          page
+            .selectFirst("a[href$=.zip], a[href*=.zip], a[href*=wp-content][href*=zip]")
             ?.absUrl("href")
             ?.takeIf { it.isNotBlank() }
             ?: return@runCatching null
@@ -205,7 +241,8 @@ class MpvRxSubtitleHubRepository(
     val doc = Jsoup.parse(html, MOVIESUBTITLES_ORG_BASE_URL)
     val selectedLanguages = selectedLanguages()
     val moviePages =
-      doc.select("div[style*=width:500px] a[href], a[href^=/movie-][href$=.html]")
+      doc
+        .select("div[style*=width:500px] a[href], a[href^=/movie-][href$=.html]")
         .asSequence()
         .map { it.text().trim() to it.absUrl("href") }
         .filter { (title, url) -> title.isNotBlank() && url.contains("/movie-") }
@@ -217,16 +254,34 @@ class MpvRxSubtitleHubRepository(
     return moviePages.flatMap { (movieTitle, movieUrl) ->
       runCatching {
         val page = Jsoup.parse(fetchText(movieUrl, "text/html", allowNonOk = true), movieUrl)
-        val pageTitle = page.selectFirst("h1, title")?.text()?.trim()?.takeIf { it.isNotBlank() } ?: movieTitle
-        page.select("a[href*=subtitle-]")
+        val pageTitle =
+          page
+            .selectFirst("h1, title")
+            ?.text()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() } ?: movieTitle
+        page
+          .select("a[href*=subtitle-]")
           .asSequence()
           .mapNotNull { anchor ->
             val detailsUrl = anchor.absUrl("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val block = anchor.closestParent { it.tagName() == "div" && it.attr("style").contains("margin-bottom") } ?: anchor.parent()
-            val languageRaw = block?.selectFirst("img[src*=flags]")?.attr("src")?.substringBeforeLast(".")?.substringAfterLast("/")
+            val block =
+              anchor.closestParent { it.tagName() == "div" && it.attr("style").contains("margin-bottom") }
+                ?: anchor.parent()
+            val languageRaw =
+              block
+                ?.selectFirst(
+                  "img[src*=flags]",
+                )?.attr("src")
+                ?.substringBeforeLast(".")
+                ?.substringAfterLast("/")
             if (!matchesSelectedLanguage(languageRaw, selectedLanguages)) return@mapNotNull null
             val fileName =
-              block?.selectFirst("b")?.text()?.trim()?.takeIf { it.isNotBlank() }
+              block
+                ?.selectFirst("b")
+                ?.text()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
                 ?: block?.text()?.trim()?.takeIf { it.isNotBlank() }
                 ?: pageTitle
             hubSubtitle(
@@ -244,8 +299,7 @@ class MpvRxSubtitleHubRepository(
                   "fallbackFormat" to "zip",
                 ),
             )
-          }
-          .distinctBy { it.url.lowercase() }
+          }.distinctBy { it.url.lowercase() }
           .take(GENERIC_SUBTITLE_RESULT_LIMIT)
           .toList()
       }.getOrElse { error ->
@@ -257,10 +311,15 @@ class MpvRxSubtitleHubRepository(
 
   private fun searchMySubs(request: OnlineSubtitleSearchRequest): List<OnlineSubtitle> {
     val encoded = URLEncoder.encode(request.query, "UTF-8")
-    val doc = Jsoup.parse(fetchText("$MY_SUBS_BASE_URL/search.php?key=$encoded", "text/html", allowNonOk = true), MY_SUBS_BASE_URL)
+    val doc =
+      Jsoup.parse(
+        fetchText("$MY_SUBS_BASE_URL/search.php?key=$encoded", "text/html", allowNonOk = true),
+        MY_SUBS_BASE_URL,
+      )
     val selectedLanguages = selectedLanguages()
     val pages =
-      doc.select("a[href*=/showlistsubtitles-], a[href*=/film-versions-]")
+      doc
+        .select("a[href*=/showlistsubtitles-], a[href*=/film-versions-]")
         .asSequence()
         .map { it.text().trim().ifBlank { it.attr("title").trim() } to it.absUrl("href") }
         .filter { (title, url) -> title.isNotBlank() && url.isNotBlank() }
@@ -279,41 +338,50 @@ class MpvRxSubtitleHubRepository(
           pageUrls.clear()
           pageUrls += episodePageUrl
         } else {
-          root.select("#saison a[href*=versions-][href*=subtitles], a[href*=versions-][href*=subtitles]").forEach { anchor ->
-            anchor.absUrl("href").takeIf { it.isNotBlank() }?.let { pageUrls += it }
-          }
+          root
+            .select("#saison a[href*=versions-][href*=subtitles], a[href*=versions-][href*=subtitles]")
+            .forEach { anchor ->
+              anchor.absUrl("href").takeIf { it.isNotBlank() }?.let { pageUrls += it }
+            }
         }
 
-        pageUrls.flatMap { pageUrl ->
-          val page = Jsoup.parse(fetchText(pageUrl, "text/html", allowNonOk = true), pageUrl)
-          val pageTitle = page.selectFirst("h1")?.text()?.trim()?.takeIf { it.isNotBlank() } ?: title
-          page.select("a[href*=/downloads/]")
-            .asSequence()
-            .mapNotNull { anchor ->
-              val downloadPageUrl = anchor.absUrl("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-              val languageRaw = mySubsLanguage(anchor)
-              if (!matchesSelectedLanguage(languageRaw, selectedLanguages)) return@mapNotNull null
-              val release =
-                mySubsRelease(anchor)
-                  ?: pageTitle
-              hubSubtitle(
-                sourceKey = "my_subs_co",
-                sourceName = "My Subs",
-                url = downloadPageUrl,
-                title = release,
-                fileName = release,
-                languageRaw = languageRaw,
-                metadata =
-                  buildMap {
-                    put("detailsUrl", pageUrl)
-                    put("requiresResolution", "my_subs_co")
-                    request.season?.let { put("season", it.toString()) }
-                    request.episode?.let { put("episode", it.toString()) }
-                  },
-              )
-            }
-            .toList()
-        }.distinctBy { it.url.lowercase() }.take(GENERIC_SUBTITLE_RESULT_LIMIT)
+        pageUrls
+          .flatMap { pageUrl ->
+            val page = Jsoup.parse(fetchText(pageUrl, "text/html", allowNonOk = true), pageUrl)
+            val pageTitle =
+              page
+                .selectFirst("h1")
+                ?.text()
+                ?.trim()
+                ?.takeIf { it.isNotBlank() } ?: title
+            page
+              .select("a[href*=/downloads/]")
+              .asSequence()
+              .mapNotNull { anchor ->
+                val downloadPageUrl = anchor.absUrl("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val languageRaw = mySubsLanguage(anchor)
+                if (!matchesSelectedLanguage(languageRaw, selectedLanguages)) return@mapNotNull null
+                val release =
+                  mySubsRelease(anchor)
+                    ?: pageTitle
+                hubSubtitle(
+                  sourceKey = "my_subs_co",
+                  sourceName = "My Subs",
+                  url = downloadPageUrl,
+                  title = release,
+                  fileName = release,
+                  languageRaw = languageRaw,
+                  metadata =
+                    buildMap {
+                      put("detailsUrl", pageUrl)
+                      put("requiresResolution", "my_subs_co")
+                      request.season?.let { put("season", it.toString()) }
+                      request.episode?.let { put("episode", it.toString()) }
+                    },
+                )
+              }.toList()
+          }.distinctBy { it.url.lowercase() }
+          .take(GENERIC_SUBTITLE_RESULT_LIMIT)
       }.getOrElse { error ->
         Log.w(TAG, "Skipping My Subs result $detailsUrl", error)
         emptyList()
@@ -329,7 +397,8 @@ class MpvRxSubtitleHubRepository(
     val doc = Jsoup.parse(html, TVSUBTITLES_BASE_URL)
     val selectedLanguages = selectedLanguages()
     val shows =
-      doc.select(".left_articles a[href*=tvshow-], a[href*=tvshow-]")
+      doc
+        .select(".left_articles a[href*=tvshow-], a[href*=tvshow-]")
         .asSequence()
         .map { it.text().trim() to it.absUrl("href") }
         .filter { (title, url) -> title.isNotBlank() && url.contains("tvshow-") }
@@ -346,56 +415,75 @@ class MpvRxSubtitleHubRepository(
             ?.let { linkedSetOf(tvSubtitlesSeasonUrl(showUrl, it)) }
             ?: linkedSetOf(showUrl)
 
-        seasonUrls.flatMap { seasonUrl ->
-          val page = Jsoup.parse(fetchText(seasonUrl, "text/html", allowNonOk = true), seasonUrl)
-          page.select("table#table5 tr[align=middle]")
-            .asSequence()
-            .flatMap { row ->
-              val episodeCode = row.selectFirst("td:nth-child(1)")?.text()?.trim().orEmpty()
-              val rowSeason = episodeCode.substringBefore("x").toIntOrNull()
-              val rowEpisode = episodeCode.substringAfter("x", "").toIntOrNull()
-              if (rowSeason == null || rowEpisode == null) return@flatMap emptySequence<OnlineSubtitle>()
-              if (request.season != null && rowSeason != request.season) return@flatMap emptySequence()
-              if (request.episode != null && rowEpisode != request.episode) return@flatMap emptySequence()
+        seasonUrls
+          .flatMap { seasonUrl ->
+            val page = Jsoup.parse(fetchText(seasonUrl, "text/html", allowNonOk = true), seasonUrl)
+            page
+              .select("table#table5 tr[align=middle]")
+              .asSequence()
+              .flatMap { row ->
+                val episodeCode =
+                  row
+                    .selectFirst("td:nth-child(1)")
+                    ?.text()
+                    ?.trim()
+                    .orEmpty()
+                val rowSeason = episodeCode.substringBefore("x").toIntOrNull()
+                val rowEpisode = episodeCode.substringAfter("x", "").toIntOrNull()
+                if (rowSeason == null || rowEpisode == null) return@flatMap emptySequence<OnlineSubtitle>()
+                if (request.season != null && rowSeason != request.season) return@flatMap emptySequence()
+                if (request.episode != null && rowEpisode != request.episode) return@flatMap emptySequence()
 
-              val episodeTitle =
-                row.selectFirst("td:nth-child(2) a b, td:nth-child(2) a")
-                  ?.text()
-                  ?.trim()
-                  ?.takeIf { it.isNotBlank() }
-              row.select("a[href*=subtitle-], a[href*=episode-]")
-                .asSequence()
-                .flatMap { anchor ->
-                  val subtitlePageUrl = anchor.absUrl("href").takeIf { it.isNotBlank() }
-                    ?: return@flatMap emptySequence<OnlineSubtitle>()
-                  val languageRaw = tvSubtitlesLanguage(anchor, subtitlePageUrl)
-                  if (!matchesSelectedLanguage(languageRaw, selectedLanguages)) return@flatMap emptySequence<OnlineSubtitle>()
+                val episodeTitle =
+                  row
+                    .selectFirst("td:nth-child(2) a b, td:nth-child(2) a")
+                    ?.text()
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                row
+                  .select("a[href*=subtitle-], a[href*=episode-]")
+                  .asSequence()
+                  .flatMap { anchor ->
+                    val subtitlePageUrl =
+                      anchor.absUrl("href").takeIf { it.isNotBlank() }
+                        ?: return@flatMap emptySequence<OnlineSubtitle>()
+                    val languageRaw = tvSubtitlesLanguage(anchor, subtitlePageUrl)
+                    if (!matchesSelectedLanguage(
+                        languageRaw,
+                        selectedLanguages,
+                      )
+                    ) {
+                      return@flatMap emptySequence<OnlineSubtitle>()
+                    }
 
-                  tvSubtitlesSubtitlePages(subtitlePageUrl).asSequence().mapNotNull { detailsUrl ->
-                    val subtitleId = parseTvSubtitlesId(detailsUrl) ?: return@mapNotNull null
-                    val fileName =
-                      "${title.sanitizeDisplayName()}.S${rowSeason.toString().padStart(2, '0')}E${rowEpisode.toString().padStart(2, '0')}.${languageRaw ?: "unknown"}.zip"
-                    hubSubtitle(
-                      sourceKey = "tvsubtitles_net",
-                      sourceName = "TVSubtitles",
-                      url = absoluteUrl(TVSUBTITLES_BASE_URL, "download-$subtitleId.html"),
-                      title = episodeTitle ?: title,
-                      fileName = fileName,
-                      languageRaw = languageRaw,
-                      metadata =
-                        mapOf(
-                          "detailsUrl" to detailsUrl,
-                          "seasonUrl" to seasonUrl,
-                          "requiresResolution" to "tvsubtitles_net",
-                          "season" to rowSeason.toString(),
-                          "episode" to rowEpisode.toString(),
-                        ),
-                    )
+                    tvSubtitlesSubtitlePages(subtitlePageUrl).asSequence().mapNotNull { detailsUrl ->
+                      val subtitleId = parseTvSubtitlesId(detailsUrl) ?: return@mapNotNull null
+                      val fileName =
+                        "${title.sanitizeDisplayName()}.S${rowSeason.toString().padStart(
+                          2,
+                          '0',
+                        )}E${rowEpisode.toString().padStart(2, '0')}.${languageRaw ?: "unknown"}.zip"
+                      hubSubtitle(
+                        sourceKey = "tvsubtitles_net",
+                        sourceName = "TVSubtitles",
+                        url = absoluteUrl(TVSUBTITLES_BASE_URL, "download-$subtitleId.html"),
+                        title = episodeTitle ?: title,
+                        fileName = fileName,
+                        languageRaw = languageRaw,
+                        metadata =
+                          mapOf(
+                            "detailsUrl" to detailsUrl,
+                            "seasonUrl" to seasonUrl,
+                            "requiresResolution" to "tvsubtitles_net",
+                            "season" to rowSeason.toString(),
+                            "episode" to rowEpisode.toString(),
+                          ),
+                      )
+                    }
                   }
-                }
-            }
-            .toList()
-        }.distinctBy { it.url.lowercase() }.take(GENERIC_SUBTITLE_RESULT_LIMIT)
+              }.toList()
+          }.distinctBy { it.url.lowercase() }
+          .take(GENERIC_SUBTITLE_RESULT_LIMIT)
       }.getOrElse { error ->
         Log.w(TAG, "Skipping TVSubtitles result $showUrl", error)
         emptyList()
@@ -410,7 +498,8 @@ class MpvRxSubtitleHubRepository(
     val url = "https://subdl.com/_next/data/$buildId/$language/search/$encodedQuery.json"
     val root = json.parseToJsonElement(fetchText(url, "application/json")).obj() ?: return emptyList()
     val results =
-      root.obj("pageProps")
+      root
+        .obj("pageProps")
         ?.array("list")
         ?.mapNotNull { it.obj()?.toSubdlSearchItem() }
         ?.filter { result -> SubtitleHubSearchMatcher.matchesQueryTitle(request.query, result.name) }
@@ -452,7 +541,11 @@ class MpvRxSubtitleHubRepository(
 
     grouped.forEach { (languageLabel, value) ->
       val languageCode = languageLabel.toLanguageCode()
-      if (selectedLanguages != null && selectedLanguages.none { it.codeEquals(languageCode) || it.codeEquals(languageLabel) }) return@forEach
+      if (selectedLanguages != null &&
+        selectedLanguages.none { it.codeEquals(languageCode) || it.codeEquals(languageLabel) }
+      ) {
+        return@forEach
+      }
 
       val rows = value as? JsonArray ?: return@forEach
       rows.forEach { row ->
@@ -482,7 +575,10 @@ class MpvRxSubtitleHubRepository(
             displayLanguage = WyzieLanguages.ALL[languageCode] ?: languageLabel,
             language = languageCode,
             source = "SubDL.com",
-            format = SubtitleHubSearchMatcher.displayFormat(extensionFromName(fileName) ?: extensionFromName(downloadUrl)),
+            format =
+              SubtitleHubSearchMatcher.displayFormat(
+                extensionFromName(fileName) ?: extensionFromName(downloadUrl),
+              ),
             downloadCount = downloads,
             isHearingImpaired = subtitle.bool("hi") == true,
             metadata =
@@ -515,8 +611,9 @@ class MpvRxSubtitleHubRepository(
       } else {
         "https://subdl.com/_next/data/$buildId/subtitle/$sdId/$slug.json"
       }
-    val root = json.parseToJsonElement(fetchText(url, "application/json")).obj()
-      ?: throw IllegalStateException("Invalid SubDL JSON")
+    val root =
+      json.parseToJsonElement(fetchText(url, "application/json")).obj()
+        ?: throw IllegalStateException("Invalid SubDL JSON")
     return root.obj("pageProps") ?: throw IllegalStateException("SubDL pageProps missing")
   }
 
@@ -544,8 +641,9 @@ class MpvRxSubtitleHubRepository(
   private fun ensureBuildId(): String {
     buildId?.let { return it }
     val html = fetchText("https://subdl.com/api-doc", "text/html")
-    val found = Regex(""""buildId"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.getOrNull(1)
-      ?: throw IllegalStateException("SubDL build id not found")
+    val found =
+      Regex(""""buildId"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.getOrNull(1)
+        ?: throw IllegalStateException("SubDL build id not found")
     buildId = found
     return found
   }
@@ -557,7 +655,8 @@ class MpvRxSubtitleHubRepository(
     customize: Request.Builder.() -> Unit = {},
   ): String {
     val builder =
-      Request.Builder()
+      Request
+        .Builder()
         .url(url)
         .header("Accept", accept)
         .header("User-Agent", USER_AGENT)
@@ -575,7 +674,10 @@ class MpvRxSubtitleHubRepository(
   private fun resolveDownloadIfNeeded(subtitle: OnlineSubtitle): ResolvedDownload {
     val url = subtitle.url
     return when {
-      subtitle.metadata["requiresResolution"] == "moviesubtitles_org" -> ResolvedDownload(resolveMovieSubtitlesOrgDownloadUrl(url))
+      subtitle.metadata["requiresResolution"] == "moviesubtitles_org" ->
+        ResolvedDownload(
+          resolveMovieSubtitlesOrgDownloadUrl(url),
+        )
       url.contains("my-subs.co/downloads/") -> ResolvedDownload(resolveMySubsDownloadUrl(url), referer = url)
       url.contains("tvsubtitles.net/download-") -> ResolvedDownload(resolveTvSubtitlesDownloadUrl(url))
       else -> ResolvedDownload(url)
@@ -596,15 +698,17 @@ class MpvRxSubtitleHubRepository(
 
   private fun resolveTvSubtitlesDownloadUrl(downloadPageUrl: String): String {
     val html = fetchText(downloadPageUrl, "text/html", allowNonOk = true)
-    val scriptPath = parseDocumentLocationConcat(html) ?: parseTvSubtitlesZipPath(html)
-      ?: throw IllegalStateException("TVSubtitles download URL not found")
+    val scriptPath =
+      parseDocumentLocationConcat(html) ?: parseTvSubtitlesZipPath(html)
+        ?: throw IllegalStateException("TVSubtitles download URL not found")
     return absoluteUrl(TVSUBTITLES_BASE_URL, scriptPath.replace(" ", "%20"))
   }
 
   private fun resolveMovieSubtitlesOrgDownloadUrl(downloadPageUrl: String): String {
     val html = fetchText(downloadPageUrl, "text/html", allowNonOk = true)
     val page = Jsoup.parse(html, downloadPageUrl)
-    return page.selectFirst("a[href$=.zip], a[href*=files][href$=.zip], a[href*=download][href$=.zip]")
+    return page
+      .selectFirst("a[href$=.zip], a[href*=files][href$=.zip], a[href*=download][href$=.zip]")
       ?.absUrl("href")
       ?.takeIf { it.isNotBlank() }
       ?: parseDocumentLocationConcat(html)?.let { absoluteUrl(MOVIESUBTITLES_ORG_BASE_URL, it) }
@@ -650,8 +754,7 @@ class MpvRxSubtitleHubRepository(
         val start = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
         val end = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
         if (start > 0 && end > start && end <= 1200 && end - start <= 500) start..end else null
-      }
-      .firstOrNull()
+      }.firstOrNull()
 
   private fun hubSubtitle(
     sourceKey: String,
@@ -670,7 +773,8 @@ class MpvRxSubtitleHubRepository(
       fileName = fileName,
       release = title,
       displayName = fileName?.takeIf { it.isNotBlank() } ?: title,
-      displayLanguage = languageCode?.let { WyzieLanguages.ALL[it] } ?: languageRaw?.takeIf { it.isNotBlank() } ?: "Unknown",
+      displayLanguage =
+        languageCode?.let { WyzieLanguages.ALL[it] } ?: languageRaw?.takeIf { it.isNotBlank() } ?: "Unknown",
       language = languageCode,
       source = sourceName,
       format =
@@ -687,8 +791,20 @@ class MpvRxSubtitleHubRepository(
     doc.select("tbody tr, table tr").forEach { row ->
       val cells = row.select("td")
       if (cells.size < 2) return@forEach
-      val label = cells.first()?.text()?.trim()?.trimEnd(':')?.lowercase().orEmpty()
-      val value = cells.last()?.text()?.trim().orEmpty()
+      val label =
+        cells
+          .first()
+          ?.text()
+          ?.trim()
+          ?.trimEnd(':')
+          ?.lowercase()
+          .orEmpty()
+      val value =
+        cells
+          .last()
+          ?.text()
+          ?.trim()
+          .orEmpty()
       if (label.isNotBlank() && value.isNotBlank()) rows[label] = value
     }
     return rows
@@ -731,7 +847,8 @@ class MpvRxSubtitleHubRepository(
     var current: Element? = anchor
     while (current != null) {
       current.previousElementSibling()?.let { previous ->
-        previous.selectFirst("h4, h3, strong, b")
+        previous
+          .selectFirst("h4, h3, strong, b")
           ?.text()
           ?.trim()
           ?.removePrefix("Version:")
@@ -742,7 +859,8 @@ class MpvRxSubtitleHubRepository(
       current = current.parent()
     }
 
-    return anchor.closestParent { it.hasClass("row") && it.text().contains("Downloads", ignoreCase = true) }
+    return anchor
+      .closestParent { it.hasClass("row") && it.text().contains("Downloads", ignoreCase = true) }
       ?.parent()
       ?.selectFirst("h4, h3, strong, b")
       ?.text()
@@ -761,7 +879,11 @@ class MpvRxSubtitleHubRepository(
     val className = flag?.classNames()?.firstOrNull { it.startsWith("flag-icon-") }
     val code =
       className?.removePrefix("flag-icon-")
-        ?: container.selectFirst("i")?.text()?.trim()?.takeIf { it.isNotBlank() }
+        ?: container
+          .selectFirst("i")
+          ?.text()
+          ?.trim()
+          ?.takeIf { it.isNotBlank() }
         ?: flag?.attr("title")?.takeIf { it.isNotBlank() }
         ?: return null
     return when (code.lowercase()) {
@@ -795,7 +917,8 @@ class MpvRxSubtitleHubRepository(
     if (!url.contains("episode-", ignoreCase = true)) return emptyList()
 
     val page = Jsoup.parse(fetchText(url, "text/html", allowNonOk = true), url)
-    return page.select("a[href*=subtitle-]")
+    return page
+      .select("a[href*=subtitle-]")
       .mapNotNull { it.absUrl("href").takeIf(String::isNotBlank) }
       .distinctBy { it.lowercase() }
       .take(GENERIC_SUBTITLE_RESULT_LIMIT)
@@ -818,8 +941,7 @@ class MpvRxSubtitleHubRepository(
     }
   }
 
-  private fun String.sanitizeDisplayName(): String =
-    replace(Regex("""[\\/:*?"<>|]"""), "_").ifBlank { "subtitle" }
+  private fun String.sanitizeDisplayName(): String = replace(Regex("""[\\/:*?"<>|]"""), "_").ifBlank { "subtitle" }
 
   private fun absoluteUrl(
     base: String,
@@ -886,18 +1008,17 @@ class MpvRxSubtitleHubRepository(
 
   private fun JsonObject.string(key: String): String? = get(key).stringValue()
 
-  private fun JsonElement?.stringValue(): String? =
-    (this as? JsonPrimitive)?.contentOrNull
+  private fun JsonElement?.stringValue(): String? = (this as? JsonPrimitive)?.contentOrNull
 
-  private fun JsonObject.int(key: String): Int? =
-    (get(key) as? JsonPrimitive)?.intOrNull
+  private fun JsonObject.int(key: String): Int? = (get(key) as? JsonPrimitive)?.intOrNull
 
-  private fun JsonObject.bool(key: String): Boolean? =
-    (get(key) as? JsonPrimitive)?.booleanOrNull
+  private fun JsonObject.bool(key: String): Boolean? = (get(key) as? JsonPrimitive)?.booleanOrNull
 
   private fun String.toLanguageCode(): String {
     val normalized = normalizeCode()
-    return WyzieLanguages.ALL.entries.firstOrNull { it.value.equals(this, ignoreCase = true) }?.key
+    return WyzieLanguages.ALL.entries
+      .firstOrNull { it.value.equals(this, ignoreCase = true) }
+      ?.key
       ?: LANGUAGE_ALIASES[normalized]
       ?: normalized
   }
@@ -907,7 +1028,8 @@ class MpvRxSubtitleHubRepository(
   private fun String.codeEquals(other: String): Boolean = normalizeCode() == other.normalizeCode()
 
   private fun extensionFromName(value: String): String? =
-    value.substringBefore("?")
+    value
+      .substringBefore("?")
       .substringAfterLast("/")
       .substringAfterLast(".", "")
       .lowercase()
@@ -934,9 +1056,9 @@ class MpvRxSubtitleHubRepository(
     }
 
   private companion object {
-    const val TAG = "MpvRxSubtitleHub"
+    const val TAG = "mpvRxSubtitleHub"
     const val USER_AGENT =
-      "Mozilla/5.0 (Linux; Android 14; MpvRx) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+      "Mozilla/5.0 (Linux; Android 14; mpvRx) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
     const val SUBTITLECAT_BASE_URL = "https://www.subtitlecat.com/"
     const val MOVIESUBTITLES_ORG_BASE_URL = "https://www.moviesubtitles.org/"
     const val MOVIESUBTITLESRT_BASE_URL = "https://moviesubtitlesrt.com/"
@@ -949,11 +1071,71 @@ class MpvRxSubtitleHubRepository(
 
     val SUPPORTED_SUBDL_SEARCH_LANGUAGES =
       setOf(
-        "ar", "pt", "da", "nl", "en", "fa", "ps", "fi", "fr", "id", "it", "no", "ro", "es", "sv",
-        "vi", "sq", "az", "azb", "be", "bn", "zh-tw", "bs", "bg", "bg-en", "my", "ca", "zh-cn",
-        "hr", "cs", "nl-en", "en-de", "eo", "et", "ka", "de", "el", "kl", "he", "hi", "hu",
-        "hu-en", "is", "ja", "ko", "ku", "lv", "lt", "mk", "ms", "ml", "mni", "pl", "ru", "sr",
-        "si", "sk", "sl", "tl", "ta", "te", "th", "tr", "uk", "ur",
+        "ar",
+        "pt",
+        "da",
+        "nl",
+        "en",
+        "fa",
+        "ps",
+        "fi",
+        "fr",
+        "id",
+        "it",
+        "no",
+        "ro",
+        "es",
+        "sv",
+        "vi",
+        "sq",
+        "az",
+        "azb",
+        "be",
+        "bn",
+        "zh-tw",
+        "bs",
+        "bg",
+        "bg-en",
+        "my",
+        "ca",
+        "zh-cn",
+        "hr",
+        "cs",
+        "nl-en",
+        "en-de",
+        "eo",
+        "et",
+        "ka",
+        "de",
+        "el",
+        "kl",
+        "he",
+        "hi",
+        "hu",
+        "hu-en",
+        "is",
+        "ja",
+        "ko",
+        "ku",
+        "lv",
+        "lt",
+        "mk",
+        "ms",
+        "ml",
+        "mni",
+        "pl",
+        "ru",
+        "sr",
+        "si",
+        "sk",
+        "sl",
+        "tl",
+        "ta",
+        "te",
+        "th",
+        "tr",
+        "uk",
+        "ur",
       )
 
     val LANGUAGE_ALIASES =

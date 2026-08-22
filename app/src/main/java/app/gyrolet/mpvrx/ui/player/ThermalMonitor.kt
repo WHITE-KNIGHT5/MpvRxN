@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import android.content.Context
@@ -18,7 +27,6 @@ import android.util.Log
  * that follow sustained SoC heat buildup.
  */
 object ThermalMonitor {
-
   private const val TAG = "ThermalMonitor"
 
   /**
@@ -64,7 +72,10 @@ object ThermalMonitor {
    * @param headroom The current thermal headroom from [getHeadroom].
    * @return The effective budget to use, always ≤ [baselineBudget].
    */
-  fun clampAmbientSampleBudget(baselineBudget: Int, headroom: Float): Int =
+  fun clampAmbientSampleBudget(
+    baselineBudget: Int,
+    headroom: Float,
+  ): Int =
     when {
       headroom < 0.40f -> baselineBudget.coerceAtMost(4)
       headroom < 0.60f -> baselineBudget.coerceAtMost(8)

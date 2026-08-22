@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.browser.filesystem
 
 import android.app.Application
@@ -12,14 +21,15 @@ import app.gyrolet.mpvrx.domain.playbackstate.repository.PlaybackStateRepository
 import app.gyrolet.mpvrx.preferences.BrowserPreferences
 import app.gyrolet.mpvrx.repository.MediaFileRepository
 import app.gyrolet.mpvrx.ui.browser.base.BaseBrowserViewModel
+import app.gyrolet.mpvrx.ui.player.PlaybackIdentity
 import app.gyrolet.mpvrx.utils.media.MediaLibraryEvents
 import app.gyrolet.mpvrx.utils.media.MetadataRetrieval
 import app.gyrolet.mpvrx.utils.media.PlaybackStateEvents
 import app.gyrolet.mpvrx.utils.sort.SortUtils
+import app.gyrolet.mpvrx.utils.storage.FileTypeUtils
 import app.gyrolet.mpvrx.utils.storage.FolderViewScanner
 import app.gyrolet.mpvrx.utils.storage.TreeViewScanner
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +83,9 @@ class FileSystemBrowserViewModel(
   // Set of videos that should show the NEW label in tree view
   private val _newVideoIds = MutableStateFlow<Set<Long>>(emptySet())
   val newVideoIds: StateFlow<Set<Long>> = _newVideoIds.asStateFlow()
+
+  private val _watchedVideoIds = MutableStateFlow<Set<Long>>(emptySet())
+  val watchedVideoIds: StateFlow<Set<Long>> = _watchedVideoIds.asStateFlow()
 
   // Loading state - similar to Fossify's showProgressBar/hideProgressBar
   private val _isLoading = MutableStateFlow(false)
@@ -146,12 +159,11 @@ class FileSystemBrowserViewModel(
     // Refresh on global media library changes
     // Similar to Fossify's media scan completion listener
     viewModelScope.launch(Dispatchers.IO) {
-        MediaLibraryEvents.changes.collectLatest {
-          // Clear cache when media library changes
-          MediaFileRepository.clearCache()
-          loadCurrentDirectory()
-        }
+      MediaLibraryEvents.changes.collectLatest {
+        MediaFileRepository.invalidateTreeCache()
+        loadCurrentDirectory()
       }
+    }
 
     viewModelScope.launch(Dispatchers.IO) {
       PlaybackStateEvents.changes.collectLatest {
@@ -184,11 +196,18 @@ class FileSystemBrowserViewModel(
         appearancePreferences.unplayedOldVideoDays.changes(),
       ) { showLabels, thresholdDays ->
         showLabels to thresholdDays
-      }
-        .drop(1)
+      }.drop(1)
         .collectLatest {
           loadCurrentDirectory()
         }
+    }
+
+    // The cached media topology is reusable; only the visible flatten depth changes.
+    viewModelScope.launch {
+      browserPreferences.treeFlattenDepth
+        .changes()
+        .drop(1)
+        .collectLatest { loadCurrentDirectory() }
     }
   }
 
@@ -229,11 +248,26 @@ class FileSystemBrowserViewModel(
 
       if (folder.exists() && folder.isDirectory) {
         // Scan all video files in the folder
-        val videoFiles = folder.listFiles { file ->
-          file.isFile && file.extension.lowercase() in listOf(
-            "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "mpg", "mpeg", "ts", "m2ts"
-          )
-        }
+        val videoFiles =
+          folder.listFiles { file ->
+            file.isFile &&
+              file.extension.lowercase() in
+              listOf(
+                "mp4",
+                "mkv",
+                "avi",
+                "mov",
+                "wmv",
+                "flv",
+                "webm",
+                "m4v",
+                "3gp",
+                "mpg",
+                "mpeg",
+                "ts",
+                "m2ts",
+              )
+          }
 
         if (!videoFiles.isNullOrEmpty()) {
           val filePaths = videoFiles.map { it.absolutePath }.toTypedArray()
@@ -281,18 +315,51 @@ class FileSystemBrowserViewModel(
   fun deleteFolders(folders: List<FileSystemItem.Folder>): Pair<Int, Int> {
     var successCount = 0
     var failureCount = 0
+    val deleteAll = browserPreferences.deleteFolderAllContents.get()
+    val includeAudio = browserPreferences.includeAudioBrowser.get()
 
-    Log.d(TAG, "Deleting ${folders.size} folders")
+    Log.d(TAG, "Deleting ${folders.size} folders (deleteAll=$deleteAll, includeAudio=$includeAudio)")
 
     folders.forEach { folder ->
       try {
         val dir = File(folder.path)
-        if (dir.exists() && dir.deleteRecursively()) {
-          successCount++
-          Log.d(TAG, "Successfully deleted folder: ${folder.path}")
-        } else {
+        if (!dir.exists()) {
           failureCount++
-          Log.w(TAG, "Failed to delete folder: ${folder.path}")
+          Log.w(TAG, "Folder does not exist: ${folder.path}")
+          return@forEach
+        }
+
+        if (deleteAll) {
+          if (dir.deleteRecursively()) {
+            successCount++
+            Log.d(TAG, "Successfully deleted folder (all contents): ${folder.path}")
+          } else {
+            failureCount++
+            Log.w(TAG, "Failed to delete folder: ${folder.path}")
+          }
+        } else {
+          var deletedAny = false
+          dir.listFiles()?.forEach { file ->
+            if (file.isFile) {
+              val ext = file.extension.lowercase()
+              val isVideo = ext in FileTypeUtils.VIDEO_EXTENSIONS
+              val isAudio = includeAudio && ext in FileTypeUtils.AUDIO_EXTENSIONS
+              if (isVideo || isAudio) {
+                if (file.delete()) deletedAny = true
+              }
+            }
+          }
+          // Remove empty subdirectories
+          dir.listFiles()?.forEach { file ->
+            if (file.isDirectory) file.delete()
+          }
+          if (deletedAny) {
+            successCount++
+            Log.d(TAG, "Deleted media files from folder: ${folder.path}")
+          } else {
+            failureCount++
+            Log.w(TAG, "No media files found in folder: ${folder.path}")
+          }
         }
       } catch (e: Exception) {
         Log.e(TAG, "Exception deleting folder: ${folder.path}", e)
@@ -300,10 +367,8 @@ class FileSystemBrowserViewModel(
       }
     }
 
-    // Set flag if any deletions were successful
     if (successCount > 0) {
       _itemsWereDeletedOrMoved.value = true
-      // Notify that media library has changed
       MediaLibraryEvents.notifyChanged()
     }
 
@@ -339,7 +404,10 @@ class FileSystemBrowserViewModel(
     return super.renameVideo(video, newDisplayName)
   }
 
-  suspend fun renameFolder(folder: FileSystemItem.Folder, newName: String): Boolean {
+  suspend fun renameFolder(
+    folder: FileSystemItem.Folder,
+    newName: String,
+  ): Boolean {
     val src = File(folder.path)
     val dst = File(src.parent ?: return false, newName)
     if (dst.exists()) return false
@@ -373,6 +441,7 @@ class FileSystemBrowserViewModel(
           _unsortedItems.value = roots
           _videoFilesWithPlayback.value = emptyMap()
           _newVideoIds.value = emptySet()
+          _watchedVideoIds.value = emptySet()
           Log.d(TAG, "Loaded ${roots.size} storage roots")
         } else {
           // Update breadcrumbs for real paths
@@ -389,8 +458,7 @@ class FileSystemBrowserViewModel(
               path,
               showAllFileTypes = false,
               forceFileSystemCheck = forceFileSystemCheck,
-            )
-            .onSuccess { items ->
+            ).onSuccess { items ->
               // Get previous count for this path
               val previousCount = itemCountByPath[path] ?: 0
 
@@ -413,35 +481,37 @@ class FileSystemBrowserViewModel(
               Log.d(TAG, "Loaded directory: $path with $folderCount folders, $videoCount videos")
 
               // Enrich videos with metadata if chips are enabled
-              val enrichedItems = if (MetadataRetrieval.isVideoMetadataNeeded(browserPreferences)) {
-                Log.d(TAG, "Metadata chips enabled, enriching $videoCount videos")
-                val videoFiles = items.filterIsInstance<FileSystemItem.VideoFile>()
-                val videos = videoFiles.map { it.video }
-                val enrichedVideos = MetadataRetrieval.enrichVideosIfNeeded(
-                  context = getApplication(),
-                  videos = videos,
-                  browserPreferences = browserPreferences,
-                  metadataCache = metadataCache
-                )
-                
-                // Replace videos in items with enriched versions
-                val enrichedVideoMap = enrichedVideos.associateBy { it.id }
-                items.map { item ->
-                  when (item) {
-                    is FileSystemItem.VideoFile -> {
-                      val enrichedVideo = enrichedVideoMap[item.video.id]
-                      if (enrichedVideo != null) {
-                        item.copy(video = enrichedVideo)
-                      } else {
-                        item
+              val enrichedItems =
+                if (MetadataRetrieval.isVideoMetadataNeeded(browserPreferences)) {
+                  Log.d(TAG, "Metadata chips enabled, enriching $videoCount videos")
+                  val videoFiles = items.filterIsInstance<FileSystemItem.VideoFile>()
+                  val videos = videoFiles.map { it.video }
+                  val enrichedVideos =
+                    MetadataRetrieval.enrichVideosIfNeeded(
+                      context = getApplication(),
+                      videos = videos,
+                      browserPreferences = browserPreferences,
+                      metadataCache = metadataCache,
+                    )
+
+                  // Replace videos in items with enriched versions
+                  val enrichedVideoMap = enrichedVideos.associateBy { it.id }
+                  items.map { item ->
+                    when (item) {
+                      is FileSystemItem.VideoFile -> {
+                        val enrichedVideo = enrichedVideoMap[item.video.id]
+                        if (enrichedVideo != null) {
+                          item.copy(video = enrichedVideo)
+                        } else {
+                          item
+                        }
                       }
+                      else -> item
                     }
-                    else -> item
                   }
+                } else {
+                  items
                 }
-              } else {
-                items
-              }
 
               _unsortedItems.value = enrichedItems
 
@@ -452,6 +522,7 @@ class FileSystemBrowserViewModel(
               _unsortedItems.value = emptyList()
               _videoFilesWithPlayback.value = emptyMap()
               _newVideoIds.value = emptySet()
+              _watchedVideoIds.value = emptySet()
               Log.e(TAG, "Error loading directory: $path", error)
             }
         }
@@ -460,6 +531,7 @@ class FileSystemBrowserViewModel(
         _unsortedItems.value = emptyList()
         _videoFilesWithPlayback.value = emptyMap()
         _newVideoIds.value = emptySet()
+        _watchedVideoIds.value = emptySet()
         Log.e(TAG, "Exception loading directory", e)
       } finally {
         _isLoading.value = false
@@ -476,38 +548,88 @@ class FileSystemBrowserViewModel(
     val playbackStates = playbackStateRepository.getAllPlaybackStates().associateBy { it.mediaTitle }
     val playbackMap = mutableMapOf<Long, Float>()
     val newIds = mutableSetOf<Long>()
+    val watchedIds = mutableSetOf<Long>()
     val currentTime = System.currentTimeMillis()
     val showNewLabels = appearancePreferences.showUnplayedOldVideoLabel.get()
     val thresholdMillis = appearancePreferences.unplayedOldVideoDays.get().toLong() * 24L * 60L * 60L * 1000L
+    val watchedThreshold = browserPreferences.watchedThreshold.get()
 
     Log.d(TAG, "Loading playback info for ${videoFiles.size} videos")
 
     videoFiles.forEach { videoFile ->
       val video = videoFile.video
-      val playbackState = playbackStates[video.displayName]
-
-      if (playbackState != null && video.duration > 0) {
-        val durationSeconds = video.duration / 1000
-        val timeRemaining = playbackState.timeRemaining.toLong()
-        val watched = durationSeconds - timeRemaining
-        val progressValue = (watched.toFloat() / durationSeconds.toFloat()).coerceIn(0f, 1f)
-
-        // Only show progress for videos that are 1-99% complete
-        // Similar to how media players show partial progress
-        if (progressValue in 0.01f..0.99f) {
-          playbackMap[video.id] = progressValue
+      val playbackIdentifiers =
+        linkedSetOf(
+          PlaybackIdentity.forLocalPath(video.path),
+          PlaybackIdentity.forUri(video.uri.toString()),
+          PlaybackIdentity.forUri(video.path),
+          PlaybackIdentity.forUri("file://${video.path}"),
+        )
+      val playbackState = playbackIdentifiers.firstNotNullOfOrNull { playbackStates[it] }
+      val progressValue =
+        if (playbackState != null && video.duration > 0) {
+          val durationSeconds = video.duration / 1000
+          val watched = durationSeconds - playbackState.timeRemaining.toLong()
+          (watched.toFloat() / durationSeconds.toFloat()).coerceIn(0f, 1f)
+        } else {
+          0f
         }
-      } else if (showNewLabels) {
-        val videoAge = currentTime - (video.dateModified * 1000L)
-        if (videoAge <= thresholdMillis) {
-          newIds += video.id
-        }
+      val isWatched =
+        playbackState?.hasBeenWatched == true ||
+          (watchedThreshold > 0 && progressValue >= watchedThreshold / 100f)
+      if (isWatched) watchedIds += video.id
+
+      if (playbackState != null && progressValue in 0.01f..0.99f) {
+        playbackMap[video.id] = progressValue
+      }
+
+      val videoAge = currentTime - (video.dateModified * 1000L)
+      val isWithinNewWindow = thresholdMillis == 0L || videoAge <= thresholdMillis
+      if (showNewLabels && !isWatched && isWithinNewWindow) {
+        newIds += video.id
       }
     }
 
     _videoFilesWithPlayback.value = playbackMap
     _newVideoIds.value = newIds
+    _watchedVideoIds.value = watchedIds
     Log.d(TAG, "Loaded playback info for ${playbackMap.size} videos with progress")
   }
-}
 
+  fun setWatched(video: Video, watched: Boolean) {
+    viewModelScope.launch(Dispatchers.IO) {
+      val durationSeconds = (video.duration / 1000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+      val identifiers =
+        linkedSetOf(
+          PlaybackIdentity.forLocalPath(video.path),
+          PlaybackIdentity.forUri(video.uri.toString()),
+          PlaybackIdentity.forUri(video.path),
+          PlaybackIdentity.forUri("file://${video.path}"),
+        )
+      val existing = playbackStateRepository.getAllPlaybackStates().firstNotNullOfOrNull { state ->
+        if (state.mediaTitle in identifiers) state else null
+      }
+      playbackStateRepository.upsert(
+        (existing ?: app.gyrolet.mpvrx.database.entities.PlaybackStateEntity(
+          mediaTitle = PlaybackIdentity.forLocalPath(video.path),
+          lastPosition = 0,
+          playbackSpeed = 1.0,
+          sid = -1,
+          secondarySid = -1,
+          subDelay = 0,
+          subSpeed = 1.0,
+          aid = -1,
+          audioDelay = 0,
+          timeRemaining = durationSeconds,
+          hasBeenWatched = false,
+        )).copy(
+          mediaTitle = PlaybackIdentity.forLocalPath(video.path),
+          lastPosition = 0,
+          timeRemaining = if (watched) 0 else durationSeconds,
+          hasBeenWatched = watched,
+        ),
+      )
+      PlaybackStateEvents.notifyChanged(PlaybackIdentity.forLocalPath(video.path))
+    }
+  }
+}

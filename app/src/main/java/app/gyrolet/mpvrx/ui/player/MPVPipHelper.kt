@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import android.app.PendingIntent
@@ -12,80 +21,73 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.util.Log
 import android.util.Rational
+import android.view.View
 import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
-import app.gyrolet.mpvrx.R
-import com.composables.icons.materialsymbols.roundedfilled.R as MaterialSymbolsR
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
-import `is`.xyz.mpv.MPVLib
+import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.utils.media.resolveSeekMode
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
+import androidx.core.content.ContextCompat
+
 private const val PIP_INTENTS_FILTER = "pip_action"
-private const val PIP_ACTION_PLAY    = "pip_action_play"
-private const val PIP_ACTION_PAUSE   = "pip_action_pause"
-private const val PIP_ACTION_REWIND  = "pip_action_rewind"
-private const val PIP_ACTION_FORWARD = "pip_action_forward"
+private const val PIP_INTENT_ACTION = "pip_action_code"
+private const val PIP_PLAY = 1
+private const val PIP_PAUSE = 2
+private const val PIP_REWIND = 3
+private const val PIP_FORWARD = 4
 
 class MPVPipHelper(
   private val activity: AppCompatActivity,
-  private val mpvView: MPVView,
+  private val videoViewProvider: (() -> View?)? = null,
+  private val isAudioPlayer: () -> Boolean = { false },
+  private val isVideoLoaded: () -> Boolean = { false },
 ) : KoinComponent {
+
+  constructor(
+    activity: AppCompatActivity,
+    mpvView: MPVView,
+    isAudioPlayer: () -> Boolean = { false },
+    isVideoLoaded: () -> Boolean = { false },
+  ) : this(activity, { mpvView }, isAudioPlayer, isVideoLoaded)
+
   private val playerPreferences: PlayerPreferences by inject()
   private var pipReceiver: BroadcastReceiver? = null
 
   fun onPictureInPictureModeChanged(isInPipMode: Boolean) {
-    // Receiver stays registered for full lifecycle — don't unregister on PiP exit
-    // This prevents missing button presses when mode changes happen mid-action
+    if (isInPipMode) {
+      registerPipReceiver()
+    } else {
+      unregisterPipReceiver()
+    }
   }
 
   @Suppress("UnspecifiedRegisterReceiverFlag")
-  fun registerPipReceiver() {
-    if (pipReceiver != null) return // already registered
+  private fun registerPipReceiver() {
     pipReceiver =
       object : BroadcastReceiver() {
         override fun onReceive(
           context: Context?,
           intent: Intent?,
         ) {
-          val duration = MPVLib.getPropertyInt("duration") ?: 0
-          val shouldUsePreciseSeeking = playerPreferences.usePreciseSeeking.get() || duration < 120
-          val seekMode = if (shouldUsePreciseSeeking) "relative+exact" else "relative+keyframes"
-          when (intent?.action) {
-            PIP_ACTION_PLAY    -> MPVLib.setPropertyBoolean("pause", false)
-            PIP_ACTION_PAUSE   -> MPVLib.setPropertyBoolean("pause", true)
-            PIP_ACTION_REWIND  -> MPVLib.command("seek", "-10", seekMode)
-            PIP_ACTION_FORWARD -> MPVLib.command("seek", "10", seekMode)
+          val seekMode = resolveSeekMode(playerPreferences)
+          when (intent?.getIntExtra(PIP_INTENT_ACTION, 0)) {
+            PIP_PLAY -> PlaybackSession.setPropertyBoolean("pause", false)
+            PIP_PAUSE -> PlaybackSession.setPropertyBoolean("pause", true)
+            PIP_REWIND -> PlaybackSession.command("seek", "-10", seekMode)
+            PIP_FORWARD -> PlaybackSession.command("seek", "10", seekMode)
           }
           updatePictureInPictureParams()
         }
       }
 
-    val filter = IntentFilter().apply {
-      addAction(PIP_ACTION_PLAY)
-      addAction(PIP_ACTION_PAUSE)
-      addAction(PIP_ACTION_REWIND)
-      addAction(PIP_ACTION_FORWARD)
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      // PiP buttons are operated by System UI - a different process/app
-      // from this one. RECEIVER_NOT_EXPORTED restricts the receiver to
-      // only accept broadcasts attributed to this app's own identity, and
-      // there are well-documented, version/OEM-dependent cases where
-      // System UI's PendingIntent-triggered broadcast for a PiP RemoteAction
-      // doesn't get attributed that way reliably, causing the receiver to
-      // silently never fire — matching "PiP buttons sometimes don't work."
-      // RECEIVER_EXPORTED is the standard fix used by most media apps for
-      // this exact case; the action strings are private to this app, so
-      // the actual exposure is minimal (worst case, another app could
-      // trigger play/pause/seek while this app happens to be in PiP).
-      activity.registerReceiver(pipReceiver, filter, Context.RECEIVER_EXPORTED)
-    } else {
-      activity.registerReceiver(pipReceiver, filter)
-    }
+    val filter = IntentFilter(PIP_INTENTS_FILTER)
+    ContextCompat.registerReceiver(activity, pipReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
   }
 
-  fun unregisterPipReceiver() {
+  private fun unregisterPipReceiver() {
     pipReceiver?.let {
       runCatching { activity.unregisterReceiver(it) }
       pipReceiver = null
@@ -105,81 +107,85 @@ class MPVPipHelper(
       .apply {
         getVideoAspectRatio()?.let { aspectRatio ->
           setAspectRatio(aspectRatio)
-          setSourceRectHint(calculateSourceRect(aspectRatio))
+          calculateSourceRect(aspectRatio)?.let { sourceRect -> setSourceRectHint(sourceRect) }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-          setAutoEnterEnabled(playerPreferences.autoPiPOnNavigation.get())
+          val autoPipAllowed = playerPreferences.autoPiPOnNavigation.get() && !isAudioPlayer() && isVideoLoaded()
+          setAutoEnterEnabled(autoPipAllowed)
+          // Video surfaces can resize continuously, so let Android morph the
+          // full-screen frame into and out of PiP instead of cross-fading it.
+          setSeamlessResizeEnabled(!isAudioPlayer())
         }
 
         setActions(createPipActions())
       }.build()
 
   private fun getVideoAspectRatio(): Rational? {
-    val width = MPVLib.getPropertyInt("video-out-params/dw") ?: 0
-    val height = MPVLib.getPropertyInt("video-out-params/dh") ?: 0
+    val width = PlaybackSession.getPropertyInt("video-out-params/dw") ?: 0
+    val height = PlaybackSession.getPropertyInt("video-out-params/dh") ?: 0
 
     if (width == 0 || height == 0) return null
 
     return Rational(width, height).takeIf { it.toFloat() in 0.5f..2.39f }
   }
 
-  private fun calculateSourceRect(aspectRatio: Rational): Rect {
-    val viewWidth = mpvView.width.toFloat()
-    val viewHeight = mpvView.height.toFloat()
+  private fun calculateSourceRect(aspectRatio: Rational): Rect? {
+    val targetView = videoViewProvider?.invoke() ?: return null
+    val visiblePlayerRect = Rect()
+    if (!targetView.getGlobalVisibleRect(visiblePlayerRect) || visiblePlayerRect.isEmpty) return null
+
+    val viewWidth = visiblePlayerRect.width().toFloat()
+    val viewHeight = visiblePlayerRect.height().toFloat()
+    if (viewWidth <= 0f || viewHeight <= 0f) return null
+
     val videoAspect = aspectRatio.toFloat()
     val viewAspect = viewWidth / viewHeight
 
     return if (viewAspect < videoAspect) {
       // Letterboxed (black bars top/bottom)
       val height = viewWidth / videoAspect
-      val top = ((viewHeight - height) / 2).toInt()
-      Rect(0, top, viewWidth.toInt(), (height + top).toInt())
+      val top = visiblePlayerRect.top + ((viewHeight - height) / 2).toInt()
+      Rect(visiblePlayerRect.left, top, visiblePlayerRect.right, top + height.toInt())
     } else {
       // Pillarboxed (black bars left/right)
       val width = viewHeight * videoAspect
-      val left = ((viewWidth - width) / 2).toInt()
-      Rect(left, 0, (width + left).toInt(), viewHeight.toInt())
+      val left = visiblePlayerRect.left + ((viewWidth - width) / 2).toInt()
+      Rect(left, visiblePlayerRect.top, left + width.toInt(), visiblePlayerRect.bottom)
     }
   }
 
   private fun createPipActions(): List<RemoteAction> {
-    val isPlaying = MPVLib.getPropertyBoolean("pause") == false
+    val isPlaying = PlaybackSession.getPropertyBoolean("pause") == false
 
     return listOf(
-      createRemoteAction("rewind", android.R.drawable.ic_media_rew, PIP_ACTION_REWIND),
+      createRemoteAction("rewind", Icons.Platform.FastRewind, PIP_REWIND),
       if (isPlaying) {
-        createRemoteAction("pause", MaterialSymbolsR.drawable.materialsymbols_ic_pause_rounded_filled, PIP_ACTION_PAUSE)
+        createRemoteAction("pause", Icons.Platform.Pause, PIP_PAUSE)
       } else {
-        createRemoteAction("play", MaterialSymbolsR.drawable.materialsymbols_ic_play_arrow_rounded_filled, PIP_ACTION_PLAY)
+        createRemoteAction("play", Icons.Platform.Play, PIP_PLAY)
       },
-      createRemoteAction("forward", android.R.drawable.ic_media_ff, PIP_ACTION_FORWARD),
+      createRemoteAction("forward", Icons.Platform.FastForward, PIP_FORWARD),
     )
   }
 
   private fun createRemoteAction(
     title: String,
     @DrawableRes icon: Int,
-    action: String,
+    actionCode: Int,
   ): RemoteAction {
-    val intent = Intent(action).apply {
-      setPackage(activity.packageName)
-    }
+    val intent =
+      Intent(PIP_INTENTS_FILTER).apply {
+        putExtra(PIP_INTENT_ACTION, actionCode)
+        setPackage(activity.packageName)
+      }
 
     val pendingIntent =
       PendingIntent.getBroadcast(
         activity,
-        action.hashCode(),
+        actionCode,
         intent,
-        // These are simple, parameter-less trigger actions (play/pause/seek) -
-        // nothing here needs the receiver to be mutable. FLAG_MUTABLE was
-        // also missing FLAG_UPDATE_CURRENT entirely on S+, which could
-        // return a stale cached PendingIntent on repeated calls (this gets
-        // rebuilt on every button press via updatePictureInPictureParams()).
-        // FLAG_IMMUTABLE is Android's own recommended default when
-        // mutability isn't required, and has documented reliability
-        // advantages over FLAG_MUTABLE for this exact PiP RemoteAction case.
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        PendingIntent.FLAG_IMMUTABLE,
       )
 
     return RemoteAction(
@@ -190,24 +196,25 @@ class MPVPipHelper(
     )
   }
 
-  fun enterPipMode() {
-    runCatching {
+  /**
+   * Requests Picture-in-Picture and reports whether Android accepted the transition.
+   *
+   * Callers use the result to fall back to background playback or a normal close instead of
+   * leaving the full-screen player stranded with hidden controls when PiP is unavailable.
+   */
+  fun enterPipMode(): Boolean {
+    if (isAudioPlayer() || !isVideoLoaded()) {
+      Log.d("MPVPipHelper", "PiP mode is disabled: audio=${isAudioPlayer()}, videoLoaded=${isVideoLoaded()}")
+      return false
+    }
+    return runCatching {
       activity.enterPictureInPictureMode(buildPipParams())
     }.onFailure {
       Log.e("MPVPipHelper", "Failed to enter PiP mode", it)
-    }
+    }.getOrDefault(false)
   }
 
   fun onStop() {
-    // Do NOT unregister when still in PiP mode — onStop() fires during the
-    // brief Activity resume/stop cycle that happens when navigating to another
-    // app while in PiP (confirmed in logcat: handleResumeActivity fires at
-    // 14:32:16 then stops again while the PiP window is still visible).
-    // Unregistering here kills the receiver mid-session, making buttons
-    // permanently unresponsive until the next PiP entry re-registers it.
-    if (!activity.isInPictureInPictureMode) {
-      unregisterPipReceiver()
-    }
+    unregisterPipReceiver()
   }
 }
-

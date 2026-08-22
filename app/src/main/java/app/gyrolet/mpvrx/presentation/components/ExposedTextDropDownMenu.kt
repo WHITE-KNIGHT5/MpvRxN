@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.presentation.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,16 +37,18 @@ fun ExposedTextDropDownMenu(
   onValueChangedEvent: (String) -> Unit,
   modifier: Modifier = Modifier,
   leadingIcon: (@Composable () -> Unit)? = null,
+  enabled: Boolean = true,
 ) {
   var expanded by remember { mutableStateOf(false) }
 
   ExposedDropdownMenuBox(
     expanded = expanded,
-    onExpandedChange = { expanded = !expanded },
+    onExpandedChange = { if (enabled) expanded = !expanded },
     modifier = modifier,
   ) {
     OutlinedTextField(
       readOnly = true,
+      enabled = enabled,
       value = selectedValue,
       onValueChange = {},
       label = { Text(text = label) },
@@ -69,4 +80,3 @@ fun ExposedTextDropDownMenu(
     }
   }
 }
-

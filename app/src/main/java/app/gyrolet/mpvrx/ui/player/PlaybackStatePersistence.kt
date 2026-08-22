@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import app.gyrolet.mpvrx.database.entities.PlaybackStateEntity
@@ -20,6 +29,7 @@ internal data class PlaybackStateSnapshot(
   val aid: Int,
   val audioDelayMs: Int,
   val externalSubtitles: String,
+  val isPositionRestorePending: Boolean = false,
 )
 
 internal object PlaybackStatePersistence {
@@ -35,9 +45,10 @@ internal object PlaybackStatePersistence {
         currentPosition = snapshot.currentPosition,
         duration = snapshot.duration,
         savePositionOnQuit = savePositionOnQuit,
+        isPositionRestorePending = snapshot.isPositionRestorePending,
       )
     val duration = snapshot.duration
-    val timeRemaining = if (duration > snapshot.currentPosition) duration - snapshot.currentPosition else 0
+    val timeRemaining = if (duration > lastPosition) duration - lastPosition else 0
 
     return PlaybackStateEntity(
       mediaTitle = snapshot.mediaIdentifier,
@@ -52,13 +63,14 @@ internal object PlaybackStatePersistence {
       audioDelay = snapshot.audioDelayMs,
       timeRemaining = timeRemaining,
       externalSubtitles = snapshot.externalSubtitles,
-      hasBeenWatched = isWatched(
-        oldState = oldState,
-        currentPosition = snapshot.currentPosition,
-        lastPosition = lastPosition,
-        duration = duration,
-        watchedThreshold = watchedThreshold,
-      ),
+      hasBeenWatched =
+        isWatched(
+          oldState = oldState,
+          currentPosition = snapshot.currentPosition,
+          lastPosition = lastPosition,
+          duration = duration,
+          watchedThreshold = watchedThreshold,
+        ),
     )
   }
 
@@ -67,8 +79,15 @@ internal object PlaybackStatePersistence {
     currentPosition: Int,
     duration: Int,
     savePositionOnQuit: Boolean,
+    isPositionRestorePending: Boolean = false,
   ): Int {
     if (!savePositionOnQuit) {
+      return oldState?.lastPosition ?: 0
+    }
+    // FILE_LOADED makes the incoming item the active save target before its database lookup
+    // completes. Keep an existing resume point if a lifecycle save observes the initial 0 in
+    // that narrow window; a real seek/playback position remains authoritative.
+    if (isPositionRestorePending && currentPosition == 0) {
       return oldState?.lastPosition ?: 0
     }
 
@@ -82,6 +101,10 @@ internal object PlaybackStatePersistence {
     duration: Int,
     watchedThreshold: Int,
   ): Boolean {
+    // Watched threshold 0 means "Infinitely": the video is never auto-marked as
+    // watched based on progress (only an explicit flag keeps it marked).
+    if (watchedThreshold == 0) return oldState?.hasBeenWatched == true
+
     val durationSeconds = duration.toFloat()
     if (durationSeconds <= 0f) return oldState?.hasBeenWatched == true
 

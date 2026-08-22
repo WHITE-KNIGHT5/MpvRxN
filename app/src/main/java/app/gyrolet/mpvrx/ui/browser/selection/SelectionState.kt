@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.browser.selection
 
 import androidx.compose.runtime.Stable
@@ -38,28 +47,31 @@ data class SelectionState<ID>(
    */
   fun toggle(id: ID): SelectionState<ID> {
     val isCurrentlySelected = selectedIds.contains(id)
-    val nextSelectedIds = if (isCurrentlySelected) {
-      selectedIds - id
-    } else {
-      selectedIds + id
-    }
+    val nextSelectedIds =
+      if (isCurrentlySelected) {
+        selectedIds - id
+      } else {
+        selectedIds + id
+      }
     return copy(
       selectedIds = nextSelectedIds,
-      lastSelectedId = if (isCurrentlySelected) {
-        if (lastSelectedId == id) nextSelectedIds.lastOrNull() else lastSelectedId
-      } else {
-        id
-      },
+      lastSelectedId =
+        if (isCurrentlySelected) {
+          if (lastSelectedId == id) nextSelectedIds.lastOrNull() else lastSelectedId
+        } else {
+          id
+        },
     )
   }
 
   /**
    * Select an item without toggling it off.
    */
-  fun select(id: ID): SelectionState<ID> = copy(
-    selectedIds = selectedIds + id,
-    lastSelectedId = id,
-  )
+  fun select(id: ID): SelectionState<ID> =
+    copy(
+      selectedIds = selectedIds + id,
+      lastSelectedId = id,
+    )
 
   /**
    * Clear all selections
@@ -69,10 +81,11 @@ data class SelectionState<ID>(
   /**
    * Select all items
    */
-  fun selectAll(ids: List<ID>): SelectionState<ID> = copy(
-    selectedIds = ids.toSet(),
-    lastSelectedId = ids.lastOrNull(),
-  )
+  fun selectAll(ids: List<ID>): SelectionState<ID> =
+    copy(
+      selectedIds = ids.toSet(),
+      lastSelectedId = ids.lastOrNull(),
+    )
 
   /**
    * Invert selection (select unselected, unselect selected)
@@ -89,7 +102,10 @@ data class SelectionState<ID>(
   /**
    * Select a range of items from the lastSelectedId to the target id.
    */
-  fun selectRange(targetId: ID, allIds: List<ID>): SelectionState<ID> {
+  fun selectRange(
+    targetId: ID,
+    allIds: List<ID>,
+  ): SelectionState<ID> {
     val anchor = lastSelectedId
     if (anchor == null || !allIds.contains(anchor)) {
       return select(targetId)
@@ -119,4 +135,3 @@ data class SelectionState<ID>(
     getId: (T) -> ID,
   ): List<T> = items.filter { selectedIds.contains(getId(it)) }
 }
-

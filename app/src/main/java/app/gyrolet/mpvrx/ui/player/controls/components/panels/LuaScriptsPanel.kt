@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.player.controls.components.panels
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -21,9 +27,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.AdvancedPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.lua.LuaRuntimeStatusCard
 import app.gyrolet.mpvrx.ui.lua.LuaScriptToggleCard
 import app.gyrolet.mpvrx.ui.lua.LuaScriptsEmptyState
@@ -56,11 +66,12 @@ fun LuaScriptsPanel(
     val isEnabled = selectedScripts.contains(scriptName)
     val newSelection =
       if (isEnabled) {
-        Toast.makeText(
-          context,
-          "$scriptName disabled. Reopen the video if the script stays active.",
-          Toast.LENGTH_LONG,
-        ).show()
+        Toast
+          .makeText(
+            context,
+            "$scriptName disabled. Reopen the video if the script stays active.",
+            Toast.LENGTH_LONG,
+          ).show()
         selectedScripts - scriptName
       } else {
         selectedScripts + scriptName
@@ -81,12 +92,14 @@ fun LuaScriptsPanel(
             .padding(top = MaterialTheme.spacing.small),
       ) {
         Text(
-          text = "Scripts (Lua / JS)",
+          text =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.pref_section_scripts),
           style = MaterialTheme.typography.titleLarge,
         )
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onDismissRequest) {
-          Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(32.dp))
+          Icon(Icons.RoundedFilled.Close, contentDescription = null, modifier = Modifier.size(32.dp))
         }
       }
     },
@@ -112,13 +125,13 @@ fun LuaScriptsPanel(
         }
         mpvConfStorageLocation.isBlank() -> {
           LuaScriptsEmptyState(
-            title = "No MPV folder selected",
+            title = stringResource(R.string.lua_no_mpv_folder),
             summary = "Choose an MPV config folder in Advanced settings, then open this panel again to manage scripts.",
           )
         }
         catalog.availableScripts.isEmpty() -> {
           LuaScriptsEmptyState(
-            title = "No scripts found",
+            title = stringResource(R.string.lua_no_scripts_found),
             summary = "Put your .lua or .js files inside the MPV scripts folder to manage them here.",
           )
         }
@@ -138,4 +151,3 @@ fun LuaScriptsPanel(
     }
   }
 }
-

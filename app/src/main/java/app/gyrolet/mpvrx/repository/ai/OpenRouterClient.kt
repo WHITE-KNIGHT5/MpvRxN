@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.repository.ai
 
 import kotlinx.coroutines.Dispatchers
@@ -38,20 +47,14 @@ private data class OrMessage(
 )
 
 @Serializable
-private data class OrChoice(
-  val message: OrMessage? = null,
+private data class OrErrorBody(
+  val error: OrErrorDetail? = null,
 )
 
 @Serializable
-private data class OrResponse(
-  val choices: List<OrChoice>? = null,
+private data class OrErrorDetail(
+  val message: String? = null,
 )
-
-@Serializable
-private data class OrErrorBody(val error: OrErrorDetail? = null)
-
-@Serializable
-private data class OrErrorDetail(val message: String? = null)
 
 @Serializable
 private data class OrChatRequest(
@@ -66,61 +69,68 @@ class OpenRouterClient(
   private val json: Json,
 ) : AiClient {
   companion object {
-    private const val TAG = "OpenRouterClient"
     private const val BASE_URL = "https://openrouter.ai/api/v1"
     private val JSON_MEDIA_TYPE = "application/json".toMediaType()
   }
 
   private val apiClient: OkHttpClient =
-    client.newBuilder()
+    client
+      .newBuilder()
       .connectTimeout(60, TimeUnit.SECONDS)
       .readTimeout(120, TimeUnit.SECONDS)
       .writeTimeout(60, TimeUnit.SECONDS)
       .build()
 
-  override suspend fun fetchModels(apiKey: String): Result<List<AiModelInfo>> = withContext(Dispatchers.IO) {
-    runCatching {
-      val request = Request.Builder()
-        .url("$BASE_URL/models")
-        .header("Authorization", "Bearer $apiKey")
-        .get()
-        .build()
+  override suspend fun fetchModels(apiKey: String): Result<List<AiModelInfo>> =
+    withContext(Dispatchers.IO) {
+      runCatching {
+        val request =
+          Request
+            .Builder()
+            .url("$BASE_URL/models")
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
 
-      val response = apiClient.newCall(request).execute()
-      val body = response.body.string()
+        val response = apiClient.newCall(request).execute()
+        val body = response.body.string()
 
-      if (!response.isSuccessful) throw Exception("OpenRouter API error ${response.code}: ${parseError(body)}")
+        if (!response.isSuccessful) throw Exception("OpenRouter API error ${response.code}: ${parseError(body)}")
 
-      val parsed = json.decodeFromString<OrModelListResponse>(body)
-      parsed.data.map { model ->
-        val isFree = model.pricing?.let { p ->
-          p.prompt.toDoubleOrNull() == 0.0 &&
-            p.completion.toDoubleOrNull() == 0.0 &&
-            p.image.toDoubleOrNull() == 0.0 &&
-            p.request.toDoubleOrNull() == 0.0
-        } ?: false
-        AiModelInfo(
-          id = model.id,
-          displayName = model.name ?: model.id,
-          isFree = isFree,
-        )
+        val parsed = json.decodeFromString<OrModelListResponse>(body)
+        parsed.data.filter { AiModelCapabilities.isTextGenerationModel(it.id) }.map { model ->
+          val isFree =
+            model.pricing?.let { p ->
+              p.prompt.toDoubleOrNull() == 0.0 &&
+                p.completion.toDoubleOrNull() == 0.0 &&
+                p.image.toDoubleOrNull() == 0.0 &&
+                p.request.toDoubleOrNull() == 0.0
+            } ?: false
+          AiModelInfo(
+            id = model.id,
+            displayName = model.name ?: model.id,
+            isFree = isFree,
+          )
+        }
       }
     }
-  }
 
-  override suspend fun verifyKey(apiKey: String): Result<String> = withContext(Dispatchers.IO) {
-    runCatching {
-      val request = Request.Builder()
-        .url("$BASE_URL/auth/key")
-        .header("Authorization", "Bearer $apiKey")
-        .get()
-        .build()
+  override suspend fun verifyKey(apiKey: String): Result<String> =
+    withContext(Dispatchers.IO) {
+      runCatching {
+        val request =
+          Request
+            .Builder()
+            .url("$BASE_URL/auth/key")
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
 
-      val response = apiClient.newCall(request).execute()
-      if (!response.isSuccessful) throw Exception("Invalid API key: ${response.code}")
-      "API key verified successfully"
+        val response = apiClient.newCall(request).execute()
+        if (!response.isSuccessful) throw Exception("Invalid API key: ${response.code}")
+        "API key verified successfully"
+      }
     }
-  }
 
   override suspend fun generateContent(
     apiKey: String,
@@ -128,44 +138,48 @@ class OpenRouterClient(
     instruction: String,
     userInput: String,
     options: AiGenerationOptions,
-  ): Result<String> = withContext(Dispatchers.IO) {
-    runCatching {
-      val requestBody = json.encodeToString(
-        OrChatRequest.serializer(),
-        OrChatRequest(
-          model = model,
-          messages = listOf(
-            OrMessage(role = "system", content = instruction),
-            OrMessage(role = "user", content = userInput),
-          ),
-          temperature = options.temperature,
-          maxTokens = options.maxTokens,
-        ),
-      )
+  ): Result<AiGeneratedContent> =
+    withContext(Dispatchers.IO) {
+      runCatching {
+        val requestBody =
+          json.encodeToString(
+            OrChatRequest.serializer(),
+            OrChatRequest(
+              model = model,
+              messages =
+                listOf(
+                  OrMessage(role = "system", content = instruction),
+                  OrMessage(role = "user", content = userInput),
+                ),
+              temperature = options.temperature,
+              maxTokens = options.maxTokens,
+            ),
+          )
 
-      val request = Request.Builder()
-        .url("$BASE_URL/chat/completions")
-        .header("Authorization", "Bearer $apiKey")
-        .header("HTTP-Referer", "https://mpvrx.app")
-        .header("X-Title", "mpvRx")
-        .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
-        .build()
+        val request =
+          Request
+            .Builder()
+            .url("$BASE_URL/chat/completions")
+            .header("Authorization", "Bearer $apiKey")
+            .header("HTTP-Referer", "https://mpvrx.app")
+            .header("X-OpenRouter-Title", "mpvRx")
+            .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
+            .build()
 
-      val response = apiClient.newCall(request).execute()
-      val body = response.body.string()
+        val response = apiClient.newCall(request).execute()
+        val body = response.body.string()
 
-      if (!response.isSuccessful) throw Exception("OpenRouter generate error ${response.code}: ${parseError(body)}")
+        if (!response.isSuccessful) throw Exception("OpenRouter generate error ${response.code}: ${parseError(body)}")
 
-      val parsed = json.decodeFromString<OrResponse>(body)
-      parsed.choices?.firstOrNull()?.message?.content?.trim()
-        ?: throw Exception("No response from OpenRouter")
+        AiResponseParser.openAiCompatible(json, body, "OpenRouter")
+      }
     }
-  }
 
-  private fun parseError(body: String): String = try {
-    val error = json.decodeFromString<OrErrorBody>(body)
-    error.error?.message ?: body
-  } catch (_: Exception) {
-    body.take(200)
-  }
+  private fun parseError(body: String): String =
+    try {
+      val error = json.decodeFromString<OrErrorBody>(body)
+      error.error?.message ?: body
+    } catch (_: Exception) {
+      body.take(200)
+    }
 }

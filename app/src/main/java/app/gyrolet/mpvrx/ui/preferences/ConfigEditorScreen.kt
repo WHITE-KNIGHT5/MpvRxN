@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.preferences
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.preferences
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box
@@ -12,11 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -28,7 +32,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -39,6 +42,8 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
 import app.gyrolet.mpvrx.ui.editor.MpvHelpScreen
 import app.gyrolet.mpvrx.ui.editor.MpvScriptEditor
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import app.gyrolet.mpvrx.ui.utils.popSafely
 import kotlinx.coroutines.Dispatchers
@@ -54,36 +59,38 @@ import kotlin.io.path.readLines
 
 @Serializable
 data class ConfigEditorScreen(
-  val configType: ConfigType
+  val configType: ConfigType,
 ) : Screen {
-
   enum class ConfigType {
     MPV_CONF,
-    INPUT_CONF
+    INPUT_CONF,
   }
 
   @OptIn(ExperimentalMaterial3Api::class)
   @Composable
   override fun Content() {
-    val context      = LocalContext.current
-    val backStack    = LocalBackStack.current
-    val preferences  = koinInject<AdvancedPreferences>()
-    val scope        = rememberCoroutineScope()
+    val context = LocalContext.current
+    val backStack = LocalBackStack.current
+    val preferences = koinInject<AdvancedPreferences>()
+    val scope = rememberCoroutineScope()
 
-    val (fileName, initialValue) = when (configType) {
-      ConfigType.MPV_CONF   -> "mpv.conf"   to preferences.mpvConf.get()
-      ConfigType.INPUT_CONF -> "input.conf" to preferences.inputConf.get()
-    }
-    val screenTitle = when (configType) {
-      ConfigType.MPV_CONF   -> "Edit mpv.conf"
-      ConfigType.INPUT_CONF -> "Edit input.conf"
-    }
-    val editorLanguage = when (configType) {
-      ConfigType.MPV_CONF   -> "mpv.conf"
-      ConfigType.INPUT_CONF -> "input.conf"
-    }
+    val (fileName, initialValue) =
+      when (configType) {
+        ConfigType.MPV_CONF -> "mpv.conf" to preferences.mpvConf.get()
+        ConfigType.INPUT_CONF -> "input.conf" to preferences.inputConf.get()
+      }
+    val screenTitle =
+      when (configType) {
+        ConfigType.MPV_CONF -> "Edit mpv.conf"
+        ConfigType.INPUT_CONF -> "Edit input.conf"
+      }
+    val editorLanguage =
+      when (configType) {
+        ConfigType.MPV_CONF -> "mpv.conf"
+        ConfigType.INPUT_CONF -> "input.conf"
+      }
 
-    var configText       by remember { mutableStateOf(initialValue) }
+    var configText by remember { mutableStateOf(initialValue) }
     var hasUnsavedChanges by remember { mutableStateOf(false) }
     val mpvConfStorageLocation by preferences.mpvConfStorageUri.collectAsState()
 
@@ -93,7 +100,7 @@ data class ConfigEditorScreen(
       withContext(Dispatchers.IO) {
         val tempFile = createTempFile()
         runCatching {
-          val tree       = DocumentFile.fromTreeUri(context, mpvConfStorageLocation.toUri())
+          val tree = DocumentFile.fromTreeUri(context, mpvConfStorageLocation.toUri())
           val configFile = tree?.findFile(fileName)
           if (configFile != null && configFile.exists()) {
             context.contentResolver.openInputStream(configFile.uri)?.copyTo(tempFile.outputStream())
@@ -109,7 +116,7 @@ data class ConfigEditorScreen(
       scope.launch(Dispatchers.IO) {
         try {
           when (configType) {
-            ConfigType.MPV_CONF   -> preferences.mpvConf.set(configText)
+            ConfigType.MPV_CONF -> preferences.mpvConf.set(configText)
             ConfigType.INPUT_CONF -> preferences.inputConf.set(configText)
           }
           File(context.filesDir, fileName).writeText(configText)
@@ -118,18 +125,29 @@ data class ConfigEditorScreen(
             val tree = DocumentFile.fromTreeUri(context, mpvConfStorageLocation.toUri())
             if (tree == null) {
               withContext(Dispatchers.Main) {
-                Toast.makeText(context, "No storage location set", Toast.LENGTH_LONG).show()
+                Toast
+                  .makeText(
+                    context,
+                    context.getString(app.gyrolet.mpvrx.R.string.ui_no_storage_location_set),
+                    Toast.LENGTH_LONG,
+                  ).show()
               }
               return@launch
             }
             val existing = tree.findFile(fileName)
             val confFile = existing ?: tree.createFile("text/plain", fileName)?.also { it.renameTo(fileName) }
-            val uri = confFile?.uri ?: run {
-              withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Failed to create file", Toast.LENGTH_LONG).show()
+            val uri =
+              confFile?.uri ?: run {
+                withContext(Dispatchers.Main) {
+                  Toast
+                    .makeText(
+                      context,
+                      context.getString(app.gyrolet.mpvrx.R.string.ui_failed_to_create_file),
+                      Toast.LENGTH_LONG,
+                    ).show()
+                }
+                return@launch
               }
-              return@launch
-            }
             context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
               out.write(configText.toByteArray())
               out.flush()
@@ -143,28 +161,38 @@ data class ConfigEditorScreen(
           }
         } catch (e: Exception) {
           withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast
+              .makeText(
+                context,
+                context.getString(
+                  R.string.toast_failed_to_save_reason,
+                  e.message ?: context.getString(R.string.generic_unknown_error),
+                ),
+                Toast.LENGTH_LONG,
+              ).show()
           }
         }
       }
     }
 
     Column(
-      modifier = Modifier.fillMaxSize()
+      modifier = Modifier.fillMaxSize(),
     ) {
       // Fixed TopAppBar
       TopAppBar(
         title = {
           Column {
             Text(
-              text  = screenTitle,
+              text = screenTitle,
               style = MaterialTheme.typography.headlineSmall,
               fontWeight = FontWeight.ExtraBold,
               color = MaterialTheme.colorScheme.primary,
             )
             if (hasUnsavedChanges) {
               Text(
-                text  = "Unsaved changes",
+                text =
+                  androidx.compose.ui.res
+                    .stringResource(app.gyrolet.mpvrx.R.string.ui_unsaved_changes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary,
               )
@@ -174,8 +202,10 @@ data class ConfigEditorScreen(
         navigationIcon = {
           IconButton(onClick = { backStack.popSafely() }) {
             Icon(
-              Icons.Default.ArrowBack,
-              contentDescription = "Back",
+              Icons.RoundedFilled.ArrowBack,
+              contentDescription =
+                androidx.compose.ui.res
+                  .stringResource(app.gyrolet.mpvrx.R.string.back),
               tint = MaterialTheme.colorScheme.secondary,
             )
           }
@@ -186,43 +216,58 @@ data class ConfigEditorScreen(
               backStack.add(MpvHelpScreen())
             },
             modifier = Modifier.padding(end = 4.dp).size(40.dp),
-            colors = IconButtonDefaults.iconButtonColors(
-              contentColor = MaterialTheme.colorScheme.secondary,
-            ),
+            colors =
+              IconButtonDefaults.iconButtonColors(
+                contentColor = MaterialTheme.colorScheme.secondary,
+              ),
           ) {
             Icon(
-              imageVector = Icons.Outlined.Info,
-              contentDescription = "Help",
+              imageVector = Icons.RoundedFilled.Info,
+              contentDescription =
+                androidx.compose.ui.res
+                  .stringResource(app.gyrolet.mpvrx.R.string.ui_help),
             )
           }
           IconButton(
-            onClick  = { saveConfig() },
-            enabled  = hasUnsavedChanges,
+            onClick = { saveConfig() },
+            enabled = hasUnsavedChanges,
             modifier = Modifier.padding(horizontal = 12.dp).size(40.dp),
-            colors   = IconButtonDefaults.iconButtonColors(
-              containerColor        = if (hasUnsavedChanges) MaterialTheme.colorScheme.primaryContainer
-                                      else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
-              contentColor          = if (hasUnsavedChanges) MaterialTheme.colorScheme.onPrimaryContainer
-                                      else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-              disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
-              disabledContentColor   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-            ),
+            colors =
+              IconButtonDefaults.iconButtonColors(
+                containerColor =
+                  if (hasUnsavedChanges) {
+                    MaterialTheme.colorScheme.primaryContainer
+                  } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
+                  },
+                contentColor =
+                  if (hasUnsavedChanges) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                  } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                  },
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+              ),
             shape = RoundedCornerShape(8.dp),
           ) {
             Icon(
-              painter = painterResource(R.drawable.ic_material_symbols_check),
-              contentDescription = "Save",
+              imageVector = Icons.RoundedFilled.Check,
+              contentDescription =
+                androidx.compose.ui.res
+                  .stringResource(app.gyrolet.mpvrx.R.string.ui_save),
             )
           }
         },
       )
-      
+
       // Editor content with IME padding
       Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .weight(1f)
-          .imePadding()
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .weight(1f)
+            .imePadding(),
       ) {
         MpvScriptEditor(
           content = configText,
@@ -237,4 +282,3 @@ data class ConfigEditorScreen(
     }
   }
 }
-

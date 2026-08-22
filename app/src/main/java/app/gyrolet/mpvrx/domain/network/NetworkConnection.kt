@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.domain.network
 
 import androidx.compose.runtime.Immutable
@@ -22,13 +31,19 @@ data class NetworkConnection(
   val isAnonymous: Boolean = false,
   val lastConnected: Long = 0,
   val autoConnect: Boolean = false,
-  val useHttps: Boolean = false,  // For WebDAV: use HTTPS instead of HTTP
-)
+  val useHttps: Boolean = false, // For WebDAV: use HTTPS instead of HTTP
+) {
+  override fun toString(): String =
+    "NetworkConnection(id=$id, name=$name, protocol=$protocol, credentials=<redacted>)"
+}
 
 /**
  * Supported network protocols
  */
-enum class NetworkProtocol(val displayName: String, val defaultPort: Int) {
+enum class NetworkProtocol(
+  val displayName: String,
+  val defaultPort: Int,
+) {
   SMB("SMB", 445),
   FTP("FTP", 21),
   WEBDAV("WebDAV", 80),
@@ -44,4 +59,3 @@ data class ConnectionStatus(
   val isConnecting: Boolean = false,
   val error: String? = null,
 )
-

@@ -1,67 +1,129 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.browser.networkstreaming
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
-
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.database.entities.NetworkStreamEntryEntity
+import app.gyrolet.mpvrx.database.repository.NetworkStreamEntryRepository
+import app.gyrolet.mpvrx.domain.network.ConnectionStatus
 import app.gyrolet.mpvrx.domain.network.NetworkConnection
+import app.gyrolet.mpvrx.domain.torrent.TorrentStreamingEngine
+import app.gyrolet.mpvrx.domain.torrent.formatTorrentBytes
+import app.gyrolet.mpvrx.domain.torrent.isTorrentSource
+import app.gyrolet.mpvrx.domain.torrent.normalizeTorrentSource
 import app.gyrolet.mpvrx.presentation.Screen
-import app.gyrolet.mpvrx.ui.browser.components.BrowserTopBar
+import app.gyrolet.mpvrx.presentation.components.RemoteImage
+import app.gyrolet.mpvrx.repository.wyzie.WyzieSearchRepository
+import app.gyrolet.mpvrx.utils.media.MediaInfoParser
 import app.gyrolet.mpvrx.ui.browser.cards.NetworkConnectionCard
+import app.gyrolet.mpvrx.ui.browser.components.BrowserTopBar
 import app.gyrolet.mpvrx.ui.browser.dialogs.AddConnectionSheet
 import app.gyrolet.mpvrx.ui.browser.dialogs.EditConnectionSheet
+import app.gyrolet.mpvrx.ui.icons.AppIcon
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.torrent.TorrentSelectionInput
+import app.gyrolet.mpvrx.ui.torrent.TorrentSelectionScreen
+import app.gyrolet.mpvrx.ui.torrent.TorrentSelectionViewModel
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
 import app.gyrolet.mpvrx.utils.media.MediaUtils
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
+
+private const val VIEWED_TORRENT_FILES_PREFS = "torrent_viewed_files"
+
+private enum class NetworkTab(val titleResId: Int) {
+  LOCAL_NETWORK(R.string.ui_local_network),
+  MEDIA(R.string.ui_media),
+  SYNC_PLAY(R.string.syncplay_title),
+}
 
 @Serializable
 object NetworkStreamingScreen : Screen {
@@ -72,171 +134,280 @@ object NetworkStreamingScreen : Screen {
     val context = LocalContext.current
     val viewModel: NetworkStreamingViewModel =
       viewModel(factory = NetworkStreamingViewModel.factory(context.applicationContext as android.app.Application))
+    val torrentStreamingEngine = koinInject<TorrentStreamingEngine>()
+    val streamEntryRepository = koinInject<NetworkStreamEntryRepository>()
+    val wyzieSearchRepository = koinInject<WyzieSearchRepository>()
+    val torrentPickerViewModel: TorrentSelectionViewModel =
+      viewModel(
+        key = "network_torrent_picker",
+        factory =
+          TorrentSelectionViewModel.factory(
+            torrentStreamingEngine = torrentStreamingEngine,
+            streamEntryRepository = streamEntryRepository,
+            wyzieSearchRepository = wyzieSearchRepository,
+          ),
+      )
+    val torrentPickerState by torrentPickerViewModel.uiState.collectAsState()
     val connections by viewModel.connections.collectAsState()
     val connectionStatuses by viewModel.connectionStatuses.collectAsState()
-    val browserPreferences = koinInject<app.gyrolet.mpvrx.preferences.BrowserPreferences>()
+    val recentLinks by viewModel.recentLinks.collectAsState()
+    val allMediaGroups by viewModel.allMediaGroups.collectAsState()
     var showAddSheet by remember { mutableStateOf(false) }
+    var showAddMediaDialog by remember { mutableStateOf(false) }
     var editingConnection by remember { mutableStateOf<NetworkConnection?>(null) }
+    var showTorrentPicker by remember { mutableStateOf(false) }
     val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
+    val coroutineScope = rememberCoroutineScope()
 
-    // LazyList state for scroll tracking
-    val listState = LazyListState()
-
-    // Track scroll direction to show/hide FAB
-    var previousFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
-    var previousFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
-    
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    
-    val isFabVisible by remember {
-      derivedStateOf {
-        val currentIndex = listState.firstVisibleItemIndex
-        val currentOffset = listState.firstVisibleItemScrollOffset
-
-        // Show FAB when at the top
-        if (currentIndex == 0 && currentOffset == 0) {
-          true
-        } else {
-          // Show when scrolling up, hide when scrolling down
-          val isScrollingUp = currentIndex < previousFirstVisibleItemIndex ||
-            (currentIndex == previousFirstVisibleItemIndex && currentOffset < previousFirstVisibleItemScrollOffset)
-
-          previousFirstVisibleItemIndex = currentIndex
-          previousFirstVisibleItemScrollOffset = currentOffset
-
-          isScrollingUp
-        }
+    LaunchedEffect(torrentPickerViewModel) {
+      torrentPickerViewModel.launches.collect { request ->
+        showTorrentPicker = false
+        MediaUtils.playFile(
+          source = request.source,
+          context = context,
+          launchSource = "network_torrent",
+          title = request.file.name,
+          torrentFileIndex = request.file.index,
+          torrentPreparationId = request.preparationId,
+        )
       }
     }
 
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearching by rememberSaveable { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    val filteredConnections =
+      remember(connections, searchQuery) {
+        if (searchQuery.isBlank()) {
+          connections
+        } else {
+          connections.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+              it.host.contains(searchQuery, ignoreCase = true) ||
+              it.protocol.displayName.contains(searchQuery, ignoreCase = true)
+          }
+        }
+      }
+
+    val filteredRecentLinks =
+      remember(recentLinks, searchQuery) {
+        recentLinks.filter { entry ->
+          searchQuery.isBlank() ||
+            entry.fileName.contains(searchQuery, ignoreCase = true) ||
+            entry.canonicalSourceUri.contains(searchQuery, ignoreCase = true)
+        }
+      }
+
+    val filteredMediaGroups =
+      remember(allMediaGroups, searchQuery) {
+        val query = searchQuery.trim()
+        if (query.isEmpty()) {
+          allMediaGroups
+        } else {
+          allMediaGroups.filter { group ->
+            group.title.contains(query, ignoreCase = true) ||
+              group.infoHash.orEmpty().contains(query, ignoreCase = true) ||
+              group.canonicalSourceUri.contains(query, ignoreCase = true) ||
+              group.overview.orEmpty().contains(query, ignoreCase = true) ||
+              group.releaseYear.orEmpty().contains(query, ignoreCase = true) ||
+              group.files.any { entry ->
+                entry.fileName.contains(query, ignoreCase = true) ||
+                  entry.filePath.orEmpty().contains(query, ignoreCase = true) ||
+                  entry.fileIndex?.toString() == query
+              }
+          }
+        }
+      }
+
+    BackHandler(enabled = isSearching) {
+      isSearching = false
+      searchQuery = ""
+    }
+
+    val pagerState = rememberPagerState { NetworkTab.entries.size }
+
     Scaffold(
-        topBar = {
+      topBar = {
+        if (isSearching) {
+          SearchBar(
+            inputField = {
+              SearchBarDefaults.InputField(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onSearch = { },
+                expanded = false,
+                onExpandedChange = { },
+                placeholder = {
+                  Text(stringResource(R.string.settings_search_title))
+                },
+                leadingIcon = {
+                  Icon(
+                    imageVector = Icons.RoundedFilled.Search,
+                    contentDescription = stringResource(R.string.settings_search_title),
+                  )
+                },
+                trailingIcon = {
+                  IconButton(
+                    onClick = {
+                      isSearching = false
+                      searchQuery = ""
+                    },
+                  ) {
+                    Icon(
+                      imageVector = Icons.RoundedFilled.Close,
+                      contentDescription = stringResource(R.string.generic_cancel),
+                    )
+                  }
+                },
+                modifier = Modifier.focusRequester(focusRequester),
+              )
+            },
+            expanded = false,
+            onExpandedChange = { },
+            modifier =
+              Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(28.dp),
+            tonalElevation = 6.dp,
+          ) {
+            // Empty search bar content
+          }
+        } else {
           BrowserTopBar(
-            title = "Network",
+            title = stringResource(R.string.ui_network),
             isInSelectionMode = false,
             selectedCount = 0,
-            totalCount = 0,
-            onBackClick = null, // No back button for network screen (root tab)
+            totalCount = connections.size + recentLinks.size + allMediaGroups.size,
+            onBackClick = null,
             onCancelSelection = { },
-          onSortClick = null,
-          // Search functionality disabled for production
-          onSearchClick = null,
-          onSettingsClick = {
-            backstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
-          },
-          onDeleteClick = null,
-          onRenameClick = null,
-          isSingleSelection = false,
-          onInfoClick = null,
-          onShareClick = null,
-          onPlayClick = null,
-          onSelectAll = null,
-          onInvertSelection = null,
-          onDeselectAll = null,
-        )
-      },
-      floatingActionButton = {
-        val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
-        if (isFabVisible) {
-          ExtendedFloatingActionButton(
-            onClick = { showAddSheet = true },
-            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text("Add Connection") },
-            modifier = Modifier.padding(bottom = navigationBarHeight)
+            onSortClick = null,
+            onSearchClick = null,
+            onSettingsClick = {
+              backstack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
+            },
+            onDeleteClick = null,
+            onRenameClick = null,
+            isSingleSelection = false,
+            onInfoClick = null,
+            onShareClick = null,
+            onPlayClick = null,
+            onSelectAll = null,
+            onInvertSelection = null,
+            onDeselectAll = null,
           )
         }
       },
+      floatingActionButton = {
+        when (pagerState.currentPage) {
+          NetworkTab.LOCAL_NETWORK.ordinal -> {
+            ExtendedFloatingActionButton(
+              onClick = { showAddSheet = true },
+              icon = { Icon(Icons.RoundedFilled.Add, contentDescription = null) },
+              text = {
+                Text(
+                  stringResource(R.string.ui_add_connection),
+                )
+              },
+              modifier = Modifier.padding(bottom = navigationBarHeight),
+            )
+          }
+          NetworkTab.MEDIA.ordinal -> {
+            ExtendedFloatingActionButton(
+              onClick = { showAddMediaDialog = true },
+              icon = { Icon(Icons.RoundedFilled.Add, contentDescription = null) },
+              text = { Text("Add Media") },
+              modifier = Modifier.padding(bottom = navigationBarHeight),
+            )
+          }
+        }
+      },
     ) { padding ->
-      LazyColumn(
-        state = listState,
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(padding),
-        contentPadding = PaddingValues(
-          start = 16.dp, 
-          end = 16.dp, 
-          top = 16.dp, 
-          bottom = navigationBarHeight
-        ),
+      Column(
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .padding(padding),
       ) {
-          // Section 1: Stream Link
-          item {
-            StreamLinkSection(
-              onPlayLink = { url ->
-                MediaUtils.playFile(url, context, "network_stream")
+        PrimaryScrollableTabRow(
+          selectedTabIndex = pagerState.currentPage,
+          edgePadding = 16.dp,
+          containerColor = MaterialTheme.colorScheme.surface,
+          contentColor = MaterialTheme.colorScheme.primary,
+          divider = {},
+        ) {
+          NetworkTab.entries.forEachIndexed { index, tab ->
+            Tab(
+              selected = pagerState.currentPage == index,
+              onClick = {
+                coroutineScope.launch { pagerState.animateScrollToPage(index) }
+              },
+              text = {
+                Text(
+                  text = stringResource(tab.titleResId),
+                  fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
+                )
               },
             )
           }
+        }
 
-          // Section 2: Local Network header
-          item {
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-              text = "Local Network",
-              style = MaterialTheme.typography.titleLarge,
-              fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.padding(vertical = 8.dp),
-            )
-          }
-
-          // Show empty state or connection list
-          if (connections.isEmpty()) {
-            item {
-              Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                  containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-              ) {
-                Column(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                  horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                  Icon(
-                    imageVector = Icons.Rounded.SignalWifiStatusbarConnectedNoInternet4,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                  )
-                  Spacer(modifier = Modifier.height(16.dp))
-                  Text(
-                    text = "No network connections",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface, // a
-                  )
-                  Spacer(modifier = Modifier.height(8.dp))
-                  Text(
-                    text = "Add SMB, FTP, or WebDAV connections to browse network files",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                  )
-                }
-              }
-            }
-          } else {
-            items(connections, key = { it.id }) { connection ->
-              val status = connectionStatuses[connection.id]
-              NetworkConnectionCard(
-                connection = connection,
-                onConnect = { conn ->
-                  viewModel.connect(conn)
+        HorizontalPager(
+          state = pagerState,
+          modifier =
+            Modifier
+              .fillMaxSize()
+              .weight(1f),
+          userScrollEnabled = true,
+          beyondViewportPageCount = 1,
+        ) { page ->
+          when (NetworkTab.entries[page]) {
+            NetworkTab.LOCAL_NETWORK -> {
+              LocalNetworkContent(
+                connections = filteredConnections,
+                connectionStatuses = connectionStatuses,
+                recentLinks = filteredRecentLinks,
+                onPlayLink = { url ->
+                  val playableSource = normalizeTorrentSource(url) ?: url.trim()
+                  if (isTorrentSource(playableSource)) {
+                    showTorrentPicker = true
+                    torrentPickerViewModel.open(TorrentSelectionInput(source = playableSource))
+                  } else {
+                    viewModel.recordSubmittedLink(playableSource)
+                    MediaUtils.playFile(playableSource, context, "network_stream")
+                  }
                 },
-                onDisconnect = { conn -> viewModel.disconnect(conn) },
-                onEdit = { conn -> editingConnection = conn },
-                onDelete = { conn -> viewModel.deleteConnection(conn) },
-                onBrowse = { conn ->
-                  // Navigate to browser screen if connected
+                onPlayRecent = { entry ->
+                  viewModel.recordSubmittedLink(entry.canonicalSourceUri)
+                  MediaUtils.playFile(
+                    source = entry.canonicalSourceUri,
+                    context = context,
+                    launchSource = "network_recent",
+                    title = entry.fileName,
+                  )
+                },
+                onSaveToMedia = { entry ->
+                  val playableSource = normalizeTorrentSource(entry.canonicalSourceUri) ?: entry.canonicalSourceUri.trim()
+                  if (isTorrentSource(playableSource)) {
+                    showTorrentPicker = true
+                    torrentPickerViewModel.open(TorrentSelectionInput(source = playableSource, title = entry.fileName))
+                  } else {
+                    viewModel.saveLinkToMedia(entry.canonicalSourceUri, entry.fileName)
+                  }
+                },
+                onDeleteRecent = viewModel::deleteStreamEntry,
+                onConnect = { viewModel.connect(it) },
+                onDisconnect = { viewModel.disconnect(it) },
+                onEdit = { editingConnection = it },
+                onDelete = { viewModel.deleteConnection(it) },
+                onBrowse = { conn, status ->
                   if (status?.isConnected == true) {
                     backstack.add(
                       NetworkBrowserScreen(
                         connectionId = conn.id,
                         connectionName = conn.name,
-                        currentPath = "/",  // Always start at root - conn.path is already included in connection
+                        currentPath = "/",
                       ),
                     )
                   }
@@ -244,16 +415,43 @@ object NetworkStreamingScreen : Screen {
                 onAutoConnectChange = { conn, autoConnect ->
                   viewModel.updateConnection(conn.copy(autoConnect = autoConnect))
                 },
-                isConnected = status?.isConnected ?: false,
-                isConnecting = status?.isConnecting ?: false,
-                error = status?.error,
-                modifier = Modifier.padding(bottom = 16.dp),
               )
+            }
+            NetworkTab.MEDIA -> {
+              MediaContent(
+                mediaGroups = filteredMediaGroups,
+                searchQuery = searchQuery,
+                onPlayMedia = { entry ->
+                  val playableSource = normalizeTorrentSource(entry.canonicalSourceUri) ?: entry.canonicalSourceUri.trim()
+                  if (isTorrentSource(playableSource)) {
+                    MediaUtils.playFile(
+                      source = entry.canonicalSourceUri,
+                      context = context,
+                      launchSource = "network_torrent",
+                      title = entry.fileName,
+                      torrentFileIndex = entry.fileIndex,
+                    )
+                  } else {
+                    viewModel.recordSubmittedLink(entry.canonicalSourceUri)
+                    MediaUtils.playFile(
+                      source = entry.canonicalSourceUri,
+                      context = context,
+                      launchSource = "network_media",
+                      title = entry.fileName,
+                    )
+                  }
+                },
+                onDeleteMediaFile = viewModel::deleteStreamEntry,
+                onDeleteMediaGroup = { viewModel.deleteMediaGroup(it) },
+              )
+            }
+            NetworkTab.SYNC_PLAY -> {
+              SyncPlayContent()
             }
           }
         }
+      }
 
-      // Add Connection Sheet
       AddConnectionSheet(
         isOpen = showAddSheet,
         onDismiss = { showAddSheet = false },
@@ -263,16 +461,42 @@ object NetworkStreamingScreen : Screen {
         },
       )
 
-      // Edit Connection Sheet
+      AddMediaDialog(
+        isOpen = showAddMediaDialog,
+        onDismiss = { showAddMediaDialog = false },
+        onSubmit = { url ->
+          val playableSource = normalizeTorrentSource(url) ?: url.trim()
+          if (isTorrentSource(playableSource)) {
+            showTorrentPicker = true
+            torrentPickerViewModel.open(TorrentSelectionInput(source = playableSource))
+          } else {
+            viewModel.saveLinkToMedia(playableSource)
+            MediaUtils.playFile(playableSource, context, "network_stream")
+          }
+        },
+      )
+
       editingConnection?.let { connection ->
         EditConnectionSheet(
           connection = connection,
           isOpen = true,
           onDismiss = { editingConnection = null },
-          onSave = { updatedConnection ->
-            viewModel.updateConnection(updatedConnection)
+          onSave = { updatedConnection, clearPassword ->
+            viewModel.updateConnection(updatedConnection, clearPassword)
             editingConnection = null
           },
+        )
+      }
+
+      if (showTorrentPicker) {
+        TorrentSelectionScreen(
+          state = torrentPickerState,
+          onBack = {
+            showTorrentPicker = false
+            torrentPickerViewModel.cancel()
+          },
+          onRetry = torrentPickerViewModel::retry,
+          onSelect = torrentPickerViewModel::select,
         )
       }
     }
@@ -280,11 +504,366 @@ object NetworkStreamingScreen : Screen {
 }
 
 @Composable
-private fun StreamLinkSection(
+private fun AddMediaDialog(
+  isOpen: Boolean,
+  onDismiss: () -> Unit,
+  onSubmit: (String) -> Unit,
+) {
+  if (!isOpen) return
+  var inputUrl by remember { mutableStateOf("") }
+  val context = LocalContext.current
+  val clipboard = androidx.compose.ui.platform.LocalClipboard.current
+  val coroutineScope = rememberCoroutineScope()
+
+  androidx.compose.material3.AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text(stringResource(R.string.ui_saved_media)) },
+    text = {
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+          text = "Paste a torrent magnet link, direct video stream (HLS, MP4, MKV), or YouTube URL to save and play.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+          value = inputUrl,
+          onValueChange = { inputUrl = it },
+          label = { Text("Stream or Magnet URL") },
+          placeholder = { Text("magnet:?xt=... or https://...") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          trailingIcon = {
+            if (inputUrl.isBlank()) {
+              IconButton(
+                onClick = {
+                  coroutineScope.launch {
+                    val clipData = clipboard.getClipEntry()?.clipData
+                    if (clipData != null && clipData.itemCount > 0) {
+                      val clip = clipData.getItemAt(0).coerceToText(context)?.toString()?.trim()
+                      if (!clip.isNullOrBlank()) inputUrl = clip
+                    }
+                  }
+                },
+              ) {
+                Icon(Icons.RoundedFilled.ContentPaste, contentDescription = "Paste")
+              }
+            } else {
+              IconButton(onClick = { inputUrl = "" }) {
+                Icon(Icons.RoundedFilled.Close, contentDescription = "Clear")
+              }
+            }
+          },
+        )
+      }
+    },
+    confirmButton = {
+      Button(
+        onClick = {
+          if (inputUrl.isNotBlank()) {
+            onSubmit(inputUrl.trim())
+            onDismiss()
+          }
+        },
+        enabled = inputUrl.isNotBlank(),
+      ) {
+        Text(stringResource(R.string.ui_play_now))
+      }
+    },
+    dismissButton = {
+      androidx.compose.material3.TextButton(onClick = onDismiss) {
+        Text(stringResource(R.string.generic_cancel))
+      }
+    },
+  )
+}
+
+@Composable
+private fun LocalNetworkContent(
+  connections: List<NetworkConnection>,
+  connectionStatuses: Map<Long, ConnectionStatus>,
+  recentLinks: List<NetworkStreamEntryEntity>,
   onPlayLink: (String) -> Unit,
+  onPlayRecent: (NetworkStreamEntryEntity) -> Unit,
+  onSaveToMedia: (NetworkStreamEntryEntity) -> Unit,
+  onDeleteRecent: (String) -> Unit,
+  onConnect: (NetworkConnection) -> Unit,
+  onDisconnect: (NetworkConnection) -> Unit,
+  onEdit: (NetworkConnection) -> Unit,
+  onDelete: (NetworkConnection) -> Unit,
+  onBrowse: (NetworkConnection, ConnectionStatus?) -> Unit,
+  onAutoConnectChange: (NetworkConnection, Boolean) -> Unit,
+) {
+  val navBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current.takeIf { it > 0.dp } ?: 88.dp
+  LazyColumn(
+    modifier = Modifier.fillMaxSize(),
+    contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = navBarHeight + 16.dp),
+    verticalArrangement = Arrangement.spacedBy(16.dp),
+  ) {
+    // 1. Stream Link Section (URL input & recent streams with Save to Media action)
+    item {
+      StreamLinkSection(
+        recentLinks = recentLinks,
+        onPlayLink = onPlayLink,
+        onPlayRecent = onPlayRecent,
+        onSaveToTorrent = onSaveToMedia,
+        onDeleteRecent = onDeleteRecent,
+      )
+    }
+
+    // 2. Saved Network Connections Section
+    if (connections.isEmpty()) {
+      item {
+        EmptyStateCard(
+          icon = Icons.RoundedFilled.SignalWifiStatusbarConnectedNoInternet4,
+          title = stringResource(R.string.ui_no_network_connections),
+          subtitle = stringResource(R.string.ui_add_smb_ftp_or_webdav_connections_to_browse_network_files),
+        )
+      }
+    } else {
+      items(connections, key = { it.id }) { connection ->
+        val status = connectionStatuses[connection.id]
+        NetworkConnectionCard(
+          connection = connection,
+          onConnect = { onConnect(it) },
+          onDisconnect = { onDisconnect(it) },
+          onEdit = { onEdit(it) },
+          onDelete = { onDelete(it) },
+          onBrowse = { onBrowse(it, status) },
+          onAutoConnectChange = { conn, autoConnect -> onAutoConnectChange(conn, autoConnect) },
+          isConnected = status?.isConnected ?: false,
+          isConnecting = status?.isConnecting ?: false,
+          error = status?.error,
+          modifier = Modifier.padding(bottom = 0.dp),
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun SyncPlayContent() {
+  SyncplayPanel()
+}
+
+@Composable
+private fun MediaContent(
+  mediaGroups: List<MediaStreamGroup>,
+  searchQuery: String,
+  onPlayMedia: (NetworkStreamEntryEntity) -> Unit,
+  onDeleteMediaFile: (String) -> Unit,
+  onDeleteMediaGroup: (MediaStreamGroup) -> Unit,
+) {
+  val context = LocalContext.current
+  val viewedPreferences =
+    remember(context) {
+      context.getSharedPreferences(VIEWED_TORRENT_FILES_PREFS, Context.MODE_PRIVATE)
+    }
+
+  var selectedDetailGroup by remember { mutableStateOf<MediaStreamGroup?>(null) }
+  val navBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current.takeIf { it > 0.dp } ?: 88.dp
+
+  val heroGroups =
+    remember(mediaGroups) {
+      mediaGroups.filter { !it.backdropUrl.isNullOrBlank() || !it.posterUrl.isNullOrBlank() }
+        .ifEmpty { mediaGroups }
+    }
+
+  val recentViewedFiles =
+    remember(mediaGroups) {
+      mediaGroups.flatMap { group ->
+        val infoHash = group.infoHash
+        val viewed = if (infoHash != null) loadViewedFileIndices(viewedPreferences, infoHash) else emptySet()
+        group.files.filter { it.fileIndex in viewed || group.groupType != MediaGroupType.TORRENT }
+      }.sortedByDescending { it.updatedAt }
+        .distinctBy { it.stableKey }
+    }
+
+  val onPlayWithHistory: (NetworkStreamEntryEntity, String?) -> Unit = { file, infoHash ->
+    val fileIdx = file.fileIndex ?: 0
+    if (infoHash != null) {
+      val viewed = loadViewedFileIndices(viewedPreferences, infoHash)
+      saveViewedFileIndices(viewedPreferences, infoHash, viewed + fileIdx)
+    }
+    onPlayMedia(file)
+  }
+
+  Box(modifier = Modifier.fillMaxSize()) {
+    if (mediaGroups.isEmpty()) {
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = navBarHeight + 16.dp),
+      ) {
+        item {
+          EmptyStateCard(
+            icon = Icons.RoundedFilled.Movie,
+            title = stringResource(R.string.ui_no_saved_media_title),
+            subtitle = stringResource(R.string.ui_no_saved_media_description),
+          )
+        }
+      }
+    } else {
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = navBarHeight + 24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+      ) {
+        // 1. Featured Hero Carousel Banner
+        if (heroGroups.isNotEmpty() && searchQuery.isBlank()) {
+          item {
+            TorrentHeroBanner(
+              groups = heroGroups,
+              onPlay = { group ->
+                val infoHash = group.infoHash
+                val viewed = if (infoHash != null) loadViewedFileIndices(viewedPreferences, infoHash) else emptySet()
+                val targetFile = group.files.firstOrNull { it.fileIndex !in viewed } ?: group.files.firstOrNull()
+                if (targetFile != null) {
+                  onPlayWithHistory(targetFile, infoHash)
+                }
+              },
+              onDetails = { group -> selectedDetailGroup = group },
+            )
+          }
+        }
+
+        // 2. Continue Watching (Recently Played Saved Links)
+        if (recentViewedFiles.isNotEmpty() && searchQuery.isBlank()) {
+          item {
+            Column(
+              modifier = Modifier.fillMaxWidth(),
+              verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+              TorrentSectionHeader(
+                title = "Continue Watching",
+                subtitle = "Resume your recent streams and torrents",
+              )
+              androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+              ) {
+                items(recentViewedFiles, key = { it.stableKey }) { entry ->
+                  TorrentResumeCard(
+                    entry = entry,
+                    onClick = { onPlayWithHistory(entry, entry.infoHash) },
+                    onLongClick = {
+                      val group = mediaGroups.find { it.infoHash == entry.infoHash || it.canonicalSourceUri == entry.canonicalSourceUri }
+                      if (group != null) selectedDetailGroup = group
+                    },
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        // 3. Saved Links Section Header
+        item {
+          TorrentSectionHeader(
+            title = if (searchQuery.isNotBlank()) "Search Results (${mediaGroups.size})" else "Saved Links (${mediaGroups.size})",
+            subtitle = if (searchQuery.isNotBlank()) null else "Stream instantly with high-speed hardware acceleration",
+          )
+        }
+
+        // 4. Saved Links Posters
+        if (mediaGroups.isNotEmpty()) {
+          item {
+            androidx.compose.foundation.lazy.LazyRow(
+              horizontalArrangement = Arrangement.spacedBy(12.dp),
+              contentPadding = PaddingValues(horizontal = 16.dp),
+            ) {
+              items(mediaGroups, key = { it.id }) { group ->
+                TorrentPosterCard(
+                  group = group,
+                  onClick = { selectedDetailGroup = group },
+                  onLongClick = { selectedDetailGroup = group },
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Cinematic Media Detail Sheet
+    selectedDetailGroup?.let { group ->
+      val infoHash = group.infoHash
+      val viewed =
+        remember(infoHash) {
+          if (infoHash != null) loadViewedFileIndices(viewedPreferences, infoHash) else emptySet()
+        }
+
+      TorrentDetailSheet(
+        group = group,
+        viewedFileIndices = viewed,
+        onDismiss = { selectedDetailGroup = null },
+        onPlayFile = { file ->
+          onPlayWithHistory(file, group.infoHash)
+        },
+        onDeleteGroup = { grp ->
+          onDeleteMediaGroup(grp)
+          selectedDetailGroup = null
+        },
+        onDeleteFile = onDeleteMediaFile,
+      )
+    }
+  }
+}
+
+@Composable
+private fun EmptyStateCard(
+  icon: AppIcon,
+  title: String,
+  subtitle: String,
+) {
+  Card(
+    modifier = Modifier.fillMaxWidth(),
+    colors =
+      CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+      ),
+    shape = RoundedCornerShape(20.dp),
+  ) {
+    Column(
+      modifier =
+        Modifier
+          .fillMaxWidth()
+          .padding(28.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = null,
+        modifier = Modifier.size(52.dp),
+        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+      )
+      Spacer(modifier = Modifier.height(16.dp))
+      Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+      Text(
+        text = subtitle,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+      )
+    }
+  }
+}
+
+@Composable
+private fun StreamLinkSection(
+  recentLinks: List<NetworkStreamEntryEntity>,
+  onPlayLink: (String) -> Unit,
+  onPlayRecent: (NetworkStreamEntryEntity) -> Unit,
+  onSaveToTorrent: (NetworkStreamEntryEntity) -> Unit,
+  onDeleteRecent: (String) -> Unit,
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
+  val playStreamContentDescription = stringResource(R.string.ui_play_stream)
   var linkUrl by rememberSaveable { mutableStateOf("") }
 
   fun pasteFromClipboard() {
@@ -292,7 +871,13 @@ private fun StreamLinkSection(
       context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     val clipData = clipboardManager?.primaryClip
     if (clipData != null && clipData.itemCount > 0) {
-      val text = clipData.getItemAt(0).text?.toString()?.trim().orEmpty()
+      val text =
+        clipData
+          .getItemAt(0)
+          .text
+          ?.toString()
+          ?.trim()
+          .orEmpty()
       if (text.isNotBlank()) {
         linkUrl = text
       }
@@ -309,26 +894,26 @@ private fun StreamLinkSection(
   }
 
   Column(
-    modifier = Modifier.fillMaxWidth(),
+    modifier =
+      Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 6.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    Text(
-      text = "Stream Link",
-      style = MaterialTheme.typography.titleLarge,
-      fontWeight = FontWeight.Bold,
-      color = MaterialTheme.colorScheme.primary,
-      modifier = Modifier.padding(vertical = 8.dp),
-    )
+    // 1. Stream URL Input Box
     Card(
       modifier = Modifier.fillMaxWidth(),
-      colors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-      ),
+      colors =
+        CardDefaults.cardColors(
+          containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
       shape = RoundedCornerShape(16.dp),
     ) {
       Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(4.dp),
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         OutlinedTextField(
@@ -337,13 +922,13 @@ private fun StreamLinkSection(
           modifier = Modifier.weight(1f),
           placeholder = {
             Text(
-              text = "Enter stream URL…",
+              text = stringResource(R.string.ui_enter_stream_url),
               color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
           },
           leadingIcon = {
             Icon(
-              imageVector = Icons.Filled.Link,
+              imageVector = Icons.RoundedFilled.Link,
               contentDescription = null,
               tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
               modifier = Modifier.size(20.dp),
@@ -355,16 +940,16 @@ private fun StreamLinkSection(
             ) {
               IconButton(onClick = { pasteFromClipboard() }) {
                 Icon(
-                  imageVector = Icons.Filled.ContentPaste,
-                  contentDescription = "Paste stream URL",
+                  imageVector = Icons.RoundedFilled.ContentPaste,
+                  contentDescription = stringResource(R.string.ui_paste_stream_url),
                   modifier = Modifier.size(18.dp),
                 )
               }
               if (linkUrl.isNotBlank()) {
                 IconButton(onClick = { linkUrl = "" }) {
                   Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Clear stream URL",
+                    imageVector = Icons.RoundedFilled.Close,
+                    contentDescription = stringResource(R.string.ui_clear_stream_url),
                     modifier = Modifier.size(18.dp),
                   )
                 }
@@ -373,16 +958,18 @@ private fun StreamLinkSection(
           },
           singleLine = true,
           shape = RoundedCornerShape(14.dp),
-          colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-          ),
+          colors =
+            OutlinedTextFieldDefaults.colors(
+              focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+              unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+              focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+              unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
           keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-          keyboardActions = KeyboardActions(
-            onGo = { playCurrentLink() },
-          ),
+          keyboardActions =
+            KeyboardActions(
+              onGo = { playCurrentLink() },
+            ),
         )
         Spacer(modifier = Modifier.size(6.dp))
         Button(
@@ -390,24 +977,150 @@ private fun StreamLinkSection(
           enabled = linkUrl.isNotBlank(),
           contentPadding = PaddingValues(12.dp),
           shape = RoundedCornerShape(14.dp),
-          colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-          ),
-          modifier = Modifier.semantics {
-            contentDescription = "Play stream"
-          },
+          colors =
+            ButtonDefaults.buttonColors(
+              containerColor = MaterialTheme.colorScheme.primary,
+            ),
+          modifier =
+            Modifier.semantics {
+              contentDescription = playStreamContentDescription
+            },
         ) {
           Icon(
-            imageVector = Icons.Filled.PlayArrow,
+            imageVector = Icons.RoundedFilled.PlayArrow,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
           )
         }
       }
     }
+
+    // 2. Top 3 Recent Stream Links with Quick Autofill & Torrent Save
+    val topRecent = remember(recentLinks) { recentLinks.take(3) }
+    if (topRecent.isNotEmpty()) {
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Icon(
+            imageVector = Icons.RoundedFilled.Link,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(14.dp),
+          )
+          Text(
+            text = stringResource(R.string.ui_recent_streams),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+          )
+        }
+
+        topRecent.forEach { entry ->
+          Surface(
+            modifier =
+              Modifier
+                .fillMaxWidth()
+                .clickable {
+                  linkUrl = entry.canonicalSourceUri
+                },
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+          ) {
+            Row(
+              modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              Icon(
+                imageVector = Icons.RoundedFilled.Link,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+              )
+              Column(modifier = Modifier.weight(1f)) {
+                val displayTitle =
+                  remember(entry.fileName, entry.canonicalSourceUri) {
+                    MediaInfoParser.parseStreamTitle(entry.canonicalSourceUri, entry.fileName)
+                  }
+                Text(
+                  text = displayTitle,
+                  style = MaterialTheme.typography.titleSmall,
+                  fontWeight = FontWeight.Medium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                  text = entry.canonicalSourceUri,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+              IconButton(
+                onClick = { onSaveToTorrent(entry) },
+                modifier = Modifier.size(32.dp),
+              ) {
+                Icon(
+                  imageVector = Icons.RoundedFilled.CloudDownload,
+                  contentDescription = "Save to Torrent Sheet",
+                  tint = MaterialTheme.colorScheme.secondary,
+                  modifier = Modifier.size(18.dp),
+                )
+              }
+              IconButton(
+                onClick = { onDeleteRecent(entry.stableKey) },
+                modifier = Modifier.size(32.dp),
+              ) {
+                Icon(
+                  imageVector = Icons.RoundedFilled.Delete,
+                  contentDescription = stringResource(R.string.delete),
+                  tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                  modifier = Modifier.size(16.dp),
+                )
+              }
+              IconButton(
+                onClick = { onPlayRecent(entry) },
+                modifier = Modifier.size(32.dp),
+              ) {
+                Icon(
+                  imageVector = Icons.RoundedFilled.PlayArrow,
+                  contentDescription = stringResource(R.string.ui_play),
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(20.dp),
+                )
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 
+private fun loadViewedFileIndices(
+  preferences: SharedPreferences,
+  infoHash: String,
+): Set<Int> =
+  preferences
+    .getStringSet(infoHash, emptySet())
+    .orEmpty()
+    .mapNotNull(String::toIntOrNull)
+    .toSet()
 
-
-
+private fun saveViewedFileIndices(
+  preferences: SharedPreferences,
+  infoHash: String,
+  indices: Set<Int>,
+) {
+  preferences
+    .edit()
+    .putStringSet(infoHash, indices.map(Int::toString).toSet())
+    .apply()
+}

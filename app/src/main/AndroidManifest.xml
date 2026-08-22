@@ -7,6 +7,8 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
@@ -19,7 +21,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATION" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     
     <uses-feature
         android:name="android.hardware.usb.host"
@@ -39,11 +44,30 @@
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="35">
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
+
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="app.gyrolet.mpvrx.ui.cast.MpvRxCastOptionsProvider" />
+
+        <receiver
+            android:name="androidx.mediarouter.media.MediaTransferReceiver"
+            android:exported="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:enableOnBackInvokedCallback="false"
+            android:enableOnBackInvokedCallback="true"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.mpvrx">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -54,7 +78,8 @@
 
         <activity
             android:name=".ui.player.PlayerActivity"
-            android:enableOnBackInvokedCallback="true"
+            android:windowSoftInputMode="adjustResize"
+            android:enableOnBackInvokedCallback="false"
             android:autoRemoveFromRecents="true"
             android:noHistory="false"
             android:excludeFromRecents="false"
@@ -65,6 +90,14 @@
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
             android:theme="@style/Theme.mpvrx.Player">
+            <!-- MIME-only discovery lets external-player pickers find mpvRx before they
+                 attach the final stream URI. URI playback remains constrained below. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
@@ -114,6 +147,9 @@
                 <data android:scheme="mmsh" />
                 <data android:scheme="tcp" />
                 <data android:scheme="udp" />
+                <data android:scheme="gopher" />
+                <data android:scheme="sctp" />
+                <data android:scheme="data" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -124,7 +160,7 @@
                 <data android:mimeType="image/*" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
@@ -333,20 +369,80 @@
                 <data android:pathPattern=".*" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.torrent.TorrentSelectionActivity"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:theme="@style/Theme.mpvrx">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="magnet" />
+                <data android:scheme="torrent" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:mimeType="application/x-bittorrent" />
+                <data android:mimeType="application/x-torrent" />
+                <data android:mimeType="application/torrent" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:pathPattern=".*\\.torrent" />
+                <data android:pathPattern=".*\\..*\\.torrent" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/x-bittorrent" />
+                <data android:mimeType="application/x-torrent" />
+                <data android:mimeType="application/torrent" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.cast.CastRemoteControllerActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.mpvrx" />
+        <activity
+            android:name=".ui.cast.CastExpandedControlsActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.mpvrx" />
         <activity android:name=".presentation.crash.CrashActivity" />
 
         <activity
             android:name=".ui.mediainfo.MediaInfoActivity"
             android:exported="true"
             android:theme="@style/Theme.mpvrx"
-            android:label="Media Info" />
+            android:label="@string/ui_media_info" />
 
         <activity-alias
             android:name=".ui.mediainfo.MediaInfoActivityAlias"
             android:targetActivity=".ui.mediainfo.MediaInfoActivity"
             android:exported="true"
             android:enabled="true"
-            android:label="Media Info">
+            android:label="@string/ui_media_info">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -425,12 +521,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
-
-        <provider
-            android:name=".ui.browser.networkstreaming.NetworkStreamingProvider"
-            android:authorities="${applicationId}.networkstreaming"
-            android:exported="false"
-            android:grantUriPermissions="true" />
     </application>
 </manifest>
 

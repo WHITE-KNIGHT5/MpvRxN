@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.repository.subtitle
 
 import android.net.Uri
@@ -53,8 +62,7 @@ fun OnlineSubtitle.subdlGroupEpisodeRange(): IntRange? {
   return start..end
 }
 
-fun OnlineSubtitle.selectedSubdlGroupEpisode(): Int? =
-  metadata[SUBDL_SELECTED_EPISODE_KEY]?.toIntOrNull()
+fun OnlineSubtitle.selectedSubdlGroupEpisode(): Int? = metadata[SUBDL_SELECTED_EPISODE_KEY]?.toIntOrNull()
 
 fun OnlineSubtitle.withSelectedSubdlGroupEpisode(episode: Int): OnlineSubtitle =
   copy(metadata = metadata + (SUBDL_SELECTED_EPISODE_KEY to episode.toString()))
@@ -69,6 +77,14 @@ interface OnlineSubtitleProvider {
   val provider: SubtitleProvider
 
   suspend fun search(request: OnlineSubtitleSearchRequest): Result<List<OnlineSubtitle>>
+
+  suspend fun searchIncrementally(
+    request: OnlineSubtitleSearchRequest,
+    onResults: suspend (List<OnlineSubtitle>) -> Unit,
+  ): Result<List<OnlineSubtitle>> =
+    search(request).also { result ->
+      result.getOrNull()?.let { onResults(it) }
+    }
 
   suspend fun download(
     subtitle: OnlineSubtitle,

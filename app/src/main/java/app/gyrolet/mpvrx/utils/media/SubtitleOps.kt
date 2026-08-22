@@ -1,9 +1,21 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.media
 
 import android.util.Log
+import app.gyrolet.mpvrx.domain.network.NetworkPath
+import app.gyrolet.mpvrx.preferences.MpvConfigControlledFeatures
+import app.gyrolet.mpvrx.preferences.MpvConfigOverridePolicy
 import app.gyrolet.mpvrx.repository.NetworkRepository
-import app.gyrolet.mpvrx.ui.browser.networkstreaming.proxy.NetworkStreamingProxy
-import `is`.xyz.mpv.MPVLib
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
@@ -19,26 +31,15 @@ object SubtitleOps : KoinComponent {
   private const val TAG = "SubtitleOps"
   private val networkRepository: NetworkRepository by inject()
 
-  private fun shouldSkipNetworkSubtitleAutoload(videoFilePath: String, videoFileName: String): Boolean {
-    val p = videoFilePath.lowercase(Locale.getDefault())
-    val n = videoFileName.lowercase(Locale.getDefault())
-
-    val looksLikePlaylist =
-      p.endsWith(".m3u") || p.endsWith(".m3u8") ||
-        p.contains(".m3u?") || p.contains(".m3u8?") ||
-        n.endsWith(".m3u") || n.endsWith(".m3u8")
-
-    val genericName = n.isBlank() || n == "network stream"
-
-    return looksLikePlaylist || genericName
-  }
-
   suspend fun autoloadSubtitles(
     videoFilePath: String,
     videoFileName: String,
     networkConnectionId: Long = -1L,
+    expectedGeneration: Long? = null,
   ) = withContext(Dispatchers.IO) {
     try {
+      if (MpvConfigOverridePolicy.ownsAny(MpvConfigControlledFeatures.SUBTITLE_DISCOVERY)) return@withContext
+      if (!isGenerationCurrent(expectedGeneration)) return@withContext
       // Skip file descriptor URIs (these don't have a parent directory concept)
       if (videoFilePath.startsWith("fd://")) return@withContext
 
@@ -48,7 +49,7 @@ object SubtitleOps : KoinComponent {
       // Check if this is a network file with connection ID (SMB/FTP/WebDAV via proxy)
       if (networkConnectionId != -1L) {
         // For network files, scan the directory using network client
-        autoloadNetworkFileSubtitles(videoFilePath, videoFileName, networkConnectionId)
+        autoloadNetworkFileSubtitles(videoFilePath, videoFileName, networkConnectionId, expectedGeneration)
         return@withContext
       }
 
@@ -56,16 +57,14 @@ object SubtitleOps : KoinComponent {
       val isNetworkStream = videoFilePath.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://.*"))
 
       if (isNetworkStream) {
-        if (shouldSkipNetworkSubtitleAutoload(videoFilePath, videoFileName)) {
-          Log.d(TAG, "Skipping network subtitle autoload for: $videoFilePath")
-          return@withContext
-        }
-        // For network streams, try to load subtitles with common extensions
-        autoloadNetworkSubtitles(videoFilePath, videoFileName)
+        Log.d(TAG, "Skipping direct network subtitle autoload for: $videoFilePath")
+        return@withContext
       } else {
         // For local files, scan the directory
-        autoloadLocalSubtitles(videoFilePath, videoFileName)
+        autoloadLocalSubtitles(videoFilePath, videoFileName, expectedGeneration)
       }
+    } catch (cancellation: CancellationException) {
+      throw cancellation
     } catch (e: Exception) {
       Log.e(TAG, "Error loading subtitles", e)
     }
@@ -79,10 +78,11 @@ object SubtitleOps : KoinComponent {
     videoFilePath: String,
     videoFileName: String,
     networkConnectionId: Long,
+    expectedGeneration: Long?,
   ) {
     try {
       Log.d(TAG, "Autoloading subtitles for network file: $videoFilePath")
-      
+
       // Get the network connection
       val connection = networkRepository.getConnectionById(networkConnectionId)
       if (connection == null) {
@@ -91,11 +91,8 @@ object SubtitleOps : KoinComponent {
       }
 
       // Get the directory path (parent of the video file)
-      val directoryPath = videoFilePath.substringBeforeLast('/', "")
-      if (directoryPath.isEmpty()) {
-        Log.w(TAG, "Could not determine directory path from: $videoFilePath")
-        return
-      }
+      val normalizedVideoPath = NetworkPath.from(videoFilePath)
+      val directoryPath = NetworkPath.from(normalizedVideoPath.segments.dropLast(1).joinToString("/")).value
 
       Log.d(TAG, "Scanning directory: $directoryPath")
 
@@ -110,13 +107,15 @@ object SubtitleOps : KoinComponent {
       }
 
       val files = filesResult.getOrNull() ?: emptyList()
-      
+      if (!isGenerationCurrent(expectedGeneration)) return
+
       // Filter for subtitle files that match the video base name
-      val subtitles = files.filter { file ->
-        !file.isDirectory &&
-          isSubtitleFile(file.name) &&
-          file.name.substringBeforeLast('.').startsWith(baseName, ignoreCase = true)
-      }
+      val subtitles =
+        files.filter { file ->
+          !file.isDirectory &&
+            isSubtitleFile(file.name) &&
+            file.name.substringBeforeLast('.').startsWith(baseName, ignoreCase = true)
+        }
 
       if (subtitles.isEmpty()) {
         Log.d(TAG, "No matching subtitle files found for: $baseName")
@@ -126,57 +125,62 @@ object SubtitleOps : KoinComponent {
       Log.d(TAG, "Found ${subtitles.size} subtitle file(s)")
 
       // Load subtitles via proxy
-      val proxy = NetworkStreamingProxy.getInstance()
-      
       // Dispatch JNI calls to the Main thread to prevent concurrent JNI usage/crashes.
       withContext(Dispatchers.Main) {
         subtitles.forEachIndexed { index, subtitle ->
+          var registeredProxyUrl: String? = null
           try {
+            if (!isGenerationCurrent(expectedGeneration)) return@forEachIndexed
             // Extract just the filename without path for display
             // Handle both forward slashes and backslashes
-            val displayName = subtitle.name
-              .substringAfterLast('/')
-              .substringAfterLast('\\')
-              .takeIf { it.isNotBlank() } ?: subtitle.name
+            val displayName =
+              subtitle.name
+                .substringAfterLast('/')
+                .substringAfterLast('\\')
+                .takeIf { it.isNotBlank() } ?: subtitle.name
 
-            Log.d(TAG, "Processing subtitle - name: '${subtitle.name}', displayName: '$displayName', path: '${subtitle.path}'")
-
-            // Create a URL-safe filename for the streamId
-            val urlSafeFilename = displayName
-              .replace(" ", ".")
-              .replace(Regex("[^a-zA-Z0-9._-]"), "")
-
-            // Register subtitle stream with proxy using the filename in streamId
-            val streamId = urlSafeFilename
-            val proxyUrl = proxy.registerStream(
-              streamId = streamId,
-              connection = connection,
-              filePath = subtitle.path,
-              fileSize = subtitle.size,
-              mimeType = "text/plain",
+            Log.d(
+              TAG,
+              "Processing subtitle - name: '${subtitle.name}', displayName: '$displayName', path: '${subtitle.path}'",
             )
 
-            // Get current subtitle track count before adding
-            val trackCountBefore = MPVLib.getPropertyInt("track-list/count") ?: 0
+            val proxyUrl =
+              PlaybackSession.registerAuxiliaryNetworkStream(
+                connectionId = connection.id,
+                filePath = subtitle.path,
+                fileSize = subtitle.size,
+                mimeType = "text/plain",
+                expectedGeneration = expectedGeneration,
+              ) ?: return@forEachIndexed
+            registeredProxyUrl = proxyUrl
 
             // Use "select" for the first subtitle, "auto" for others
             val flag = if (index == 0) "select" else "auto"
-            MPVLib.command("sub-add", proxyUrl, flag)
-
-            // Set the title for the newly added subtitle track
-            val trackCountAfter = MPVLib.getPropertyInt("track-list/count") ?: 0
-            if (trackCountAfter > trackCountBefore) {
-              val newTrackIndex = trackCountAfter - 1
-              MPVLib.setPropertyString("track-list/$newTrackIndex/title", displayName)
-              Log.d(TAG, "Loaded network subtitle: '$displayName' (track $newTrackIndex) via proxy (flag=$flag)")
-            } else {
-              Log.d(TAG, "Loaded network subtitle: '$displayName' via proxy (flag=$flag)")
+            val added =
+              expectedGeneration?.let { generation ->
+                PlaybackSession.commandForGeneration(generation, "sub-add", proxyUrl, flag, displayName)
+              } ?: run {
+                PlaybackSession.command("sub-add", proxyUrl, flag, displayName)
+                true
+              }
+            if (!added) {
+              PlaybackSession.unregisterAuxiliaryNetworkStream(proxyUrl)
+              registeredProxyUrl = null
+              return@forEachIndexed
             }
+            Log.d(TAG, "Loaded network subtitle: '$displayName' via proxy (flag=$flag)")
+            registeredProxyUrl = null
+          } catch (cancellation: CancellationException) {
+            registeredProxyUrl?.let(PlaybackSession::unregisterAuxiliaryNetworkStream)
+            throw cancellation
           } catch (e: Exception) {
+            registeredProxyUrl?.let(PlaybackSession::unregisterAuxiliaryNetworkStream)
             Log.e(TAG, "Failed to load subtitle ${subtitle.name}: ${e.message}", e)
           }
         }
       }
+    } catch (cancellation: CancellationException) {
+      throw cancellation
     } catch (e: Exception) {
       Log.e(TAG, "Error autoloading network subtitles", e)
     }
@@ -185,6 +189,7 @@ object SubtitleOps : KoinComponent {
   private suspend fun autoloadLocalSubtitles(
     videoFilePath: String,
     videoFileName: String,
+    expectedGeneration: Long?,
   ) {
     val videoFile = File(videoFilePath)
     val videoDirectory = videoFile.parentFile ?: return
@@ -200,71 +205,78 @@ object SubtitleOps : KoinComponent {
     if (subtitles.isNotEmpty()) {
       withContext(Dispatchers.Main) {
         subtitles.forEachIndexed { index, subtitle ->
+          if (!isGenerationCurrent(expectedGeneration)) return@forEachIndexed
           // MPV command format: sub-add <url> [<flags> [<title>]]
           // Use "select" for the first autoloaded subtitle so it is enabled by default
           val flag = if (index == 0) "select" else "auto"
-          MPVLib.command("sub-add", subtitle.absolutePath, flag, subtitle.name)
+          val added =
+            expectedGeneration?.let { generation ->
+              PlaybackSession.commandForGeneration(
+                generation,
+                "sub-add",
+                subtitle.absolutePath,
+                flag,
+                subtitle.name,
+              )
+            } ?: run {
+              PlaybackSession.command("sub-add", subtitle.absolutePath, flag, subtitle.name)
+              true
+            }
+          if (!added) return@forEachIndexed
           Log.d(TAG, "Loaded local subtitle: ${subtitle.name} (flag=$flag)")
         }
       }
     }
   }
 
-  private suspend fun autoloadNetworkSubtitles(
-    videoFilePath: String,
-    videoFileName: String,
-  ) {
-    // Get base name without extension
-    val baseName = videoFileName.substringBeforeLast('.')
-
-    // Get the base URL (path without the filename)
-    val lastSlashIndex = videoFilePath.lastIndexOf('/')
-    if (lastSlashIndex == -1) return
-
-    val baseUrl = videoFilePath.substring(0, lastSlashIndex + 1)
-
-    // Common subtitle extensions to try
-    val subtitleExtensions = listOf("srt", "ass", "ssa", "vtt", "sub")
-
-    // Keep mpv calls off the main thread for network URLs to avoid ANRs.
-    // Try each subtitle extension
-    subtitleExtensions.forEachIndexed { index, ext ->
-      val subtitleUrl = "$baseUrl$baseName.$ext"
-      try {
-        // Try to add the subtitle - MPV will handle if it doesn't exist
-        // Use "auto" flag so MPV doesn't select it if it's not found
-        // Only use "select" for the first one (.srt)
-        val flag = if (index == 0) "select" else "auto"
-        withContext(Dispatchers.Main) {
-          MPVLib.command("sub-add", subtitleUrl, flag, "$baseName.$ext")
-        }
-        Log.d(TAG, "Attempting to load network subtitle: $subtitleUrl (flag=$flag)")
-      } catch (e: Exception) {
-        Log.d(TAG, "Could not load network subtitle $subtitleUrl: ${e.message}")
-      }
-    }
-  }
-
   private fun isSubtitleFile(fileName: String): Boolean {
     val extension = fileName.substringAfterLast('.', "").lowercase(Locale.getDefault())
-    return extension in setOf(
-      // Common & modern
-      "srt", "vtt", "ass", "ssa",
-      // DVD / Blu-ray
-      "sub", "idx", "sup",
-      // Streaming / XML / Professional
-      "xml", "ttml", "dfxp", "itt", "ebu", "imsc", "usf",
-      // Online platforms
-      "sbv", "srv1", "srv2", "srv3", "json",
-      // Legacy & niche
-      "sami", "smi", "mpl", "pjs", "stl", "rt", "psb", "cap",
-      // Broadcast captions
-      "scc", "vttx",
-      // Karaoke / lyrics
-      "lrc", "krc",
-      // Fallback / raw text
-      "txt", "pgs"
-    )
+    return extension in
+      setOf(
+        // Common & modern
+        "srt",
+        "vtt",
+        "ass",
+        "ssa",
+        // DVD / Blu-ray
+        "sub",
+        "idx",
+        "sup",
+        // Streaming / XML / Professional
+        "xml",
+        "ttml",
+        "dfxp",
+        "itt",
+        "ebu",
+        "imsc",
+        "usf",
+        // Online platforms
+        "sbv",
+        "srv1",
+        "srv2",
+        "srv3",
+        "json",
+        // Legacy & niche
+        "sami",
+        "smi",
+        "mpl",
+        "pjs",
+        "stl",
+        "rt",
+        "psb",
+        "cap",
+        // Broadcast captions
+        "scc",
+        "vttx",
+        // Karaoke / lyrics
+        "lrc",
+        "krc",
+        // Fallback / raw text
+        "txt",
+        "pgs",
+      )
   }
-}
 
+  private fun isGenerationCurrent(expectedGeneration: Long?): Boolean =
+    expectedGeneration == null || PlaybackSession.isCurrentGeneration(expectedGeneration)
+}

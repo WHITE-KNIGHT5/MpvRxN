@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.database.dao
 
 import androidx.room.Dao
@@ -29,6 +38,12 @@ interface PlaylistDao {
   @Query("SELECT * FROM PlaylistEntity ORDER BY updatedAt DESC")
   suspend fun getAllPlaylists(): List<PlaylistEntity>
 
+  @Query("SELECT * FROM PlaylistEntity WHERE isAudio = :isAudio ORDER BY updatedAt DESC")
+  fun observePlaylistsByAudio(isAudio: Boolean): Flow<List<PlaylistEntity>>
+
+  @Query("SELECT * FROM PlaylistEntity WHERE isAudio = :isAudio ORDER BY updatedAt DESC")
+  suspend fun getPlaylistsByAudio(isAudio: Boolean): List<PlaylistEntity>
+
   @Query("SELECT * FROM PlaylistEntity WHERE id = :playlistId")
   suspend fun getPlaylistById(playlistId: Int): PlaylistEntity?
 
@@ -41,6 +56,37 @@ interface PlaylistDao {
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertPlaylistItems(items: List<PlaylistItemEntity>)
+
+  /** Inserts a potentially large item batch in one transaction without exceeding bind limits. */
+  @Transaction
+  suspend fun insertPlaylistItemsAtomically(items: List<PlaylistItemEntity>) {
+    items.chunked(PLAYLIST_WRITE_CHUNK_SIZE).forEach { chunk -> insertPlaylistItems(chunk) }
+  }
+
+  /** Inserts playlist metadata and every item atomically, assigning the generated parent id. */
+  @Transaction
+  suspend fun insertPlaylistWithItems(
+    playlist: PlaylistEntity,
+    items: List<PlaylistItemEntity>,
+  ): Long {
+    val playlistId = insertPlaylist(playlist)
+    items
+      .map { item -> item.copy(playlistId = playlistId.toInt()) }
+      .chunked(PLAYLIST_WRITE_CHUNK_SIZE)
+      .forEach { chunk -> insertPlaylistItems(chunk) }
+    return playlistId
+  }
+
+  /** Replaces a parsed playlist without exposing the old list to partial-delete failures. */
+  @Transaction
+  suspend fun replacePlaylistItems(
+    playlist: PlaylistEntity,
+    items: List<PlaylistItemEntity>,
+  ) {
+    deleteAllItemsFromPlaylist(playlist.id)
+    items.chunked(PLAYLIST_WRITE_CHUNK_SIZE).forEach { chunk -> insertPlaylistItems(chunk) }
+    updatePlaylist(playlist)
+  }
 
   @Update
   suspend fun updatePlaylistItem(item: PlaylistItemEntity)
@@ -73,10 +119,16 @@ interface PlaylistDao {
   suspend fun deleteAllItemsFromPlaylist(playlistId: Int)
 
   @Query("UPDATE PlaylistItemEntity SET position = :newPosition WHERE id = :itemId")
-  suspend fun updateItemPosition(itemId: Int, newPosition: Int)
+  suspend fun updateItemPosition(
+    itemId: Int,
+    newPosition: Int,
+  )
 
   @Transaction
-  suspend fun reorderPlaylistItems(playlistId: Int, newOrder: List<Int>) {
+  suspend fun reorderPlaylistItems(
+    playlistId: Int,
+    newOrder: List<Int>,
+  ) {
     newOrder.forEachIndexed { index, itemId ->
       updateItemPosition(itemId, index)
     }
@@ -93,7 +145,12 @@ interface PlaylistDao {
     WHERE playlistId = :playlistId AND filePath = :filePath
     """,
   )
-  suspend fun updatePlayHistory(playlistId: Int, filePath: String, timestamp: Long, position: Long)
+  suspend fun updatePlayHistory(
+    playlistId: Int,
+    filePath: String,
+    timestamp: Long,
+    position: Long,
+  )
 
   @Query(
     """
@@ -103,7 +160,10 @@ interface PlaylistDao {
     LIMIT :limit
     """,
   )
-  suspend fun getRecentlyPlayedInPlaylist(playlistId: Int, limit: Int): List<PlaylistItemEntity>
+  suspend fun getRecentlyPlayedInPlaylist(
+    playlistId: Int,
+    limit: Int,
+  ): List<PlaylistItemEntity>
 
   @Query(
     """
@@ -113,7 +173,10 @@ interface PlaylistDao {
     LIMIT :limit
     """,
   )
-  fun observeRecentlyPlayedInPlaylist(playlistId: Int, limit: Int): Flow<List<PlaylistItemEntity>>
+  fun observeRecentlyPlayedInPlaylist(
+    playlistId: Int,
+    limit: Int,
+  ): Flow<List<PlaylistItemEntity>>
 
   @Query(
     """
@@ -121,7 +184,10 @@ interface PlaylistDao {
     WHERE playlistId = :playlistId AND filePath = :filePath
     """,
   )
-  suspend fun getPlaylistItemByPath(playlistId: Int, filePath: String): PlaylistItemEntity?
+  suspend fun getPlaylistItemByPath(
+    playlistId: Int,
+    filePath: String,
+  ): PlaylistItemEntity?
 
   // Pagination support for large playlists
   @Query(
@@ -132,7 +198,11 @@ interface PlaylistDao {
     LIMIT :limit OFFSET :offset
     """,
   )
-  suspend fun getPlaylistItemsWindow(playlistId: Int, offset: Int, limit: Int): List<PlaylistItemEntity>
+  suspend fun getPlaylistItemsWindow(
+    playlistId: Int,
+    offset: Int,
+    limit: Int,
+  ): List<PlaylistItemEntity>
 
   @Query(
     """
@@ -141,7 +211,11 @@ interface PlaylistDao {
     ORDER BY position ASC
     """,
   )
-  suspend fun getPlaylistItemsInRange(playlistId: Int, startPosition: Int, endPosition: Int): List<PlaylistItemEntity>
+  suspend fun getPlaylistItemsInRange(
+    playlistId: Int,
+    startPosition: Int,
+    endPosition: Int,
+  ): List<PlaylistItemEntity>
 
   // M3U category / group support
   @Query(
@@ -169,7 +243,10 @@ interface PlaylistDao {
     ORDER BY position ASC
     """,
   )
-  fun observeItemsByCategory(playlistId: Int, category: String): kotlinx.coroutines.flow.Flow<List<PlaylistItemEntity>>
+  fun observeItemsByCategory(
+    playlistId: Int,
+    category: String,
+  ): kotlinx.coroutines.flow.Flow<List<PlaylistItemEntity>>
 
   // Favorites
   @Query(
@@ -190,7 +267,10 @@ interface PlaylistDao {
   suspend fun toggleFavorite(itemId: Int)
 
   @Query("UPDATE PlaylistItemEntity SET isFavorite = :isFavorite WHERE id = :itemId")
-  suspend fun setFavorite(itemId: Int, isFavorite: Boolean)
+  suspend fun setFavorite(
+    itemId: Int,
+    isFavorite: Boolean,
+  )
 
   // Get favorite filePaths for a playlist (used to preserve favorites on refresh)
   @Query(
@@ -200,5 +280,8 @@ interface PlaylistDao {
     """,
   )
   suspend fun getFavoriteFilePaths(playlistId: Int): List<String>
-}
 
+  companion object {
+    private const val PLAYLIST_WRITE_CHUNK_SIZE = 500
+  }
+}

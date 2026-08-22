@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import android.annotation.SuppressLint
@@ -6,6 +15,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
+import app.gyrolet.mpvrx.domain.network.NetworkPlaybackUri
 import app.gyrolet.mpvrx.ui.player.PlayerActivity.Companion.TAG
 import `is`.xyz.mpv.MPVNode
 import `is`.xyz.mpv.Utils
@@ -33,6 +43,7 @@ private object StoragePaths {
  *
  * Falls back to file descriptor if real path cannot be determined.
  */
+
 /**
  * Extracts a direct local filesystem path from a content:// URI if it exists.
  * This is useful to bypass scoped storage / document provider permissions when we have MANAGE_EXTERNAL_STORAGE.
@@ -45,7 +56,7 @@ internal fun Uri.extractLocalPath(): String? {
     if (index != -1) {
       val rawPath = decoded.substring(index)
       val path = rawPath.substringBefore('?').substringBefore('#')
-      if (File(path).exists()) {
+      if (File(path).canRead()) {
         return path
       }
     }
@@ -53,23 +64,50 @@ internal fun Uri.extractLocalPath(): String? {
   return null
 }
 
-internal fun Uri.openContentFd(context: Context): String? =
+internal fun Uri.openContentFd(
+  context: Context,
+  allowFdFallback: Boolean = true,
+): String? =
   extractLocalPath()
-    ?: tryFileDescriptorPath(context)
+    ?: tryFileDescriptorPath(context, allowFdFallback)
     ?: tryMediaStoreQuery(context)
     ?: tryDocumentUriParsing(context)
-    ?: tryFileDescriptorFallback(context)
+    ?: (if (allowFdFallback) tryFileDescriptorFallback(context) else null)
+
+/** Resolves identity only; unlike [openContentFd], this never detaches a file descriptor. */
+internal fun Uri.resolveLocalPath(context: Context): String? =
+  when (scheme?.lowercase()) {
+    "file" -> path
+    "content" -> extractLocalPath() ?: tryMediaStoreQuery(context) ?: tryDocumentUriParsing(context)
+    else -> null
+  }
 
 /**
  * Method 1: Extract real filesystem path from file descriptor.
  * Works best for most content URIs on modern Android.
+ * If the resolved path is not readable directly (e.g. 0 permissions granted),
+ * returns the detached file descriptor so MPV can play via fd:// directly.
+ * Callers that persist the result must pass [allowFdFallback] = false: a detached
+ * descriptor is single-use and cannot be replayed later.
  */
-private fun Uri.tryFileDescriptorPath(context: Context): String? =
+private fun Uri.tryFileDescriptorPath(
+  context: Context,
+  allowFdFallback: Boolean = true,
+): String? =
   runCatching {
-    context.contentResolver.openFileDescriptor(this, "r")?.use { pfd ->
-      Utils.findRealPath(pfd.fd)?.also {
-        Log.d(TAG, "Resolved via file descriptor: $it")
-      }
+    val pfd = context.contentResolver.openFileDescriptor(this, "r") ?: return null
+    val path = Utils.findRealPath(pfd.fd)
+    if (path != null && File(path).canRead()) {
+      pfd.close()
+      Log.d(TAG, "Resolved via file descriptor: $path")
+      path
+    } else if (allowFdFallback) {
+      val fd = pfd.detachFd()
+      Log.d(TAG, "Using file descriptor fallback (fd://$fd) for $this")
+      "fd://$fd"
+    } else {
+      pfd.close()
+      null
     }
   }.getOrNull()
 
@@ -88,7 +126,7 @@ private fun Uri.tryMediaStoreQuery(context: Context): String? =
             cursor
               .getString(columnIndex)
               ?.takeIf { path ->
-                path.isNotBlank() && File(path).exists()
+                path.isNotBlank() && File(path).canRead()
               }?.also {
                 Log.d(TAG, "Resolved via MediaStore: $it")
               }
@@ -141,14 +179,14 @@ private fun Uri.tryDocumentUriParsing(context: Context): String? {
 private fun tryPrimaryStoragePath(docId: String): String? {
   val path = docId.substringAfter(StoragePaths.PRIMARY_PREFIX)
   val fullPath = "${StoragePaths.PRIMARY_STORAGE}/$path"
-  return fullPath.takeIf { File(it).exists() }?.also {
+  return fullPath.takeIf { File(it).canRead() }?.also {
     Log.d(TAG, "Resolved document URI to primary storage: $it")
   }
 }
 
 private fun tryRawPath(docId: String): String? {
   val rawPath = docId.substringAfter(StoragePaths.RAW_PREFIX)
-  return rawPath.takeIf { File(it).exists() }?.also {
+  return rawPath.takeIf { File(it).canRead() }?.also {
     Log.d(TAG, "Resolved document URI from raw path: $it")
   }
 }
@@ -169,7 +207,7 @@ private fun tryExternalStoragePaths(docId: String): String? {
       "${StoragePaths.MEDIA_RW}/$path",
     )
 
-  return possiblePaths.firstOrNull { File(it).exists() }?.also {
+  return possiblePaths.firstOrNull { File(it).canRead() }?.also {
     Log.d(TAG, "Resolved document URI to: $it")
   }
 }
@@ -194,7 +232,10 @@ private fun Uri.tryFileDescriptorFallback(context: Context): String? =
  *
  * Returns null if URI scheme is null or unsupported.
  */
-internal fun Uri.resolveUri(context: Context): String? {
+internal fun Uri.resolveUri(
+  context: Context,
+  allowFdFallback: Boolean = true,
+): String? {
   if (scheme == null) {
     Log.e(TAG, "URI has null scheme: $this")
     return null
@@ -202,8 +243,12 @@ internal fun Uri.resolveUri(context: Context): String? {
 
   return when (scheme) {
     "file" -> path
-    "content" -> openContentFd(context)
+    "content" ->
+      openContentFd(context, allowFdFallback = allowFdFallback)
+        ?: if (allowFdFallback) null else toString()
     "data" -> "data://$schemeSpecificPart"
+    "magnet", "torrent" -> toString()
+    NetworkPlaybackUri.SCHEME -> toString()
     in Utils.PROTOCOLS -> toString()
     else -> {
       Log.e(TAG, "Unsupported URI scheme: $scheme")
@@ -214,21 +259,21 @@ internal fun Uri.resolveUri(context: Context): String? {
 
 /**
  * Sanitizes JSON strings from MPV by fixing invalid escape sequences.
- * 
+ *
  * MPV's C library may generate JSON with unescaped backslashes (e.g., in file paths
  * like "Signs\Songs"). This function fixes invalid escape sequences by properly
  * escaping backslashes that aren't part of valid JSON escape sequences.
- * 
+ *
  * Valid JSON escape sequences: \" \\ \/ \b \f \n \r \t \uXXXX
  */
 fun sanitizeJsonString(jsonString: String): String {
   val result = StringBuilder(jsonString.length)
   var i = 0
   var inString = false
-  
+
   while (i < jsonString.length) {
     val char = jsonString[i]
-    
+
     when {
       // Track if we're inside a string literal
       char == '"' && (i == 0 || jsonString[i - 1] != '\\') -> {
@@ -239,14 +284,15 @@ fun sanitizeJsonString(jsonString: String): String {
       // Handle backslashes inside string literals
       char == '\\' && inString && i + 1 < jsonString.length -> {
         val nextChar = jsonString[i + 1]
-        
+
         // Check if this is a valid escape sequence
-        val isValidEscape = when (nextChar) {
-          '"', '\\', '/', 'b', 'f', 'n', 'r', 't' -> true
-          'u' -> i + 5 < jsonString.length // \uXXXX format
-          else -> false
-        }
-        
+        val isValidEscape =
+          when (nextChar) {
+            '"', '\\', '/', 'b', 'f', 'n', 'r', 't' -> true
+            'u' -> i + 5 < jsonString.length // \uXXXX format
+            else -> false
+          }
+
         if (isValidEscape) {
           // Valid escape sequence, keep as-is
           result.append(char)
@@ -263,14 +309,14 @@ fun sanitizeJsonString(jsonString: String): String {
       }
     }
   }
-  
+
   return result.toString()
 }
 
 /**
  * Deserializes MPV's native node structure to Kotlin data classes.
  * MPV uses C-style tree structures (MPVNode) which we convert to typed objects.
- * 
+ *
  * Sanitizes the JSON before parsing to handle invalid escape sequences from MPV.
  */
 inline fun <reified T> MPVNode.toObject(json: Json): T {
@@ -278,4 +324,3 @@ inline fun <reified T> MPVNode.toObject(json: Json): T {
   val sanitizedJson = sanitizeJsonString(jsonString)
   return json.decodeFromString<T>(sanitizedJson)
 }
-

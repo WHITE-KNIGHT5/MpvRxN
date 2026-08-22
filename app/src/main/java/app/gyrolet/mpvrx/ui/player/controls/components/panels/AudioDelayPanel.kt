@@ -1,14 +1,21 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 @file:Suppress("ktlint:standard:no-wildcard-imports")
 
 package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,11 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.constraintlayout.compose.ConstraintLayout
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.AudioPreferences
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
@@ -38,24 +45,24 @@ fun AudioDelayPanel(
   modifier: Modifier = Modifier,
 ) {
   val preferences = koinInject<AudioPreferences>()
-  
+
   DraggablePanel(
     modifier = modifier,
     header = {
       AudioDelayCardTitle(onClose = onDismissRequest)
-    }
+    },
   ) {
-    val delay by MPVLib.propDouble["audio-delay"].collectAsState()
+    val delay by PlaybackSession.propDouble["audio-delay"].collectAsState()
     val delayFloat by remember { derivedStateOf { (delay ?: 0.0).toFloat() } }
 
     DelayCard(
       delay = delayFloat,
       onDelayChange = {
         val delayInSeconds = it.toDouble()
-        MPVLib.setPropertyDouble("audio-delay", delayInSeconds)
+        PlaybackSession.setPropertyDouble("audio-delay", delayInSeconds)
       },
       onApply = { preferences.defaultAudioDelay.set((delayFloat * 1000).roundToInt()) },
-      onReset = { MPVLib.setPropertyDouble("audio-delay", 0.0) },
+      onReset = { PlaybackSession.setPropertyDouble("audio-delay", 0.0) },
       delayType = DelayType.Audio,
     )
   }
@@ -64,19 +71,19 @@ fun AudioDelayPanel(
 // Ensure the AudioDelayPanel also uses the content version as DraggablePanel wraps it
 @Composable
 fun DelayCard(
-    delay: Float,
-    onDelayChange: (Float) -> Unit,
-    onApply: () -> Unit,
-    onReset: () -> Unit,
-    delayType: DelayType,
+  delay: Float,
+  onDelayChange: (Float) -> Unit,
+  onApply: () -> Unit,
+  onReset: () -> Unit,
+  delayType: DelayType,
 ) {
-    DelayCardContent(
-        delay = delay,
-        onDelayChange = onDelayChange,
-        onApply = onApply,
-        onReset = onReset,
-        delayType = delayType
-    )
+  DelayCardContent(
+    delay = delay,
+    onDelayChange = onDelayChange,
+    onApply = onApply,
+    onReset = onReset,
+    delayType = delayType,
+  )
 }
 
 @Composable
@@ -87,10 +94,11 @@ fun AudioDelayCardTitle(
   Row(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.SpaceBetween,
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(horizontal = MaterialTheme.spacing.medium)
-      .padding(top = MaterialTheme.spacing.small),
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .padding(horizontal = MaterialTheme.spacing.medium)
+        .padding(top = MaterialTheme.spacing.small),
   ) {
     Text(
       stringResource(R.string.player_sheets_audio_delay_card_title),
@@ -98,11 +106,7 @@ fun AudioDelayCardTitle(
     )
     Spacer(Modifier.weight(1f))
     IconButton(onClick = onClose) {
-      Icon(Icons.Default.Close, null, modifier = Modifier.size(32.dp))
+      Icon(Icons.RoundedFilled.Close, null, modifier = Modifier.size(32.dp))
     }
   }
 }
-
-
-
-

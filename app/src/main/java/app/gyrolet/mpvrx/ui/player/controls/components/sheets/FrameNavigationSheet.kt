@@ -1,9 +1,16 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components.sheets
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
-import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -29,8 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import app.gyrolet.mpvrx.ui.components.IconSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -55,10 +61,11 @@ import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.components.PlayerSheet
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.screenshot.ScreenshotSaver
 import app.gyrolet.mpvrx.ui.player.screenshot.ScreenshotSettings
 import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -95,15 +102,15 @@ fun FrameNavigationSheet(
   val currentOnUpdateFrameInfo by rememberUpdatedState(onUpdateFrameInfo)
 
   // Use the same logic as PlayerControls for pause state
-  val paused by MPVLib.propBoolean["pause"].collectAsState()
+  val paused by PlaybackSession.propBoolean["pause"].collectAsState()
   val isPaused = paused ?: false
 
   // Remember the initial pause state when the sheet opens
   val wasPausedInitially = remember { isPaused }
 
   // Use the same logic as PlayerControls for position and duration
-  val position by MPVLib.propInt["time-pos"].collectAsState()
-  val duration by MPVLib.propInt["duration"].collectAsState()
+  val position by PlaybackSession.propInt["time-pos"].collectAsState()
+  val duration by PlaybackSession.propInt["duration"].collectAsState()
   val pos = position ?: 0
   val dur = duration ?: 0
 
@@ -144,7 +151,7 @@ fun FrameNavigationSheet(
               currentOnPause()
               delay(50)
             }
-            MPVLib.command("no-osd", "frame-back-step")
+            PlaybackSession.command("no-osd", "frame-back-step")
             delay(100)
             currentOnUpdateFrameInfo()
           }
@@ -158,7 +165,7 @@ fun FrameNavigationSheet(
               currentOnPause()
               delay(50)
             }
-            MPVLib.command("no-osd", "frame-step")
+            PlaybackSession.command("no-osd", "frame-step")
             delay(100)
             currentOnUpdateFrameInfo()
           }
@@ -174,23 +181,33 @@ fun FrameNavigationSheet(
         coroutineScope.launch {
           isSnapshotLoading = true
           try {
-            val result = withContext(Dispatchers.IO) {
-              ScreenshotSaver.save(
-                context = context,
-                settings = ScreenshotSettings.fromPreferences(playerPreferences),
-                includeSubtitles = includeSubtitlesInSnapshot,
-              )
-            }
-            result.onSuccess {
-              Toast
-                .makeText(
-                  context,
-                  context.getString(R.string.player_sheets_frame_navigation_snapshot_saved),
-                  Toast.LENGTH_SHORT,
-                ).show()
-            }.onFailure { error ->
-              Toast.makeText(context, "Failed to save snapshot: ${error.message}", Toast.LENGTH_LONG).show()
-            }
+            val result =
+              withContext(Dispatchers.IO) {
+                ScreenshotSaver.save(
+                  context = context,
+                  settings = ScreenshotSettings.fromPreferences(playerPreferences),
+                  includeSubtitles = includeSubtitlesInSnapshot,
+                )
+              }
+            result
+              .onSuccess {
+                Toast
+                  .makeText(
+                    context,
+                    context.getString(R.string.player_sheets_frame_navigation_snapshot_saved),
+                    Toast.LENGTH_SHORT,
+                  ).show()
+              }.onFailure { error ->
+                Toast
+                  .makeText(
+                    context,
+                    context.getString(
+                      R.string.toast_failed_to_save_snapshot,
+                      error.message ?: context.getString(R.string.generic_unknown_error),
+                    ),
+                    Toast.LENGTH_LONG,
+                  ).show()
+              }
           } finally {
             isSnapshotLoading = false
           }
@@ -439,7 +456,9 @@ private fun FrameInfoDisplay(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
-        text = "Frame: ",
+        text =
+          androidx.compose.ui.res
+            .stringResource(app.gyrolet.mpvrx.R.string.ui_frame),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
         color = MaterialTheme.colorScheme.tertiary,
       )
@@ -459,7 +478,9 @@ private fun FrameInfoDisplay(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
-        text = "Timestamp: ",
+        text =
+          androidx.compose.ui.res
+            .stringResource(app.gyrolet.mpvrx.R.string.ui_timestamp),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
         color = MaterialTheme.colorScheme.tertiary,
       )
@@ -495,7 +516,7 @@ private fun ControlButtons(
       contentPadding = PaddingValues(0.dp),
     ) {
       Icon(
-        Icons.Default.FastRewind,
+        Icons.RoundedFilled.FastRewind,
         contentDescription = null,
         modifier = Modifier.size(32.dp),
       )
@@ -509,7 +530,7 @@ private fun ControlButtons(
       contentPadding = PaddingValues(0.dp),
     ) {
       Icon(
-        if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+        if (isPaused) Icons.RoundedFilled.PlayArrow else Icons.RoundedFilled.Pause,
         contentDescription = null,
         modifier = Modifier.size(32.dp),
       )
@@ -523,7 +544,7 @@ private fun ControlButtons(
       contentPadding = PaddingValues(0.dp),
     ) {
       Icon(
-        Icons.Default.FastForward,
+        Icons.RoundedFilled.FastForward,
         contentDescription = null,
         modifier = Modifier.size(32.dp),
       )
@@ -544,7 +565,7 @@ private fun ControlButtons(
         )
       } else {
         Icon(
-          Icons.Default.Aperture,
+          Icons.RoundedFilled.Aperture,
           contentDescription = null,
           modifier = Modifier.size(32.dp),
         )
@@ -569,7 +590,7 @@ private fun FrameNavigationCardTitle(
     )
     IconButton(onClose) {
       Icon(
-        Icons.Default.Close,
+        Icons.RoundedFilled.Close,
         null,
         modifier = Modifier.size(32.dp),
       )
@@ -591,33 +612,10 @@ private fun IncludeSubsToggle(
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.Start,
   ) {
-    Switch(
+    IconSwitch(
       checked = includeSubs,
       onCheckedChange = setIncludeSubs,
       modifier = Modifier.scale(0.8f),
-      thumbContent = {
-        Crossfade(
-          targetState = includeSubs,
-          animationSpec = tween(durationMillis = 200),
-          label = "SwitchIconAnimation"
-        ) { isChecked ->
-          if (isChecked) {
-            Icon(
-              Icons.Filled.Check,
-              contentDescription = null,
-              modifier = Modifier.size(SwitchDefaults.IconSize),
-              tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-          } else {
-            Icon(
-              Icons.Filled.Close,
-              contentDescription = null,
-              modifier = Modifier.size(SwitchDefaults.IconSize),
-              tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-        }
-      }
     )
     Text(
       text = stringResource(R.string.player_sheets_frame_navigation_include_subtitles),
@@ -626,7 +624,3 @@ private fun IncludeSubsToggle(
     )
   }
 }
-
-
-
-

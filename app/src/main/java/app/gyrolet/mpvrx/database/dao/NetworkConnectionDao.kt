@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.database.dao
 
 import androidx.room.Dao
@@ -38,6 +47,12 @@ interface NetworkConnectionDao {
     timestamp: Long,
   )
 
+  @Query("UPDATE network_connections SET password = :encryptedPassword WHERE id = :id")
+  suspend fun updateEncryptedPassword(
+    id: Long,
+    encryptedPassword: String,
+  )
+
   @Query("DELETE FROM network_connections WHERE id = :id")
   suspend fun deleteById(id: Long)
 
@@ -47,4 +62,3 @@ interface NetworkConnectionDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertAll(connections: List<NetworkConnection>)
 }
-

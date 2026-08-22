@@ -1,6 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
 package app.gyrolet.mpvrx.preferences
 
+import app.gyrolet.mpvrx.preferences.preference.DependentBooleanPreference
 import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.getEnum
 import app.gyrolet.mpvrx.ui.player.AmbientVisualMode
@@ -8,9 +17,9 @@ import app.gyrolet.mpvrx.ui.player.ControlsAnimationStyle
 import app.gyrolet.mpvrx.ui.player.NavigationAnimStyle
 import app.gyrolet.mpvrx.ui.player.PlayerOrientation
 import app.gyrolet.mpvrx.ui.player.RepeatMode
-import app.gyrolet.mpvrx.ui.player.screenshot.ScreenshotFormat
 import app.gyrolet.mpvrx.ui.player.VideoAspect
 import app.gyrolet.mpvrx.ui.player.VideoOpenAnimation
+import app.gyrolet.mpvrx.ui.player.screenshot.ScreenshotFormat
 
 enum class IntroSegmentProvider(
   val displayName: String,
@@ -19,6 +28,7 @@ enum class IntroSegmentProvider(
   INTRO_DB("IntroDB", "introdb"),
   THE_INTRO_DB("TIDB", "theintrodb"),
   ANI_SKIP("AniSkip (Anime)", "aniskip"),
+  ANIME_SKIP("Anime Skip", "animeskip"),
   HYBRID("Hybrid (Fastest)", "hybrid"),
 }
 
@@ -36,12 +46,12 @@ class PlayerPreferences(
   val orientation = preferenceStore.getEnum("player_orientation", PlayerOrientation.Video)
   val invertDuration = preferenceStore.getBoolean("invert_duration")
   val holdForMultipleSpeed = preferenceStore.getFloat("hold_for_multiple_speed", 2f)
-  val showDynamicSpeedOverlay = preferenceStore.getBoolean("show_dynamic_speed_overlay", true)
   val showDoubleTapOvals = preferenceStore.getBoolean("show_double_tap_ovals", true)
   val showSeekTimeWhileSeeking = preferenceStore.getBoolean("show_seek_time_while_seeking", true)
   val usePreciseSeeking = preferenceStore.getBoolean("use_precise_seeking", false)
   val useThumbFastSeekPreview = preferenceStore.getBoolean("use_thumbfast_seek_preview", true)
   val showBufferedRange = preferenceStore.getBoolean("show_buffered_range", true)
+  val showChapterIndicators = preferenceStore.getBoolean("show_chapter_indicators", true)
 
   val brightnessGesture = preferenceStore.getBoolean("gestures_brightness", true)
   val volumeGesture = preferenceStore.getBoolean("volume_brightness", true)
@@ -66,7 +76,7 @@ class PlayerPreferences(
 
   val closeAfterReachingEndOfVideo = preferenceStore.getBoolean("close_after_eof", true)
 
-  val rememberBrightness = preferenceStore.getBoolean("remember_brightness", true)
+  val rememberBrightness = preferenceStore.getBoolean("remember_brightness")
   val defaultBrightness = preferenceStore.getFloat("default_brightness", -1f)
 
   val allowGesturesInPanels = preferenceStore.getBoolean("allow_gestures_in_panels")
@@ -93,7 +103,7 @@ class PlayerPreferences(
   val useWavySeekbar = preferenceStore.getBoolean("use_wavy_seekbar", true)
 
   val customSkipDuration = preferenceStore.getInt("custom_skip_duration", 90)
-  val enableIntroDb = preferenceStore.getBoolean("enable_introdb", false)
+  val enableIntroDb = preferenceStore.getBoolean("enable_introdb", true)
   val introSegmentProvider = preferenceStore.getEnum("intro_segment_provider", IntroSegmentProvider.HYBRID)
   val detectIntroOutroFromChapters = preferenceStore.getBoolean("detect_intro_outro_from_chapters", true)
   val autoSkipIntro = preferenceStore.getBoolean("auto_skip_intro", false)
@@ -109,8 +119,12 @@ class PlayerPreferences(
 
   // New: autoplay next video when current file ends
   val autoplayNextVideo = preferenceStore.getBoolean("autoplay_next_video", true)
+  val autoplayNextAudio = preferenceStore.getBoolean("autoplay_next_audio", true)
 
   val autoPiPOnNavigation = preferenceStore.getBoolean("auto_pip_on_navigation", false)
+  private val videoBackgroundPlayback = preferenceStore.getBoolean("automatic_background_playback", false)
+  private val storedEnableVideoMiniPlayer = preferenceStore.getBoolean("enable_video_mini_player", false)
+  val enableVideoMiniPlayer = DependentBooleanPreference(storedEnableVideoMiniPlayer, videoBackgroundPlayback)
 
   val keepScreenOnWhenPaused = preferenceStore.getBoolean("keep_screen_on_when_paused", false)
   val autoplayAfterScreenUnlock = preferenceStore.getBoolean("autoplay_after_screen_unlock", false)
@@ -128,7 +142,6 @@ class PlayerPreferences(
   val ambientBezelDepth = preferenceStore.getFloat("ambient_bezel_depth", 0.0f)
   val ambientVignetteStrength = preferenceStore.getFloat("ambient_vignette_strength", 0.5f)
   val ambientWarmth = preferenceStore.getFloat("ambient_warmth", 0.0f)
-  val ambientEdgeSmooth = preferenceStore.getFloat("ambient_edge_smooth", 0.02f)
   val ambientFadeCurve = preferenceStore.getFloat("ambient_fade_curve", 1.5f)
   val ambientOpacity = preferenceStore.getFloat("ambient_opacity", 1.0f)
   val ambientVisualMode = preferenceStore.getEnum("ambient_visual_mode", AmbientVisualMode.GLOW)
@@ -138,23 +151,32 @@ class PlayerPreferences(
   val isAmbientEnabled = preferenceStore.getBoolean("ambient_enabled", false)
   val ambientBatterySaver = preferenceStore.getBoolean("ambient_battery_saver", false)
 
-  // ── Overlay visibility controls ───────────────────────────────────────────
   /** Show the vertical volume pill while swiping for volume. */
   val showVolumeGestureOverlay = preferenceStore.getBoolean("show_volume_gesture_overlay", true)
+
   /** Show the vertical brightness pill while swiping for brightness. */
   val showBrightnessGestureOverlay = preferenceStore.getBoolean("show_brightness_gesture_overlay", true)
+
   /** Show any speed overlay (badge or full slider) during long-press hold-speed. */
   val showHoldSpeedOverlay = preferenceStore.getBoolean("show_hold_speed_overlay", true)
+
   /** Show the action pill when cycling aspect ratio. */
   val showAspectRatioOverlay = preferenceStore.getBoolean("show_aspect_ratio_overlay", true)
+
   /** Show the action pill when zoom level changes via pinch. */
   val showZoomLevelOverlay = preferenceStore.getBoolean("show_zoom_level_overlay", true)
+
   /** Show the action pill when toggling repeat mode or shuffle. */
   val showRepeatShuffleOverlay = preferenceStore.getBoolean("show_repeat_shuffle_overlay", true)
+
   /** Show brief text pills from custom buttons, ambient toggle, subtitle drag, and Lua scripts. */
   val showActionFeedbackOverlay = preferenceStore.getBoolean("show_action_feedback_overlay", true)
 
+  /** Show provider/network status feedback such as online subtitle and marker lookup failures. */
+  val showProviderStatusOverlay = preferenceStore.getBoolean("show_provider_status_overlay", false)
+
   // ── Animation settings ──────────────────────────────────────────────────
+
   /** Style used for controls appearing / disappearing. Default = original slide+fade behaviour. */
   val controlsAnimStyle = preferenceStore.getEnum("controls_anim_style", ControlsAnimationStyle.Default)
 

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.presentation.components
 
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +32,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.ui.theme.spacing
+import kotlin.math.roundToInt
 
 @Composable
 fun SliderItem(
@@ -33,6 +43,7 @@ fun SliderItem(
   max: Int,
   modifier: Modifier = Modifier,
   min: Int = 0,
+  enabled: Boolean = true,
   icon: @Composable () -> Unit = {},
 ) {
   val haptic = LocalHapticFeedback.current
@@ -71,7 +82,7 @@ fun SliderItem(
       Slider(
         value = value.toFloat(),
         onValueChange = {
-          val newValue = it.toInt()
+          val newValue = it.roundToInt()
           if (newValue != value) {
             onChange(newValue)
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -80,6 +91,7 @@ fun SliderItem(
         modifier = Modifier.fillMaxWidth(),
         valueRange = min.toFloat()..max.toFloat(),
         steps = (max - min - 1).coerceAtLeast(0),
+        enabled = enabled,
       )
     }
   }
@@ -95,6 +107,7 @@ fun SliderItem(
   modifier: Modifier = Modifier,
   steps: Int = 0,
   min: Float = 0f,
+  enabled: Boolean = true,
   icon: @Composable () -> Unit = {},
 ) {
   val haptic = LocalHapticFeedback.current
@@ -142,6 +155,7 @@ fun SliderItem(
         modifier = Modifier.fillMaxWidth(),
         valueRange = min..max,
         steps = steps,
+        enabled = enabled,
       )
     }
   }
@@ -223,7 +237,7 @@ fun VerticalSlider(
         .height(50.dp),
     value = value.toFloat(),
     valueRange = min.toFloat()..max.toFloat(),
-    onValueChange = { onValueChange(it.toInt()) },
+    onValueChange = { onValueChange(it.roundToInt()) },
   )
 }
 
@@ -238,4 +252,3 @@ private fun PreviewVerticalSliderItem() {
     5,
   )
 }
-

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.database.repository
 
 import app.gyrolet.mpvrx.database.dao.RecentlyPlayedDao
@@ -21,38 +30,40 @@ class RecentlyPlayedRepositoryImpl(
   ) {
     // Check if there's an existing entry for this file
     val existingEntry = recentlyPlayedDao.getByFilePath(filePath)
-    
+
     if (existingEntry != null) {
       // Update existing entry, but preserve the original launchSource
-      val entity = RecentlyPlayedEntity(
-        id = existingEntry.id,
-        filePath = filePath,
-        fileName = fileName,
-        videoTitle = videoTitle ?: existingEntry.videoTitle,
-        duration = if (duration > 0) duration else existingEntry.duration,
-        fileSize = if (fileSize > 0) fileSize else existingEntry.fileSize,
-        width = if (width > 0) width else existingEntry.width,
-        height = if (height > 0) height else existingEntry.height,
-        timestamp = System.currentTimeMillis(),
-        // Preserve the original launch source when reopening the same file
-        launchSource = existingEntry.launchSource,
-        playlistId = playlistId ?: existingEntry.playlistId,
-      )
+      val entity =
+        RecentlyPlayedEntity(
+          id = existingEntry.id,
+          filePath = filePath,
+          fileName = fileName,
+          videoTitle = videoTitle ?: existingEntry.videoTitle,
+          duration = if (duration > 0) duration else existingEntry.duration,
+          fileSize = if (fileSize > 0) fileSize else existingEntry.fileSize,
+          width = if (width > 0) width else existingEntry.width,
+          height = if (height > 0) height else existingEntry.height,
+          timestamp = System.currentTimeMillis(),
+          // Preserve the original launch source when reopening the same file
+          launchSource = existingEntry.launchSource,
+          playlistId = playlistId ?: existingEntry.playlistId,
+        )
       recentlyPlayedDao.insert(entity)
     } else {
       // Create a new entry
-      val entity = RecentlyPlayedEntity(
-        filePath = filePath,
-        fileName = fileName,
-        videoTitle = videoTitle,
-        duration = duration,
-        fileSize = fileSize,
-        width = width,
-        height = height,
-        timestamp = System.currentTimeMillis(),
-        launchSource = launchSource,
-        playlistId = playlistId,
-      )
+      val entity =
+        RecentlyPlayedEntity(
+          filePath = filePath,
+          fileName = fileName,
+          videoTitle = videoTitle,
+          duration = duration,
+          fileSize = fileSize,
+          width = width,
+          height = height,
+          timestamp = System.currentTimeMillis(),
+          launchSource = launchSource,
+          playlistId = playlistId,
+        )
       recentlyPlayedDao.insert(entity)
     }
   }
@@ -70,8 +81,7 @@ class RecentlyPlayedRepositoryImpl(
   override suspend fun getRecentlyPlayed(limit: Int): List<RecentlyPlayedEntity> =
     recentlyPlayedDao.getRecentlyPlayed(limit)
 
-  override suspend fun getRecentlyPlayedCount(): Int =
-    recentlyPlayedDao.getRecentlyPlayedCount()
+  override suspend fun getRecentlyPlayedCount(): Int = recentlyPlayedDao.getRecentlyPlayedCount()
 
   override fun observeRecentlyPlayed(limit: Int): Flow<List<RecentlyPlayedEntity>> =
     recentlyPlayedDao.observeRecentlyPlayed(limit)
@@ -119,4 +129,3 @@ class RecentlyPlayedRepositoryImpl(
     recentlyPlayedDao.updateVideoMetadata(filePath, videoTitle, duration, fileSize, width, height)
   }
 }
-

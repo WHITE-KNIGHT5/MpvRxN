@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.preferences.preference
 
 import android.content.Context
@@ -10,14 +19,29 @@ import app.gyrolet.mpvrx.preferences.preference.AndroidPreference.LongPrimitive
 import app.gyrolet.mpvrx.preferences.preference.AndroidPreference.Object
 import app.gyrolet.mpvrx.preferences.preference.AndroidPreference.StringPrimitive
 import app.gyrolet.mpvrx.preferences.preference.AndroidPreference.StringSetPrimitive
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.shareIn
 
 class AndroidPreferenceStore(
   context: Context,
   private val sharedPreferences: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context),
 ) : PreferenceStore {
-  private val keyFlow = sharedPreferences.keyFlow
+  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+  // Collectors are numerous — a single browser grid observes a dozen preferences per card — and the
+  // upstream callbackFlow is cold, so without sharing each collection would register its own
+  // OnSharedPreferenceChangeListener and every write would fan out across all of them.
+  private val keyFlow =
+    sharedPreferences.keyFlow.shareIn(
+      scope,
+      SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
+      replay = 0,
+    )
 
   override fun getString(
     key: String,
@@ -81,4 +105,3 @@ private val SharedPreferences.keyFlow
         unregisterOnSharedPreferenceChangeListener(listener)
       }
     }
-

@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.recentlyplayed
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.recentlyplayed
 
 import android.content.Intent
 import android.widget.Toast
@@ -10,6 +16,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +46,7 @@ import androidx.compose.material3.animateFloatingActionButton
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -50,9 +59,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import app.gyrolet.mpvrx.database.repository.PlaylistRepository
+import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.domain.media.model.Video
 import app.gyrolet.mpvrx.domain.media.model.VideoFolder
 import app.gyrolet.mpvrx.domain.thumbnail.ThumbnailRepository
@@ -75,14 +85,12 @@ import app.gyrolet.mpvrx.ui.browser.playlist.PlaylistDetailScreen
 import app.gyrolet.mpvrx.ui.browser.selection.rememberSelectionManager
 import app.gyrolet.mpvrx.ui.browser.sheets.PlayLinkSheet
 import app.gyrolet.mpvrx.ui.browser.states.EmptyState
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
+import app.gyrolet.mpvrx.ui.utils.calculateResponsiveGridSpans
 import app.gyrolet.mpvrx.utils.media.MediaUtils
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventPass
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 
@@ -93,36 +101,32 @@ object RecentlyPlayedScreen : Screen {
   override fun Content() {
     val context = LocalContext.current
     val backStack = LocalBackStack.current
-    val playlistRepository = koinInject<PlaylistRepository>()
     val viewModel: RecentlyPlayedViewModel =
       viewModel(factory = RecentlyPlayedViewModel.factory(context.applicationContext as android.app.Application))
 
     val recentItems by viewModel.recentItems.collectAsState()
-    val recentVideos by viewModel.recentVideos.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val deleteDialogOpen = rememberSaveable { mutableStateOf(false) }
     val deleteFilesCheckbox = rememberSaveable { mutableStateOf(false) }
     val advancedPreferences = koinInject<AdvancedPreferences>()
+    val appearancePreferences = koinInject<AppearancePreferences>()
     val enableRecentlyPlayed by advancedPreferences.enableRecentlyPlayed.collectAsState()
+    val showQuickPlayFab by appearancePreferences.showQuickPlayFab.collectAsState()
+    val quickPlayFabDirect by appearancePreferences.quickPlayFabDirect.collectAsState()
     val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
 
     // FAB visibility for scroll-based hiding
     val isFabVisible = remember { mutableStateOf(true) }
     val isFabExpanded = remember { mutableStateOf(false) }
     val showLinkDialog = remember { mutableStateOf(false) }
-    
+
     val coroutineScope = rememberCoroutineScope()
-    
+
     // Selection manager for all items (videos and playlists)
     val selectionManager =
       rememberSelectionManager(
         items = recentItems,
-        getId = { item ->
-          when (item) {
-            is RecentlyPlayedItem.VideoItem -> "video_${item.video.id}"
-            is RecentlyPlayedItem.PlaylistItem -> "playlist_${item.playlist.id}"
-          }
-        },
+        getId = ::recentlyPlayedItemKey,
         onDeleteItems = { items, deleteFiles ->
           val videos = items.filterIsInstance<RecentlyPlayedItem.VideoItem>().map { it.video }
           val playlistIds = items.filterIsInstance<RecentlyPlayedItem.PlaylistItem>().map { it.playlist.id }
@@ -151,27 +155,36 @@ object RecentlyPlayedScreen : Screen {
       )
 
     // Handle back button during selection mode or FAB menu expanded
+    // Synchronize NavigationBarState when selection mode changes
+    SideEffect {
+      app.gyrolet.mpvrx.ui.browser.NavigationBarState.updateSelectionState(
+        inSelectionMode = selectionManager.isInSelectionMode,
+        onlyVideos = true,
+      )
+    }
+
     BackHandler(enabled = selectionManager.isInSelectionMode || isFabExpanded.value) {
       when {
         isFabExpanded.value -> isFabExpanded.value = false
         selectionManager.isInSelectionMode -> selectionManager.clear()
       }
     }
-    
+
     // File picker for opening external files
-    val filePicker = rememberLauncherForActivityResult(
-      contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-      uri?.let {
-        runCatching {
-          context.contentResolver.takePersistableUriPermission(
-            it,
-            Intent.FLAG_GRANT_READ_URI_PERMISSION,
-          )
+    val filePicker =
+      rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+      ) { uri ->
+        uri?.let {
+          runCatching {
+            context.contentResolver.takePersistableUriPermission(
+              it,
+              Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+          }
+          MediaUtils.playFile(it.toString(), context, "open_file")
         }
-        MediaUtils.playFile(it.toString(), context, "open_file")
       }
-    }
 
     // Track scroll for FAB visibility - create states here to pass to content
     val listState = remember { LazyListState() }
@@ -187,155 +200,174 @@ object RecentlyPlayedScreen : Screen {
     )
 
     Scaffold(
-        topBar = {
-          BrowserTopBar(
-            title = "Recently Played",
-            isInSelectionMode = selectionManager.isInSelectionMode,
-            selectedCount = selectionManager.selectedCount,
-            totalCount = recentItems.size,
-            onBackClick = null, // No back button for recently played screen
-            onCancelSelection = { selectionManager.clear() },
-            onSortClick = null, // No sorting in recently played
-            onSettingsClick = {
-              backStack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
-            },
-            isSingleSelection = selectionManager.isSingleSelection,
-            onInfoClick = null, // No info in recently played
-            onShareClick = null,
-            onPlayClick = null,
-            onSelectAll = { selectionManager.selectAll() },
-            onInvertSelection = { selectionManager.invertSelection() },
-            onDeselectAll = { selectionManager.clear() },
-            onDeleteClick = { deleteDialogOpen.value = true },
-          )
-        },
+      topBar = {
+        BrowserTopBar(
+          title = stringResource(R.string.pref_advanced_enable_recently_played_title),
+          isInSelectionMode = selectionManager.isInSelectionMode,
+          selectedCount = selectionManager.selectedCount,
+          totalCount = recentItems.size,
+          onBackClick = null, // No back button for recently played screen
+          onCancelSelection = { selectionManager.clear() },
+          onSortClick = null, // No sorting in recently played
+          onSettingsClick = {
+            backStack.add(app.gyrolet.mpvrx.ui.preferences.PreferencesScreen)
+          },
+          isSingleSelection = selectionManager.isSingleSelection,
+          onInfoClick = null, // No info in recently played
+          onShareClick = null,
+          onPlayClick = null,
+          onSelectAll = { selectionManager.selectAll() },
+          onInvertSelection = { selectionManager.invertSelection() },
+          onDeselectAll = { selectionManager.clear() },
+          onDeleteClick = { deleteDialogOpen.value = true },
+        )
+      },
       floatingActionButton = {
         FloatingActionButtonMenu(
-          modifier = Modifier
-            .padding(bottom = navigationBarHeight + 8.dp),
-          expanded = isFabExpanded.value,
+          modifier =
+            Modifier
+              .padding(bottom = (navigationBarHeight - 16.dp).coerceAtLeast(0.dp)),
+          expanded = isFabExpanded.value && !quickPlayFabDirect,
           button = {
             TooltipBox(
-              positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                if (isFabExpanded.value) {
-                  TooltipAnchorPosition.Start
-                } else {
-                  TooltipAnchorPosition.Above
+              positionProvider =
+                TooltipDefaults.rememberTooltipPositionProvider(
+                  if (isFabExpanded.value && !quickPlayFabDirect) {
+                    TooltipAnchorPosition.Start
+                  } else {
+                    TooltipAnchorPosition.Above
+                  },
+                ),
+              tooltip = {
+                PlainTooltip {
+                  Text(
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_toggle_menu),
+                  )
                 }
-              ),
-              tooltip = { PlainTooltip { Text("Toggle menu") } },
+              },
               state = rememberTooltipState(),
             ) {
               ToggleFloatingActionButton(
-                modifier = Modifier
-                  .animateFloatingActionButton(
-                    visible = !selectionManager.isInSelectionMode && isFabVisible.value,
-                    alignment = Alignment.BottomEnd,
-                  )
-                  .pointerInput(Unit) {
-                    awaitEachGesture {
-                      awaitFirstDown(requireUnconsumed = false)
-                      val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                        while (true) {
-                          val event = awaitPointerEvent(PointerEventPass.Initial)
-                          if (event.changes.none { it.pressed }) break
-                        }
-                      }
-                      if (timedOut == null) {
-                        isFabExpanded.value = true
-                        while (true) {
-                          val event = awaitPointerEvent(PointerEventPass.Initial)
-                          event.changes.forEach { it.consume() }
-                          if (event.changes.none { it.pressed }) break
-                        }
-                      }
-                    }
-                  },
-                checked = isFabExpanded.value,
+                modifier =
+                  Modifier
+                    .animateFloatingActionButton(
+                      visible = showQuickPlayFab && !selectionManager.isInSelectionMode && isFabVisible.value,
+                      alignment = Alignment.BottomEnd,
+                    ),
+                checked = isFabExpanded.value && !quickPlayFabDirect,
                 onCheckedChange = {
-                  coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    val lastPlayed = app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps.getLastPlayedEntity()
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                      if (lastPlayed != null && !isFabExpanded.value) {
+                  if (quickPlayFabDirect) {
+                    coroutineScope.launch {
+                      val lastPlayed =
+                        app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
+                          .getLastPlayedEntity()
+                      if (lastPlayed != null) {
                         MediaUtils.playFile(
                           source = lastPlayed.filePath,
                           context = context,
-                          launchSource = "recently_played_fab",
-                          title = lastPlayed.videoTitle?.takeIf { it.isNotBlank() }
-                            ?: lastPlayed.fileName.takeIf { it.isNotBlank() },
+                          launchSource = "quick_play_fab",
+                          title =
+                            lastPlayed.videoTitle?.takeIf { it.isNotBlank() }
+                              ?: lastPlayed.fileName.takeIf { it.isNotBlank() },
                         )
-                      } else {
-                        isFabExpanded.value = !isFabExpanded.value
                       }
                     }
+                  } else {
+                    isFabExpanded.value = !isFabExpanded.value
                   }
                 },
               ) {
                 val imageVector by remember {
                   derivedStateOf {
-                    if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.PlayArrow
+                    if (checkedProgress > 0.5f && !quickPlayFabDirect) Icons.RoundedFilled.Close else Icons.RoundedFilled.PlayArrow
                   }
                 }
                 Icon(
                   imageVector = imageVector,
                   contentDescription = null,
-                  modifier = Modifier.animateIcon({ checkedProgress }),
+                  modifier = Modifier.animateIcon({ if (quickPlayFabDirect) 0f else checkedProgress }),
                 )
               }
             }
           },
         ) {
-          FloatingActionButtonMenuItem(
-            onClick = {
-              isFabExpanded.value = false
-              filePicker.launch(arrayOf("video/*"))
-            },
-            icon = { Icon(Icons.Filled.FileOpen, contentDescription = null) },
-            text = { Text(text = "Open File") },
-          )
+          if (!quickPlayFabDirect) {
+            FloatingActionButtonMenuItem(
+              onClick = {
+                isFabExpanded.value = false
+                filePicker.launch(arrayOf("video/*"))
+              },
+              icon = { Icon(Icons.RoundedFilled.FileOpen, contentDescription = null) },
+              text = {
+                Text(
+                  text =
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_open_file),
+                )
+              },
+            )
 
-          FloatingActionButtonMenuItem(
-            onClick = {
-              isFabExpanded.value = false
-              coroutineScope.launch {
-                val lastPlayed = app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps.getLastPlayedEntity()
-                if (lastPlayed != null) {
-                  MediaUtils.playFile(
-                    source = lastPlayed.filePath,
-                    context = context,
-                    launchSource = "recently_played_button",
-                    title = lastPlayed.videoTitle?.takeIf { it.isNotBlank() }
-                      ?: lastPlayed.fileName.takeIf { it.isNotBlank() },
-                  )
+            FloatingActionButtonMenuItem(
+              onClick = {
+                isFabExpanded.value = false
+                coroutineScope.launch {
+                  val lastPlayed =
+                    app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
+                      .getLastPlayedEntity()
+                  if (lastPlayed != null) {
+                    MediaUtils.playFile(
+                      source = lastPlayed.filePath,
+                      context = context,
+                      launchSource = "recently_played_button",
+                      title =
+                        lastPlayed.videoTitle?.takeIf { it.isNotBlank() }
+                          ?: lastPlayed.fileName.takeIf { it.isNotBlank() },
+                    )
+                  }
                 }
-              }
-            },
-            icon = { Icon(Icons.Filled.History, contentDescription = null) },
-            text = { Text(text = "Recently Played") },
-          )
+              },
+              icon = { Icon(Icons.RoundedFilled.History, contentDescription = null) },
+              text = {
+                Text(
+                  text =
+                    androidx.compose.ui.res.stringResource(
+                      app.gyrolet.mpvrx.R.string.pref_advanced_enable_recently_played_title,
+                    ),
+                )
+              },
+            )
 
-          FloatingActionButtonMenuItem(
-            onClick = {
-              isFabExpanded.value = false
-              showLinkDialog.value = true
-            },
-            icon = { Icon(Icons.Filled.Link, contentDescription = null) },
-            text = { Text(text = "Open Link") },
-          )
+            FloatingActionButtonMenuItem(
+              onClick = {
+                isFabExpanded.value = false
+                showLinkDialog.value = true
+              },
+              icon = { Icon(Icons.RoundedFilled.Link, contentDescription = null) },
+              text = {
+                Text(
+                  text =
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_open_link),
+                )
+              },
+            )
+          }
         }
       },
     ) { padding ->
       when {
         !enableRecentlyPlayed -> {
           Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(padding),
+            modifier =
+              Modifier
+                .fillMaxSize()
+                .padding(padding),
             contentAlignment = Alignment.Center,
           ) {
             EmptyState(
-              icon = Icons.Filled.History,
-              title = "Recently Played is disabled",
+              icon = Icons.RoundedFilled.History,
+              title = stringResource(R.string.ui_recently_played_disabled),
               message = "Enable it in Advanced Settings to track your playback history",
             )
           }
@@ -343,9 +375,10 @@ object RecentlyPlayedScreen : Screen {
 
         isLoading && recentItems.isEmpty() -> {
           Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(padding),
+            modifier =
+              Modifier
+                .fillMaxSize()
+                .padding(padding),
             contentAlignment = Alignment.Center,
           ) {
             CircularProgressIndicator(
@@ -357,14 +390,15 @@ object RecentlyPlayedScreen : Screen {
 
         recentItems.isEmpty() && !isLoading -> {
           Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(padding),
+            modifier =
+              Modifier
+                .fillMaxSize()
+                .padding(padding),
             contentAlignment = Alignment.Center,
           ) {
             EmptyState(
-              icon = Icons.Filled.History,
-              title = "No recently played videos",
+              icon = Icons.RoundedFilled.History,
+              title = stringResource(R.string.ui_no_recently_played_videos),
               message = "Videos you play will appear here",
             )
           }
@@ -373,7 +407,6 @@ object RecentlyPlayedScreen : Screen {
         else -> {
           RecentItemsContent(
             recentItems = recentItems,
-            playlistRepository = playlistRepository,
             selectionManager = selectionManager,
             onVideoClick = { video ->
               coroutineScope.launch {
@@ -382,7 +415,12 @@ object RecentlyPlayedScreen : Screen {
                   // Always play individual videos without creating a playlist.
                   MediaUtils.playFile(playableVideo, context, "recently_played")
                 } else {
-                  Toast.makeText(context, "Recent file no longer exists", Toast.LENGTH_SHORT).show()
+                  Toast
+                    .makeText(
+                      context,
+                      context.getString(app.gyrolet.mpvrx.R.string.ui_recent_file_no_longer_exists),
+                      Toast.LENGTH_SHORT,
+                    ).show()
                 }
               }
             },
@@ -405,21 +443,23 @@ object RecentlyPlayedScreen : Screen {
         val itemText = if (itemCount == 1) "item" else "items"
         val deleteFiles = deleteFilesCheckbox.value
 
-        val title = if (deleteFiles) {
-          "Delete $itemCount $itemText?"
-        } else {
-          "Remove $itemCount $itemText from history?"
-        }
-
-        val subtitle = buildString {
+        val title =
           if (deleteFiles) {
-            append("This will permanently delete the original video file(s) from your device storage.\n\n")
-            append("This action cannot be undone.")
+            "Delete $itemCount $itemText?"
           } else {
-            append("This will remove the selected $itemText from your recently played list. ")
-            append("The original video files will not be deleted.")
+            "Remove $itemCount $itemText from history?"
           }
-        }
+
+        val subtitle =
+          buildString {
+            if (deleteFiles) {
+              append("This will permanently delete the original video file(s) from your device storage.\n\n")
+              append("This action cannot be undone.")
+            } else {
+              append("This will remove the selected $itemText from your recently played list. ")
+              append("The original video files will not be deleted.")
+            }
+          }
 
         ConfirmDialog(
           title = title,
@@ -436,7 +476,10 @@ object RecentlyPlayedScreen : Screen {
                 },
               )
               androidx.compose.material3.Text(
-                text = "Also delete original file(s)",
+                text =
+                  androidx.compose.ui.res.stringResource(
+                    app.gyrolet.mpvrx.R.string.ui_also_delete_original_file_s,
+                  ),
                 modifier = Modifier.padding(start = 8.dp),
                 style = MaterialTheme.typography.bodyMedium,
               )
@@ -453,7 +496,7 @@ object RecentlyPlayedScreen : Screen {
           },
         )
       }
-      
+
       // Link dialog
       PlayLinkSheet(
         isOpen = showLinkDialog.value,
@@ -467,7 +510,6 @@ object RecentlyPlayedScreen : Screen {
 @Composable
 private fun RecentItemsContent(
   recentItems: List<RecentlyPlayedItem>,
-  playlistRepository: PlaylistRepository,
   selectionManager: app.gyrolet.mpvrx.ui.browser.selection.SelectionManager<RecentlyPlayedItem, String>,
   onVideoClick: (Video) -> Unit,
   onPlaylistClick: suspend (RecentlyPlayedItem.PlaylistItem) -> Unit,
@@ -490,33 +532,42 @@ private fun RecentItemsContent(
   val showFramerateInResolution by browserPreferences.showFramerateInResolution.collectAsState()
   val showProgressBar by browserPreferences.showProgressBar.collectAsState()
   val showDateChip by browserPreferences.showDateChip.collectAsState()
+  val showCodecSupportIndicator by browserPreferences.showCodecSupportIndicator.collectAsState()
   val showUnplayedOldVideoLabel by appearancePreferences.showUnplayedOldVideoLabel.collectAsState()
   val unplayedOldVideoDays by appearancePreferences.unplayedOldVideoDays.collectAsState()
   val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
-  val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
-  val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
-  val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()
-  val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
   val showExtensionField by browserPreferences.showExtensionField.collectAsState()
   val showDurationField by browserPreferences.showDurationField.collectAsState()
-
-
+  val centerGridTitles by browserPreferences.centerGridTitles.collectAsState()
+  val manualGridColumnsEnabled by browserPreferences.manualGridColumnsEnabled.collectAsState()
+  val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()
+  val videoGridColumnsLandscape by browserPreferences.videoGridColumnsLandscape.collectAsState()
   val configuration = androidx.compose.ui.platform.LocalConfiguration.current
   val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-
-  val folderGridColumns = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
-  val videoGridColumns = if (isLandscape) videoGridColumnsLandscape else videoGridColumnsPortrait
+  val screenWidthDp = configuration.screenWidthDp.dp
+  val contentHorizontalPadding = 8.dp
+  val itemSpacing = 2.dp
+  val usableWidth = screenWidthDp - (contentHorizontalPadding * 2) - itemSpacing
+  val videoMinWidth = 130.dp
+  val videoGridColumnsPref = if (isLandscape) videoGridColumnsLandscape else videoGridColumnsPortrait
+  val computedVideoColumns =
+    if (manualGridColumnsEnabled) {
+      videoGridColumnsPref.coerceAtLeast(1)
+    } else {
+      (usableWidth / videoMinWidth).toInt().coerceAtLeast(1)
+    }
 
   val isGridMode = mediaLayoutMode == MediaLayoutMode.GRID
 
   val coroutineScope = rememberCoroutineScope()
   val isRefreshing = remember { mutableStateOf(false) }
 
-  val thumbWidthDp = if (isGridMode) {
-    (360.dp / videoGridColumns)
-  } else {
-    160.dp
-  }
+  val thumbWidthDp =
+    if (isGridMode) {
+      (screenWidthDp / computedVideoColumns)
+    } else {
+      160.dp
+    }
   val aspect = 16f / 9f
   val thumbWidthPx = with(density) { thumbWidthDp.roundToPx() }
   val thumbHeightPx = (thumbWidthPx / aspect).toInt()
@@ -527,12 +578,14 @@ private fun RecentItemsContent(
       showSizeChip,
       showResolutionChip,
       showFramerateInResolution,
+      showCodecSupportIndicator,
       showProgressBar,
       showDateChip,
       showUnplayedOldVideoLabel,
       unplayedOldVideoDays,
       showExtensionField,
       showDurationField,
+      centerGridTitles,
     ) {
       VideoCardUiConfig(
         unlimitedNameLines = unlimitedNameLines,
@@ -540,18 +593,21 @@ private fun RecentItemsContent(
         showSizeChip = showSizeChip,
         showResolutionChip = showResolutionChip,
         showFramerateInResolution = showFramerateInResolution,
+        showCodecSupportIndicator = showCodecSupportIndicator,
         showProgressBar = showProgressBar,
         showDateChip = showDateChip,
         showUnplayedOldVideoLabel = showUnplayedOldVideoLabel,
         unplayedOldVideoDays = unplayedOldVideoDays,
         showExtensionField = showExtensionField,
         showDurationField = showDurationField,
+        centerGridTitles = centerGridTitles,
       )
     }
 
-  val recentVideos = remember(recentItems) {
-    recentItems.filterIsInstance<RecentlyPlayedItem.VideoItem>().map { it.video }
-  }
+  val recentVideos =
+    remember(recentItems) {
+      recentItems.filterIsInstance<RecentlyPlayedItem.VideoItem>().map { it.video }
+    }
 
   // Unified thumbnail generation - starts with initial batch and continues as needed
   // This avoids the overhead of multiple conflicting LaunchedEffect calls
@@ -559,9 +615,10 @@ private fun RecentItemsContent(
     if (showVideoThumbnails && recentVideos.isNotEmpty()) {
       // Start with all videos - the ThumbnailRepository will handle batching internally
       // This avoids redundant job restarts when scrolling
-      val allVideos = recentItems
-        .filterIsInstance<RecentlyPlayedItem.VideoItem>()
-        .map { it.video }
+      val allVideos =
+        recentItems
+          .filterIsInstance<RecentlyPlayedItem.VideoItem>()
+          .map { it.video }
       thumbnailRepository.startFolderThumbnailGeneration(
         folderId = "recently_played",
         videos = allVideos,
@@ -575,10 +632,11 @@ private fun RecentItemsContent(
 
   val scrollbarAlpha by androidx.compose.animation.core.animateFloatAsState(
     targetValue = if (!hasEnoughItems) 0f else 1f,
-    animationSpec = androidx.compose.animation.core.spring(
-      dampingRatio = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.dampingRatio,
-      stiffness = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.stiffness,
-    ),
+    animationSpec =
+      androidx.compose.animation.core.spring(
+        dampingRatio = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.dampingRatio,
+        stiffness = app.gyrolet.mpvrx.ui.theme.AppMotion.Effect.Alpha.stiffness,
+      ),
     label = "scrollbarAlpha",
   )
 
@@ -590,30 +648,46 @@ private fun RecentItemsContent(
   ) {
     if (isGridMode) {
       val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(bottom = navigationBarHeight)
+      BoxWithConstraints(
+        modifier =
+          Modifier
+            .fillMaxSize(),
       ) {
+        val spansInfo =
+          calculateResponsiveGridSpans(
+            maxWidth = maxWidth,
+            isGridMode = true,
+          )
         LazyVerticalGrid(
-          columns = GridCells.Fixed(videoGridColumns),
+          columns = GridCells.Fixed(spansInfo.spans),
           state = gridState,
           modifier = Modifier.fillMaxSize(),
-          contentPadding = PaddingValues(
-            start = 8.dp,
-            end = 8.dp,
-            bottom = if (isInSelectionMode) 88.dp else 16.dp
-          ),
+          contentPadding =
+            PaddingValues(
+              start = 8.dp,
+              end = 8.dp,
+              bottom = if (isInSelectionMode) 88.dp else navigationBarHeight,
+            ),
           horizontalArrangement = Arrangement.spacedBy(4.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
           items(
             count = recentItems.size,
-            key = { index ->
-              when (val item = recentItems[index]) {
-                is RecentlyPlayedItem.VideoItem -> "video_${item.video.id}_${item.timestamp}"
-                is RecentlyPlayedItem.PlaylistItem -> "playlist_${item.playlist.id}_${item.timestamp}"
+            key = { index -> recentlyPlayedItemKey(recentItems[index]) },
+            contentType = { index ->
+              when (recentItems[index]) {
+                is RecentlyPlayedItem.VideoItem -> "video_item"
+                is RecentlyPlayedItem.PlaylistItem -> "playlist_item"
               }
+            },
+            span = { index ->
+              val item = recentItems[index]
+              val itemSpan =
+                when (item) {
+                  is RecentlyPlayedItem.PlaylistItem -> spansInfo.folderSpan
+                  is RecentlyPlayedItem.VideoItem -> spansInfo.videoSpan
+                }
+              GridItemSpan(itemSpan)
             },
           ) { index ->
             when (val item = recentItems[index]) {
@@ -630,34 +704,36 @@ private fun RecentItemsContent(
                     }
                   },
                   onLongClick = { selectionManager.handleLongClick(item) },
-                  onThumbClick = if (tapThumbnailToSelect) {
-                    { selectionManager.toggle(item) }
-                  } else {
-                    {
-                      if (selectionManager.isInSelectionMode) {
-                        selectionManager.toggle(item)
-                      } else {
-                        onVideoClick(item.video)
+                  onThumbClick =
+                    if (tapThumbnailToSelect) {
+                      { selectionManager.toggle(item) }
+                    } else {
+                      {
+                        if (selectionManager.isInSelectionMode) {
+                          selectionManager.toggle(item)
+                        } else {
+                          onVideoClick(item.video)
+                        }
                       }
-                    }
-                  },
+                    },
                   isGridMode = true,
-                  gridColumns = videoGridColumns,
+                  gridColumns = spansInfo.spans,
                   showSubtitleIndicator = showSubtitleIndicator,
                   uiConfig = videoCardUiConfig,
                 )
               }
 
               is RecentlyPlayedItem.PlaylistItem -> {
-                val folderModel = VideoFolder(
-                  bucketId = item.playlist.id.toString(),
-                  name = item.playlist.name,
-                  path = "",
-                  videoCount = item.videoCount,
-                  totalSize = 0,
-                  totalDuration = 0,
-                  lastModified = item.playlist.updatedAt / 1000,
-                )
+                val folderModel =
+                  VideoFolder(
+                    bucketId = item.playlist.id.toString(),
+                    name = item.playlist.name,
+                    path = "",
+                    videoCount = item.videoCount,
+                    totalSize = 0,
+                    totalDuration = 0,
+                    lastModified = item.playlist.updatedAt / 1000,
+                  )
                 FolderCard(
                   folder = folderModel,
                   isSelected = selectionManager.isSelected(item),
@@ -685,7 +761,7 @@ private fun RecentItemsContent(
                       }
                     }
                   },
-                  customIcon = Icons.Filled.PlaylistPlay,
+                  customIcon = Icons.RoundedFilled.PlaylistPlay,
                   showDateModified = true,
                   isGridMode = true,
                 )
@@ -705,35 +781,38 @@ private fun RecentItemsContent(
                 },
               )
             },
-            modifier = Modifier
-              .align(Alignment.CenterEnd)
-              .padding(end = 4.dp)
-              .graphicsLayer { alpha = scrollbarAlpha },
+            modifier =
+              Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp)
+                .graphicsLayer { alpha = scrollbarAlpha },
           )
         }
       }
     } else {
       val navigationBarHeight = app.gyrolet.mpvrx.ui.browser.LocalNavigationBarHeight.current
       Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(bottom = navigationBarHeight)
+        modifier =
+          Modifier
+            .fillMaxSize(),
       ) {
         LazyColumn(
           state = listState,
           modifier = Modifier.fillMaxSize(),
-          contentPadding = PaddingValues(
-            start = 8.dp,
-            end = 8.dp,
-            bottom = if (isInSelectionMode) 88.dp else 16.dp
-          ),
+          contentPadding =
+            PaddingValues(
+              start = 8.dp,
+              end = 8.dp,
+              bottom = if (isInSelectionMode) 88.dp else navigationBarHeight,
+            ),
         ) {
           items(
             count = recentItems.size,
-            key = { index ->
-              when (val item = recentItems[index]) {
-                is RecentlyPlayedItem.VideoItem -> "video_${item.video.id}_${item.timestamp}"
-                is RecentlyPlayedItem.PlaylistItem -> "playlist_${item.playlist.id}_${item.timestamp}"
+            key = { index -> recentlyPlayedItemKey(recentItems[index]) },
+            contentType = { index ->
+              when (recentItems[index]) {
+                is RecentlyPlayedItem.VideoItem -> "video_item"
+                is RecentlyPlayedItem.PlaylistItem -> "playlist_item"
               }
             },
           ) { index ->
@@ -751,17 +830,18 @@ private fun RecentItemsContent(
                     }
                   },
                   onLongClick = { selectionManager.handleLongClick(item) },
-                  onThumbClick = if (tapThumbnailToSelect) {
-                    { selectionManager.toggle(item) }
-                  } else {
-                    {
-                      if (selectionManager.isInSelectionMode) {
-                        selectionManager.toggle(item)
-                      } else {
-                        onVideoClick(item.video)
+                  onThumbClick =
+                    if (tapThumbnailToSelect) {
+                      { selectionManager.toggle(item) }
+                    } else {
+                      {
+                        if (selectionManager.isInSelectionMode) {
+                          selectionManager.toggle(item)
+                        } else {
+                          onVideoClick(item.video)
+                        }
                       }
-                    }
-                  },
+                    },
                   isGridMode = false,
                   showSubtitleIndicator = showSubtitleIndicator,
                   uiConfig = videoCardUiConfig,
@@ -769,15 +849,16 @@ private fun RecentItemsContent(
               }
 
               is RecentlyPlayedItem.PlaylistItem -> {
-                val folderModel = VideoFolder(
-                  bucketId = item.playlist.id.toString(),
-                  name = item.playlist.name,
-                  path = "",
-                  videoCount = item.videoCount,
-                  totalSize = 0,
-                  totalDuration = 0,
-                  lastModified = item.playlist.updatedAt / 1000,
-                )
+                val folderModel =
+                  VideoFolder(
+                    bucketId = item.playlist.id.toString(),
+                    name = item.playlist.name,
+                    path = "",
+                    videoCount = item.videoCount,
+                    totalSize = 0,
+                    totalDuration = 0,
+                    lastModified = item.playlist.updatedAt / 1000,
+                  )
                 FolderCard(
                   folder = folderModel,
                   isSelected = selectionManager.isSelected(item),
@@ -805,7 +886,7 @@ private fun RecentItemsContent(
                       }
                     }
                   },
-                  customIcon = Icons.Filled.PlaylistPlay,
+                  customIcon = Icons.RoundedFilled.PlaylistPlay,
                   showDateModified = true,
                   isGridMode = false,
                 )
@@ -825,10 +906,11 @@ private fun RecentItemsContent(
                 },
               )
             },
-            modifier = Modifier
-              .align(Alignment.CenterEnd)
-              .padding(end = 4.dp)
-              .graphicsLayer { alpha = scrollbarAlpha },
+            modifier =
+              Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 2.dp, top = 6.dp, bottom = navigationBarHeight + 6.dp)
+                .graphicsLayer { alpha = scrollbarAlpha },
           )
         }
       }
@@ -836,5 +918,8 @@ private fun RecentItemsContent(
   }
 }
 
-
-
+private fun recentlyPlayedItemKey(item: RecentlyPlayedItem): String =
+  when (item) {
+    is RecentlyPlayedItem.VideoItem -> "video_${item.video.id}_${item.timestamp}_${item.video.path}"
+    is RecentlyPlayedItem.PlaylistItem -> "playlist_${item.playlist.id}_${item.timestamp}_${item.mostRecentVideoPath}"
+  }

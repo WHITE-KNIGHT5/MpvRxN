@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.domain.thumbnail
 
 import android.graphics.Bitmap
@@ -97,10 +106,15 @@ internal object MatroskaEmbeddedArtworkExtractor {
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     val sampleSize = calculateThumbnailSampleSize(options.outWidth, options.outHeight)
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
-      inSampleSize = sampleSize
-      inPreferredConfig = Bitmap.Config.RGB_565
-    })
+    return BitmapFactory.decodeByteArray(
+      bytes,
+      0,
+      bytes.size,
+      BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.RGB_565
+      },
+    )
   }
 
   private fun readElementHeader(file: RandomAccessFile): ElementHeader? {

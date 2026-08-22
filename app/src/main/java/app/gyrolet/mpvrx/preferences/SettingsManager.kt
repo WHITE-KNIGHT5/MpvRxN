@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.preferences
 
 import android.content.Context
@@ -18,20 +27,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
 class SettingsManager(
   private val context: Context,
   private val preferenceStore: PreferenceStore,
   private val database: MpvRxDatabase,
 ) {
   companion object {
-    private const val TAG_ROOT = "MpvRxSettings"
+    private const val TAG_ROOT = "mpvRxSettings"
     private const val TAG_PREFERENCES = "preferences"
     private const val TAG_PREFERENCE = "preference"
     private const val TAG_DATABASE = "database"
     private const val TAG_NETWORK_CONNECTIONS = "networkConnections"
     private const val TAG_NETWORK_CONNECTION = "networkConnection"
-    
+
     private const val ATTR_KEY = "key"
     private const val ATTR_TYPE = "type"
     private const val ATTR_VALUE = "value"
@@ -47,7 +55,6 @@ class SettingsManager(
     private const val STRING_SET_SEPARATOR = "|||"
   }
 
-
   suspend fun exportSettings(outputUri: Uri): Result<ExportStats> =
     withContext(Dispatchers.IO) {
       try {
@@ -60,7 +67,6 @@ class SettingsManager(
       }
     }
 
-
   suspend fun importSettings(inputUri: Uri): Result<ImportStats> =
     withContext(Dispatchers.IO) {
       try {
@@ -72,7 +78,6 @@ class SettingsManager(
         Result.failure(e)
       }
     }
-
 
   private suspend fun writeSettingsToXml(outputStream: OutputStream): ExportStats {
     val serializer: XmlSerializer = Xml.newSerializer()
@@ -129,14 +134,14 @@ class SettingsManager(
     )
   }
 
-
-  private fun sanitizeXmlValue(value: String): String {
-    return value.filter { c ->
-      c.code == 0x9 || c.code == 0xA || c.code == 0xD ||
+  private fun sanitizeXmlValue(value: String): String =
+    value.filter { c ->
+      c.code == 0x9 ||
+        c.code == 0xA ||
+        c.code == 0xD ||
         (c.code in 0x20..0xD7FF) ||
         (c.code in 0xE000..0xFFFD)
     }
-  }
 
   private fun writePreference(
     serializer: XmlSerializer,
@@ -181,7 +186,6 @@ class SettingsManager(
     serializer.endTag(null, TAG_PREFERENCE)
   }
 
-
   private fun writeNetworkConnection(
     serializer: XmlSerializer,
     connection: NetworkConnection,
@@ -193,11 +197,14 @@ class SettingsManager(
     serializer.attribute(null, "host", sanitizeXmlValue(connection.host))
     serializer.attribute(null, "port", connection.port.toString())
     serializer.attribute(null, "username", sanitizeXmlValue(connection.username))
-    serializer.attribute(null, "password", sanitizeXmlValue(connection.password))
+    // Passwords are Android Keystore-bound ciphertext at rest. Exporting that envelope would both
+    // expose credential material and create an unusable backup on another installation. Deliberately
+    // omit it; non-anonymous imports stay disconnected until the user enters a password again.
     serializer.attribute(null, "path", sanitizeXmlValue(connection.path))
     serializer.attribute(null, "isAnonymous", connection.isAnonymous.toString())
     serializer.attribute(null, "lastConnected", connection.lastConnected.toString())
     serializer.attribute(null, "autoConnect", connection.autoConnect.toString())
+    serializer.attribute(null, "useHttps", connection.useHttps.toString())
     serializer.endTag(null, TAG_NETWORK_CONNECTION)
   }
 
@@ -256,7 +263,6 @@ class SettingsManager(
     return stats
   }
 
-
   private fun readPreference(parser: XmlPullParser) {
     val key = parser.getAttributeValue(null, ATTR_KEY) ?: return
     val type = parser.getAttributeValue(null, ATTR_TYPE) ?: return
@@ -287,9 +293,8 @@ class SettingsManager(
     editor.apply()
   }
 
-
-  private fun readNetworkConnection(parser: XmlPullParser): NetworkConnection {
-    return NetworkConnection(
+  private fun readNetworkConnection(parser: XmlPullParser): NetworkConnection =
+    NetworkConnection(
       id = 0, // Will be auto-generated
       name = parser.getAttributeValue(null, "name") ?: "",
       protocol =
@@ -299,13 +304,16 @@ class SettingsManager(
       host = parser.getAttributeValue(null, "host") ?: "",
       port = parser.getAttributeValue(null, "port")?.toIntOrNull() ?: 445,
       username = parser.getAttributeValue(null, "username") ?: "",
-      password = parser.getAttributeValue(null, "password") ?: "",
+      // Never restore credentials from settings XML, including legacy exports that contained
+      // plaintext passwords or device-bound encrypted envelopes.
+      password = "",
       path = parser.getAttributeValue(null, "path") ?: "/",
       isAnonymous = parser.getAttributeValue(null, "isAnonymous")?.toBoolean() ?: false,
       lastConnected = parser.getAttributeValue(null, "lastConnected")?.toLongOrNull() ?: 0L,
-      autoConnect = parser.getAttributeValue(null, "autoConnect")?.toBoolean() ?: false,
+      // Avoid repeated authentication attempts before credentials have been re-entered.
+      autoConnect = false,
+      useHttps = parser.getAttributeValue(null, "useHttps")?.toBoolean() ?: false,
     )
-  }
 
   fun getDefaultExportFilename(): String {
     val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
@@ -324,5 +332,3 @@ class SettingsManager(
     val exportedKeys: List<String>,
   )
 }
-
-

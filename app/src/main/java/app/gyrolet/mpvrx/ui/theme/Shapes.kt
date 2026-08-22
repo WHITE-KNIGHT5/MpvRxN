@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -5,7 +14,7 @@ import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 /**
- * MpvRx expressive shape scale following Material 3 Expressive guidelines.
+ * mpvRx expressive shape scale following Material 3 Expressive guidelines.
  * 8-level scale from 4dp (chips) to 48dp (high-emphasis expressive containers).
  */
 val AppShapes =

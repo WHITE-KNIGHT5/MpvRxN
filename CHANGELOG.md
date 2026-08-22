@@ -2,65 +2,470 @@
 
 These notes are written in plain English and focus on what changed for real use.
 
-# MpvRxN v1.5.0
+## 2.2.2 — Lyrics & Navigation Hotfix
 
-> **MpvRxN** is a custom fork of MpvRx.
+- **Smooth Karaoke Fill**: Word-timed lyrics now fill continuously from left to right with a soft glow. The previous per-letter jump, scale, and layout movement have been removed.
+- **Reliable Tab Swiping**: Main browser navigation now uses the pager's settled page as its single source of truth, preventing interrupted swipes from leaving Recents and Playlists stuck between pages.
+- **Synchronized Builds**: Standard, Fongmi, and non-Vulkan packages are built together from the same release tag and app source revision.
 
-### ✨ New Features
+## 2.2.1 — Playback & Lyrics Hotfix
 
-- 🎵 **Audio file support with thumbnails** — new toggle in *Settings → Audio → "Audio Player"*. Shows MP3, FLAC, AAC, OGG, M4A, OPUS, WAV, WMA and more alongside videos in every folder, with embedded album art. Off by default.
-- 🔊 **Background audio on back press** — pressing back (gesture, button, or the in-player arrow) while playing audio now keeps it playing in the background instead of stopping.
-- 📂 **Background play doesn't exist app ** — Now when we press background play button the player doesn't go back to launcher instead it goes back where the file is being play.
-- 🔔 **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
-- 👆 **Swipe between tabs** — works even when the nav bar is hidden, with wrap-around.
-- ⏫ **Long-press folder name or title** to scroll back to the top instantly.
-- ▶️ **FAB quick play** — tap plays your most recently played video; long-press opens the original menu.
-- ⏱️ **Long-press the speed button** to reset playback speed to your default.
-- 🔍 **Search auto-opens the keyboard** when tapped.
-- 🔓 **Easy Unlock** — lock icons on both sides for one-tap unlocking.
-- 🎞️ **Smooth Back Animation toggle** — choose a smooth scale exit or an instant cut.
+### 🎬 Video Playback Reliability
+- **Black Screen on Startup Fixed**: Video output now waits for Android to attach a valid render surface before mpv initializes the renderer. This restores the proven 2.1.0 startup order and prevents `Missing surface pointer`, audio-only playback, and permanent `video=eof` states on slower devices, including Vivo devices running Android 16.
+- **Safer Surface Recreation**: If the surface disappears while a file is loading, video selection is deferred until the replacement surface is attached instead of racing a destroyed native window.
+- **Single Video-Restoration Path**: Removed duplicate Activity-level restoration state so `PlaybackSession` is the sole owner of deferred video selection.
 
-### 🎨 Improvements
+### 🎤 Lyrics & Update Notes
+- **Word-Timed Karaoke for Standard LRC**: Regular LRCLIB line-synced lyrics now receive stable per-word timing, so the active line animates word by word instead of displaying one static sentence. Enhanced LRC files keep their original word timestamps.
+- **Consistent Centered Lyrics**: Normal and fullscreen lyrics now use the same centered layout for active lines, translations, and plain lyrics.
+- **Maintained Markdown Renderer**: Update release notes now use the lightweight Material 3 Markdown renderer from Maven Central instead of a custom parser.
 
-- Transparent volume/brightness/speed/seek overlays with white text — no more dark boxes.
-- Cleaner speed pill (no arrow icon), no full slider panel during swipe.
-- Chnaged swipe-speed always jumping to 2x — now starts from your actual hold-speed preset.
-- Thinner, more consistent seekbar with a smaller thumb.
-- **Much faster folder loading** — disk-cached after first open, instant on every load after (even post-reboot).
+## 2.2.0 — Jellyfin, Torrent Series & Player Reliability Release
 
-### 🎬 Picture-in-Picture
+### 🪼 Jellyfin Streaming Integration
+- **Built-in Jellyfin Client & Tab**: Connect to your Jellyfin server and browse Movies, Shows, and Music directly inside the app, with authenticated streaming, external subtitle support, and a bottom-sheet server setup flow that replaces the old dialog.
+- **JellyCine-Style Home Experience**: Completely redesigned Jellyfin tab using Material 3 Expressive components — hero carousel with autoscroll animations, resume carousel, expanded Top Picks, and a dedicated Music section on the home page.
+- **Richer Library Cards & Ratings**: Library cards now fetch real cover art and show IMDb star ratings, with Rotten Tomatoes ratings reorganized for readability and your libraries prioritized in the order you use them.
+- **Faster, Smarter Library Browsing**: Libraries are queried by item type instead of slow folder traversal, with server-side genre filtering, prioritized Shows/Movies in search results, search debouncing, and direct breadcrumb navigation.
+- **Episode Auto-Play & Next-Episode Overlay**: Series continue automatically with a next-episode overlay, audio/subtitle language sync between episodes, and an item info sheet for details before you play.
+- **Two-Way Playback Sync**: Playback state (pause/resume/stop) is reported to the server in real time, and the app pulls your freshest watch position from Jellyfin before starting playback — resume works across devices.
 
-- Play/Pause, Rewind (−10s), and Forward (+10s) buttons inside PiP now work correctly.
+### 🧲 Torrent Series & Network Streaming
+- **Series Torrents Become a Real Playlist**: Multi-file torrents now appear as one playlist entry per episode (sorted naturally), so you can jump between episodes from the queue sheet, use next/previous, auto-advance at the end of an episode, and keep separate resume positions per file. Switching episodes restarts the stream on the right file automatically.
+- **Media Tab Redesign**: The Torrent tab became the unified Media tab in JellyCine style — hero banner, resume carousel, poster cards, and a detail sheet — with saved torrent and network streams unified in one place and a save/open action on recent stream links.
+- **Network Tabs Reorganized**: Tabs reordered to Local Network, Media, and Syncplay, with "Saved Links" naming and a streamlined Media tab UI.
+- **Smarter Recents**: YouTube links now persist their real video titles and thumbnails into recents, and network streaming episode rows show proper episode titles with Jellyfin artwork fallback.
+- **Honest Buffering Indicator**: A proper buffering spinner for network and torrent streams that only appears during genuine cache stalls — no more flicker while seeking or when controls are hidden.
+
+### 🎤 Lyrics & Audio Experience
+- **Letter-by-Letter Karaoke Lyrics**: Synced lyrics now animate every single character on its own beat — letters rise into place with a pop, glow briefly, and sweep from dim to bright, driven by a frame-interpolated playback clock so the wave stays fluid even between position updates.
+- **Centered Lyric Focus**: The active line glides to the center of the view (instead of sticking to the top) with a depth-of-field falloff — nearby lines stay readable while distant lines blur and fade. Fullscreen lyrics are center-aligned with larger type.
+- **Visualizer Engine Cleanup**: All four visualizers (Galaxy, Blob, Cuboid, Particle) now share one audio analysis source of truth — beats, volume gating, and spectrum data are identical across styles, and a dead duplicate rendering engine was removed.
+- **Audio Quality-of-Life**: New audio file picker with persistent folder selection, an autoplay-next-audio preference, immediate audio stop when closing the player, correct "now playing" highlight in the music list, and a crash fix when starting playback from the Songs tab.
+
+### 🎬 Player Reliability & Playback Engine
+- **Load Recovery & Watchdog**: Media that never becomes ready now times out with a visible error and automatic retry instead of hanging forever; playback also recovers cleanly after reopening the app, and end-file metadata edge cases no longer crash the session.
+- **Resume Position Correctness**: Each video resumes from its own saved position — the next playlist item no longer inherits the previous video's progress, progress is persisted for the active playlist item, and history identity is unified for local files.
+- **Subtitle Improvements**: Choose preferred subtitles by ordered title keywords (e.g. "Dialogue" before "Signs"), yt-dlp subtitle titles no longer confuse language filters, and subtitle scale/position now compensate correctly during GPU video zoom and pan (#395).
+- **Skip Markers Fixed**: Intro/outro skip markers no longer accidentally advance to the next video, and marker metadata survives track changes.
+- **Zero-Permission External Playback**: Files shared from other apps play via file descriptors without any storage permission, with robust fallbacks for content URIs.
+- **mpv.conf Option Ownership Page**: A dedicated, organized settings page (replacing the old popup) to hand specific option groups — renderer, decoder, shaders, subtitles, and more — over to your mpv.conf, with per-option control, live counts, and one-tap reset.
+
+### 🧭 UI, Navigation & Updates
+- **Expressive Adaptive Navigation Bar**: New Material 3 expressive navbar that sizes its pill to the actual content, adapts between phone and tablet instead of cramming six tabs, and centers correctly on launch.
+- **Codec Support Indicators**: Per-video decoder support badges across browsing screens and a cleaned-up codec capabilities page, so you can see hardware vs. software decode support at a glance.
+- **In-App Updates Get a Bottom Sheet**: The update dialog was replaced with a modern bottom sheet that renders release notes as formatted Markdown (headings, lists, bold, links) with version chips, release date, size, and download progress.
+- **Picture-in-Picture Polish**: The media notification now stays available in PiP mode (#402).
+
+### ⚡ Performance, Networking & Stability
+- **One Shared HTTP Stack**: The bundled libcurl was replaced by the app-wide OkHttp client (scripts, Jellyfin reporting, subtitles all included), reducing native footprint and unifying cookies, headers, and TLS handling.
+- **ANR & Leak Fixes**: Fixed a teardown ANR, audio-focus races, and an HLS credential leak; preference listeners are now shared instead of one per collector.
+- **Snappier Lists**: Recently-played lookups are indexed, per-render date formatters were hoisted, recompositions were trimmed in Jellyfin browsing, and the library scrollbar no longer overlaps content.
+- **Cleaner Codebase**: The project was reorganized along MVVM lines (update feature split into domain/UI layers, domain no longer depends on UI), every compiler warning was fixed, and dead code was removed.
+
+## 2.1.0 — Feature & Experience Release
+
+### 🧲 Native Torrent Streaming & Media Browsing
+- **Built-in Torrent Streaming Engine**: Stream and play `.torrent` files, magnet links, and HTTP torrent URLs directly with background piece caching, sequential download prioritization, and integrated local streaming server.
+- **Dedicated Torrent File & Episode Picker**: Interactive file selection screen showing all playable video and audio items within multi-file torrents, complete with individual file sizes, format tags, launch status, and episode labels.
+- **Anime & Series Torrent Cards**: Redesigned Torrent history cards in Network Streaming that automatically group multi-episode series with expandable episode lists, poster art, synopsis, release year, and media type tags.
+- **Smart TMDB Metadata & Artwork Parsing**: Multi-stage metadata engine that intelligently parses filenames, seasons, and episodes (supporting complex scene tags, colon separators like `S1:E1`, cross-format `1x01`, dashes, and anime numbering) with multi-candidate fallback search against TMDB to fetch high-resolution posters, backdrops, and overviews.
+- **Inline Episode Search & Sorting**: Built-in search bar within expanded torrent cards to quickly filter large episode collections by title, file path, or episode number, alongside ascending/descending (1–N / A–Z) sorting toggles.
+- **Torrent Playback History & Progress Memory**: Automatically tracks opened and watched torrent files with checkmark badges and one-tap resume capabilities.
+- **Real-Time Torrent Buffering Status**: Live buffer duration indicator and demuxer cache percentage chip displayed directly beneath the player loading spinner during network cache buffering.
+
+### 🎵 Music Library Revamp & Audio Player Experience
+- **Dedicated Music Library Screen**: Completely redesigned Music tab with organized sub-tabs for **Songs**, **Albums**, **Artists**, **Playlists**, and **Folders**.
+- **Audio Folder Browser & Sorting**: Integrated folder-based audio browser in the Music Library with folder sorting dialog (`FolderSortDialog`), instant text filtering, and clean audio-only traversal.
+- **Customizable & Reorderable Music Sub-Tabs**: Preference setting to toggle visibility and customize the ordering of Music Library sub-tabs to match your workflow.
+- **Interactive Cover Art Swipe Pager**: Horizontal swipe gestures on album art cards to fluidly navigate between previous and next tracks in active playlists with real-time drag physics.
+- **Synchronized LRC Lyrics & In-Place Lyrics View**: Full support for synchronized LRC lyrics featuring white active-line highlighting, tap-to-restore fullscreen mode, auto-hiding controls, and embedded vs. external source toggling.
+- **Audio Visualizers & Reactivity**: Full visualizer support across 4 distinct styles (Galaxy, Blob, 3D Cuboid Warptunnel, Particle) with spectrum capture lifecycle optimizations that suspend rendering behind sheets to save battery.
+- **In-Place Lossless Specs & Audio Enhancements**:
+  - Direct on-card Lossless badge with tap-to-expand details (`HI-RES LOSSLESS`, format, sample rate, bit depth, bitrate).
+  - Quick-access Equalizer button in player controls, dedicated playback speed indicator next to A-B loop, and in-player playlist management.
+  - Dynamic Range Compression (DRC) audio filter and non-overriding filter pipeline.
+
+### 📦 Release Flavors & Device Compatibility
+- **Standard Default Build**: The primary release featuring full `gpu-next` and Vulkan hardware acceleration, built for standard modern Android devices.
+- **Non-Vulkan Compatibility Build**: A dedicated flavor with Vulkan disabled to eliminate startup and playback crashes on legacy GPU drivers and older devices without Vulkan support.
+- **Fongmi High-Performance Build**: Advanced flavor supporting MediaCodec hardware decoding under Vulkan mode, aggressive rendering optimizations, and Dolby Vision (DV) playback capabilities.
+
+### 🌐 Network Streaming, Proxies & Protocols
+- **In-App HLS Proxy Engine**: Added dedicated local HLS proxy server with a settings toggle for optimized live stream and HLS media handling.
+- **SMB Tree Ownership & Session Reliability**: Resolved DiskShare closing issues where session-cached SMB connections were prematurely closed during per-request streams.
+- **Preserved HTTP Headers & Cookies**: Custom headers, cookies, and user-agent strings are now properly preserved across network stream resolvers and playback requests.
+- **Recent Stream Cards & Quick Autofill**: Quick paste and autofill stream cards with one-tap playback launch.
+
+### 📱 UI Polish, Themes & Controls
+- **New Aurora Theme**: Added modern Aurora gradient color theme and refreshed navigation library icons.
+- **Auto-Marquee for Long Media Titles**: Implemented continuous auto-marquee scrolling for long track names, torrent titles, and episode filenames across all list rows.
+- **Expanded Video Sharpness Limits**: Expanded video sharpness adjustments to a full $\pm 10$ range (Issue #391).
+- **Translucent Bottom Sheets & Normal Seekbar Polish**: Soft translucent sheet background styling (Issue #391) and fixed normal seekbar track coloring in dark themes (Issue #393).
+- **Smooth Tab Pager & Navigation Inset Clearance**: Added pre-paging cache (`beyondViewportPageCount = 1`) and graphics-layer translation to prevent jank during tab swipes, with bottom padding clearance across all tabs to prevent navigation button overlap.
+- **Video Mini-Player Control**: Option to toggle mini-player for video playback independently of audio, with subtitle suppression in mini-player mode.
+- **Pulsing Search Highlights & Autoscroll**: Settings search now smoothly scrolls to and pulses the target preference with a high-contrast highlight indicator.
+- **Unified Audio & Video Folder Blacklisting**: Manage blacklisted directories for audio and video media libraries independently or together.
+- **Supported Codecs Inspection Screen**: Detailed hardware vs. software decoder capabilities list for all audio and video media codecs supported on device.
+- **Full Multi-Language Localization**: Added complete Hindi language translation support alongside English, Arabic, German, Spanish, French, Japanese, Brazilian Portuguese, Russian, and Simplified Chinese.
+
+### ⚡ Performance, Engine & Stability
+- **Upgraded MPV Engine & FFmpeg 9.0**: Updated bundled `mpvlib` binaries with updated SSL certificates, Fongmi Vulkan / MediaCodec support, and universal non-Vulkan fallbacks for older devices.
+- **Precise Network Seek Previews & Seek Guards**: Enhanced seekbar thumbnail scrubbing precision over network streams, non-blocking thumbnail extraction, and seek-guarding to prevent audio stuttering during rapid scrubbing.
+- **Playback History Disambiguation**: Resolved history collisions for same-named files in different directories by keying history records with unique canonical paths (Issue #382).
+- **Jetpack Compose Low-Power Tuning**: Phase-deferred layout and draw calls, memoized image bitmaps, optimized list recycling with `contentType`, and elimination of recomposition stalls during tab swiping.
+- **Memory & Lifecycle Hardening**: Added LeakCanary detection in debug builds, persistent foreground playback notification services, and leak-free session teardowns.
+
+## 2.0.0 — Major Release
+
+### 🎵 Music Player & Audio Experience
+- **Dedicated Music & Audio Player Interface**: Built a full-fledged audio player UI with responsive portrait/landscape layouts, dynamic theme backgrounds, transparent visualizers, cover art polish, and real-time metadata display.
+- **Tablet Landscape Dual-Pane Music Player**: New tablet-optimized two-pane music player layout with smooth drag-and-drop playlist reordering.
+- **Interactive Audio Visualizers**:
+  - **3D Cuboid Warptunnel Visualizer**: Ported native Compose Canvas 3D tunnel visualizer featuring dynamic tunnel radius, touch-steering controls, 3D rotation gestures, pinch-zoom, screen-filling scale, dynamic theme palettes, and interactive reactivity.
+  - **OpenGL Blob & Galaxy Visualizers**: High-rate spectrum capture, FFT audio-capture energy processing, tuned frequency envelopes, frame-time-aware interpolation, and responsive beat decay for smooth, jump-free rendering.
+  - **PCM-based Visualizer Pipeline**: New per-bin FFT texture pipeline for enhanced audio spectrum analysis with dual waveform/FFT capture.
+- **Separate Background Playback Controls**: Introduced independent background playback settings for audio vs. video media with notification permission prompts, system brightness restriction to valid ranges, and automatic service cleanup.
+- **Smarter Media Notifications**: Audio notifications now strip file extensions from track titles and fall back to embedded album art when MPV reports no thumbnail.
+- **Uninterrupted Background Music**: Swiping back during audio playback keeps the song playing, the playback service stays alive when reopening the player from a notification, and toggling the background playback setting off no longer pauses active music.
+- **Equalizer & Audio Filters**: Added a built-in equalizer with debounced MPV audio filter updates for smooth slider movement, A-B looping, and persistent pitch correction controls.
+- **Audio Playlist Management**: Added drag-and-drop playlist item reordering, M3U/IPTV `tvg-logo` thumbnail fallbacks, square 1:1 artwork cards, and automatic sibling audio file list population.
+- **Audio Player Orientation & Controls**: Added configurable audio player orientation settings, centered play/pause controls in portrait mode, and dedicated audio background playback toggle.
+- **Audio Mode UI Fixes**: System bars no longer flicker when opening sheets in audio mode, and seekbar timer colors adapt to the active theme.
+
+### 📺 Google Cast & Remote Controls
+- **Native Cast Integration**: Added stateful Google Cast buttons to both portrait and landscape player control bars with layout migration support for existing configurations.
+- **Local & Remote Media Handoff**: Casts remote HTTP(S) streams directly, while local `file://` and `content://` media are served over a secure, tokenized local HTTP server with byte-range seeking and CORS support.
+- **Remote Cast Controller**: Full-featured remote control dialog supporting play/pause, volume adjustment, seeking, playback speed selection, and media track switching.
+- **Playback Continuity**: Seamlessly synchronizes title, play state, duration, and position when transferring playback between local device and Cast receivers, restoring state on disconnect.
+- **Graceful Cast Degradation**: The player stays fully functional when the Google Cast module is unavailable on a device.
+
+### ⚡ Performance & Video Player Polish
+- **GPU View Transformations**: Implemented hardware-accelerated GPU view transformations for ultra-smooth video panning and zoom.
+- **Refined Touch Gestures**: Restricted video pan gestures to two-finger operations to prevent accidental screen shifts while scrubbing or adjusting volume/brightness. Decoupled video and subtitle gesture toggles.
+- **Snap-to-Preset Hold-Speed**: Hold-speed gesture now snaps to fixed presets (0.5x, 1x, 1.5x, 2x, 2.5x, 3x, 3.5x, 4x) displayed as a clean text pill, replacing the old overlay slider.
+- **Native Ported Thumbnail Pipeline**: Integrated fast native video thumbnail extraction pipeline (ported from mpvRex) for instant seekbar scrubbing previews and refreshed visible thumbnail updates.
+- **YouTube-Style Ambient Lighting**: Added ambient background mode that dynamically projects matching video color highlights around the player.
+- **Display Refresh Rate Auto-Matching**: Automatically adjusts the display refresh rate to match video source frame rates for smooth, tear-free video output.
+- **Anime4K & Vulkan Upscaling**: Added standalone Anime4K Ultra upscaling mode with `gpu-next` Vulkan requirement checks and optimized baseline profiles.
+- **HDR Mode Hardening**: HDR modes are now properly gated by renderer support (GPU Next + Vulkan), colors are restored correctly when HDR is disabled, and your last selected HDR mode is remembered between sessions.
+- **Linear HDR Restored**: Reverted Linear HDR to use mpv-native pipeline without hdr-toys shaders, fixing brightness issues on supported devices.
+- **Robust Player Sessions**: Added an mpv session coordinator that reliably tears down and recovers sessions (no ghost players after crashes), sanitizes the mpv config, and collects player diagnostics.
+- **Negative Brightness Control**: Support for negative brightness adjustment to dim the display below system default minimums.
+- **Instant Video Launch & Startup Optimization**: Offloaded file loading to `Dispatchers.Default` to eliminate UI thread blocking. Deferred cold-start DB init, grammar pre-load, and auto-update checks to cut first-frame time significantly.
+- **Screenshot Timestamps & Templates**: Re-worked screenshot templates (`%F`, `%P`, `%p`, `%wH`, `%wM`, `%wS`, `%wT`) to use exact video playback position instead of wall-clock time.
+- **Audio Decoder Fallback**: Added audio decoder check and fallback for unsupported audio codecs in compressor.
+
+### 📱 UI & Modern Tablet Dual-Pane Design
+- **Telegram-Style Floating Pill Navbar**: Redesigned bottom navigation bar with a modern floating pill design, smooth sliding indicator animations, and gesture-synced pill motion that follows finger swipes across tabs.
+- **Horizontal Pager Tab Navigation**: Implemented swipeable horizontal pager transitions across main navigation tabs (`MainScreen`).
+- **Tablet & Foldable Dual-Pane Layouts**: Full dual-pane interface support for Folder List, File System Browser, and Settings screens with active folder card highlights and animated navigation pills.
+- **Dynamic Grid & Column Layouts**: Independent grid/list view toggles for folders and video lists with custom column counts, side-by-side column sliders, and haptic feedback ticks on snap.
+- **Quick Play FAB & Direct Play Toggle**: Added Quick Play Floating Action Button (FAB) with action menu (Open File, Recently Played, Open Link) and a new **Direct Quick Play** setting to immediately launch recent media without showing the menu.
+- **Tree View Path Compression**: Configurable single-child folder flattening (`Off`, 1–5, `Unlimited`) applied per navigation step.
+- **FAB Alignment & Exit Animations**: Aligned FAB Y-positions across Home, Recents, and File System screens, and preserved floating action bar buttons during exit animations.
+- **Navbar & Toolbar Polish**: Fixed floating navbar bottom inset padding, added a smooth animated selection toolbar, and fixed the bottom navbar hiding in the audio library.
+- **Unified Blur Theme Transitions**: Consistent blur-based theme transitions throughout the app.
+- **Rounded Material Symbol Icons**: All app icons unified onto rounded Material Symbols with a cleaner icon pipeline.
+- **Header Theme Toggle**: Single tap on app name/screen title now toggles dark/light theme with circular reveal animation (always enabled).
+
+### 🌐 Syncplay & Network Streaming
+- **Synchronized Room Playback**: Complete Syncplay client implementation featuring server connections, room creation/joining, MD5 password authentication, latency compensation, protocol version handshakes, and user list sync with background reconnection fixes.
+- **Native HLS/DASH Streaming**: Direct media URLs (`.m3u8`, `.mpd`, `.mp4`, `.ts`) bypass yt-dlp to use MPV's native ffmpeg demuxers for faster, crash-free playback.
+- **Expanded Protocol Support**: Added native stream detection and intent filter handling for `gopher://`, `sctp://`, `data://`, and MIME-only external player intents.
+- **WebDAV Connectivity Enhancements**: Depth-zero `PROPFIND` connection checks for compatibility with servers like FileBrowser Quantum, with consistent trailing slash handling.
+- **yt-dlp Audio Quality Selection**: Preferred audio stream quality selector (Auto, 64, 128, 192, 256 kbps) for network media links.
+- **Lua Script Module Syncing**: Automatically syncs `script-modules/` to internal storage so Lua `require()` calls locate custom MPV modules.
+
+### 🤖 AI Providers & Smart Tools
+- **Multi-Provider AI Engine**: Integrated support for OpenAI, Anthropic, Groq, OpenRouter, Together AI, and OpenCode.
+- **Resilient AI Parsing**: Added reasoning-block stripping, fallback JSON parsers, and provider-specific model memory for smart file renaming and subtitle cleanup.
+
+### 🔍 Subtitle System & Search
+- **Real-Time Subtitle Merging**: Online subtitle search results from SubHub and Wyzie stream in live as requests complete.
+- **Anime Skip Integration**: Added Anime Skip provider integration (GraphQL api.anime-skip.com) for intro/ending detection, and removed obsolete TMDB mirror.
+- **Hitbox & Gesture Adjustments**: Dynamic multi-line wrapped text hitbox calculations under zoom/pan, option to invert swipe subtitle gesture direction, and automatic secondary subtitle position offset using primary hitbox to prevent overlap.
+- **Subtitle Track Roles**: Subtitle track sheet now displays track roles (primary/secondary) for multi-role subtitle tracks.
+- **Stream Subtitle Fix**: Subtitles load reliably on network streams without breaking background playback.
+- **Korean Subtitle Fix**: Fixed broken Korean Jamo rendering using NFC Unicode normalization.
+- **Subtitle Persistence & Search Keyboard Fix**: Subtitles persist across sessions reliably (`addSubtitleSuspend`), and soft keyboard no longer covers the subtitle search dialog (`adjustResize`).
+
+### ⚙️ Settings, Lifecycle, i18n & Binary Footprint
+- **Dedicated MediaSearchEngine**: High-performance search engine indexing files and folders with VideoFolder references.
+- **Incremental Folder Scanning**: Hidden folder scanning is now incremental and DB-backed, so revisiting large libraries is dramatically faster.
+- **Settings Search & Suggestions**: Dynamic reflection-based settings search with query history and real-time suggestions.
+- **App Language Preference**: Added per-app language selection independent of system language settings.
+- **Redesigned Permission Setup**: Storage permission page redesigned with separate File & Notification sections and a guided Next-button flow, now responsive across screen sizes.
+- **mpv Config Validation**: The config editor validates `mpv.conf` before saving and properly closes editor streams to avoid file lockups.
+- **Folder Deletion Behavior**: Media-only deletion mode by default (removes video/audio files while protecting documents/images) with full recursive deletion toggle in settings.
+- **Unified Background Playback Lifecycle**: Streamlined PiP transitions, screen lock/unlock handling, and task removal behavior for Android 15/16.
+- **Android 16 Compatibility**: Native libmpv subprocess handling updated for Android 16, with a cache-safe, coordinated MPV teardown process.
+- **Binary Footprint Optimization**: Removed ~50 MB of unused `libpython_bin.so` binaries across all CPU architectures.
+- **Toast Notifications for Blocked Audio**: Displays helpful toast alerts when background playback is restricted by notification settings.
+- **Memory Leak & Crash Fixes**: Plugged 5 memory leaks across player activity, main activity, and background services, and fixed audio player back navigation crashes.
+- **Full Multi-Language Localization**: Complete string key synchronization and translations across English, Arabic, German, Spanish, French, Japanese, Brazilian Portuguese, Russian, and Simplified Chinese.
+- **Code Cleanup**: Removed dead code, extracted shared utilities, DRY/SOLID cleanup across codebase.
+
+### 🔒 Secure Folder
+- **PIN Gate & Grid Screen**: Secure Folder now requires PIN authentication before access, with a grid view of secured media.
+- **Biometric Authentication**: Added fingerprint and face unlock support for quick access (when device supports BIOMETRIC_STRONG).
+- **Layout Mode**: Enabled List/Grid layout toggle in Secure Folder sort options.
+- **Back Button Behavior**: Pressing back in selection mode now deselects all items first before navigating back.
+- **Hide Entry Point**: Option to hide Secure Folder from preferences (still accessible via title double-tap).
+- **Don't Ask Again Flags**: Added "don't ask again" options for move, restore, delete, and hide entry point confirmations.
+- **Tablet Responsiveness**: Improved Secure Folder UI for tablet and foldable devices.
+
+### 🏷️ Branding, Licensing & Cleanup
+- **App Rename**: The app is now branded **mpvRx** (renamed from "MpvRx") across UI, docs, and metadata.
+- **New License**: Relicensed to **CC BY-NC 4.0** with license headers applied across the codebase.
+- **Acknowledgements**: Added credit for MpvRex and Pixel Player (UI and thumbnail pipeline inspiration) and AFinity.
+- **Code Quality**: Added ktlint formatting enforcement and fixed AAPT resource and Kotlin compiler warnings.
+
+## 1.5.0-preview.5 — Preview Release
+
+### Syncplay
+- **Synchronized room playback**: Added Syncplay server, room, username, and optional password controls to Network Streaming.
+- **Live player integration**: Local pause, resume, seek, file, and playback-position changes are shared with the room, while remote room updates are applied to mpv.
+- **Protocol compatibility fixes**: Added the legacy and real protocol version handshake fields, MD5 server-password handling, latency compensation, user-list updates, and `ignoringOnTheFly` feedback suppression.
+- **Localized interface**: Extracted all Syncplay UI text into Android resources and translated it for Arabic, German, Spanish, French, Japanese, Brazilian Portuguese, Russian, and Simplified Chinese.
+
+### Google Cast
+- **Native Cast control**: Added the standard stateful Google Cast button to portrait and landscape player controls, including a one-time layout migration for existing users.
+- **Local and remote media handoff**: Receiver-accessible HTTP(S) streams are loaded directly; Android-local `file://` and `content://` media use a tokenized temporary LAN server with byte-range seeking and CORS support.
+- **Playback continuity**: The sender transfers title, play state, duration, and current position, pauses local playback after a successful receiver load, and restores local playback at the receiver position when casting ends.
+- **Complete sender controls**: Added Cast SDK expanded controls, notification/lock-screen integration, reconnection support, and receiver volume controls.
+- **Receiver compatibility guardrail**: Casting uses Google's Default Media Receiver, so containers and codecs unsupported by the selected TV/Chromecast are not transcoded automatically.
+
+### Playback Lifecycle & Background Playback
+- **One background playback switch**: Audio preferences and the player background button now control the same persistent setting for both audio and video.
+- **Reliable screen lock and unlock handling**: Playback now follows the selected background policy across screen-off, lock-screen, unlock, and resume transitions without losing the prior play state.
+- **PiP lifecycle coordination**: Picture-in-picture transitions, PiP dismissal, screen locking while in PiP, and activity teardown now share one lifecycle policy instead of competing playback paths.
+- **Persistent task-removal playback**: Swiping the app out of Recents no longer kills an active foreground playback session, so background audio continues until explicitly stopped.
+- **Foreground service cleanup**: Disabling background playback immediately pauses playback and stops its foreground service and notification.
+- **Preference migration**: Existing users who enabled the legacy audio-only screen-lock option are migrated to the unified background playback setting.
+
+### Subtitle Search
+- **Results appear as they arrive**: Online subtitle results are merged into the list as each selected SubHub source or Wyzie completes instead of waiting for every request.
+- **Race-free repeat searches**: Starting another subtitle search cancels the previous request and clears stale results before streaming the new matches.
+
+### Playback Engine
+- **Updated bundled mpvlib**: Refreshed the packaged `mpvlib.aar` used by all preview APK variants.
+
+### Media Library & Audio Browsing
+- **Preference-aware media switch**: The Video/Audio selector appears only when audio browsing is enabled, remembers the selected library type, and resets to Video when audio browsing is disabled.
+- **Complete audio playlists**: Audio launches now populate the active playlist so previous and next controls update and navigate correctly.
+- **Square audio artwork**: Audio thumbnails use a square presentation in both grid and list cards while video thumbnails remain 16:9.
+- **Audio-safe editing**: Video compression actions are hidden for audio selections and guarded from opening with audio files.
+
+### Player Polish
+- **Rounded streaming cache indicator**: Buffered seekbar progress is clipped to the same pill-shaped ends as the normal seek track.
+- **Smoother natural visualizer**: Higher-rate spectrum capture, tuned frequency envelopes, frame-time-aware interpolation, and responsive beat decay make the audio blob react fluidly without harsh jumps.
+
+### AI Providers & Smart Tools
+- **Current provider protocols**: OpenAI, Anthropic, Groq, OpenRouter, Together, and OpenCode Zen requests now follow their current API shapes; OpenCode models are routed through Responses, Messages, Gemini, or Chat Completions as required.
+- **Resilient response parsing**: Text, multipart content, reasoning blocks, citations, provider errors, and both object- and array-based model lists are parsed without relying on one rigid response schema.
+- **Thinking-model rename fixes**: AI rename and subtitle-title output now discard reasoning and code fences, accept structured JSON fields, preserve extensions, and reject empty or unsafe names.
+- **Provider-specific model memory**: Each provider keeps its own selected model and cached model list, preventing stale selections when switching services.
+- **Correct speech endpoints**: Groq and OpenAI use supported transcription models, while OpenRouter speech requests use its current base64 JSON audio format.
+
+## 1.5.0-preview.4 — Preview Release
+
+### Google Cast
+- **Native Cast control**: Added the standard stateful Google Cast button to portrait and landscape player controls, including a one-time layout migration for existing users.
+- **Local and remote media handoff**: Receiver-accessible HTTP(S) streams are loaded directly; Android-local `file://` and `content://` media use a tokenized temporary LAN server with byte-range seeking and CORS support.
+- **Playback continuity**: The sender transfers title, play state, duration, and current position, pauses local playback after a successful receiver load, and restores local playback at the receiver position when casting ends.
+- **Complete sender controls**: Added Cast SDK expanded controls, notification/lock-screen integration, reconnection support, and receiver volume controls.
+- **Receiver compatibility guardrail**: Casting uses Google's Default Media Receiver, so containers and codecs unsupported by the selected TV/Chromecast are not transcoded automatically.
+
+### Playback Lifecycle & Background Playback
+- **One background playback switch**: Audio preferences and the player background button now control the same persistent setting for both audio and video.
+- **Reliable screen lock and unlock handling**: Playback now follows the selected background policy across screen-off, lock-screen, unlock, and resume transitions without losing the prior play state.
+- **PiP lifecycle coordination**: Picture-in-picture transitions, PiP dismissal, screen locking while in PiP, and activity teardown now share one lifecycle policy instead of competing playback paths.
+- **Persistent task-removal playback**: Swiping the app out of Recents no longer kills an active foreground playback session, so background audio continues until explicitly stopped.
+- **Foreground service cleanup**: Disabling background playback immediately pauses playback and stops its foreground service and notification.
+- **Preference migration**: Existing users who enabled the legacy audio-only screen-lock option are migrated to the unified background playback setting.
+
+### Subtitle Search
+- **Results appear as they arrive**: Online subtitle results are merged into the list as each selected SubHub source or Wyzie completes instead of waiting for every request.
+- **Race-free repeat searches**: Starting another subtitle search cancels the previous request and clears stale results before streaming the new matches.
+
+### Playback Engine
+- **Updated bundled mpvlib**: Refreshed the packaged `mpvlib.aar` used by all preview APK variants.
+
+### Media Library & Audio Browsing
+- **Preference-aware media switch**: The Video/Audio selector appears only when audio browsing is enabled, remembers the selected library type, and resets to Video when audio browsing is disabled.
+- **Complete audio playlists**: Audio launches now populate the active playlist so previous and next controls update and navigate correctly.
+- **Square audio artwork**: Audio thumbnails use a square presentation in both grid and list cards while video thumbnails remain 16:9.
+- **Audio-safe editing**: Video compression actions are hidden for audio selections and guarded from opening with audio files.
+
+### Player Polish
+- **Rounded streaming cache indicator**: Buffered seekbar progress is clipped to the same pill-shaped ends as the normal seek track.
+- **Smoother natural visualizer**: Higher-rate spectrum capture, tuned frequency envelopes, frame-time-aware interpolation, and responsive beat decay make the audio blob react fluidly without harsh jumps.
+
+### AI Providers & Smart Tools
+- **Current provider protocols**: OpenAI, Anthropic, Groq, OpenRouter, Together, and OpenCode Zen requests now follow their current API shapes; OpenCode models are routed through Responses, Messages, Gemini, or Chat Completions as required.
+- **Resilient response parsing**: Text, multipart content, reasoning blocks, citations, provider errors, and both object- and array-based model lists are parsed without relying on one rigid response schema.
+- **Thinking-model rename fixes**: AI rename and subtitle-title output now discard reasoning and code fences, accept structured JSON fields, preserve extensions, and reject empty or unsafe names.
+- **Provider-specific model memory**: Each provider keeps its own selected model and cached model list, preventing stale selections when switching services.
+- **Correct speech endpoints**: Groq and OpenAI use supported transcription models, while OpenRouter speech requests use its current base64 JSON audio format.
+
+## 1.5.0-preview.3 — Preview Release
+
+### Playback Hotfix
+- **Audio and video transitions rebuilt**: Every item is loaded with file-local video-track selection, preventing audio state from producing a black screen on the next video.
+- **Reliable next-item playback**: Runtime navigation now sends an actual mpv `loadfile` replacement and clears the previous EOF pause state.
+- **Preference-safe EOF handling**: Autoplay, Repeat One, Repeat All, Shuffle, playlist mode, and close-at-end now behave consistently, including very short audio files.
+- **Safe seeking**: Audio never enters the native video-thumbnail path, and video thumbnails are generated only on demand while scrubbing—not automatically during file load.
+- **Separated render surfaces**: The blob surface is mounted only for media independently identified as audio, preventing it from covering video during track-list transitions.
+- **True beat response**: With audio-capture permission, real FFT data exclusively drives the blob; brightness and bloom are reduced while bass onsets pulse more clearly.
+
+### 🔊 Audio Blob Visualizer
+- **OpenGL ES 3.0 blob visualizer** — when playing audio without cover art, a reactive 3D blob appears behind the player controls. The blob morphs, pulses, and shifts color based on audio energy with a bloom/glow post-process.
+- **Touch rotation**: Drag the blob to rotate it in 3D.
+- **Pinch zoom fixed**: The blob now properly shrinks/enlarges when pinching — `pinchScaleFromRenderer()` was hardcoded to always return `1f`, resetting zoom on every new gesture.
+- **Smaller default size**: Camera distance increased so the blob fits cleanly within screen bounds instead of nearly filling the height.
+- **Audio Preferences toggle**: New "Audio blob visualizer" switch in Settings > Audio to enable or disable it.
+- **Audio filter setting moved**: Audio filter (compressor/equalizer) options now live in Audio Preferences instead of the player's MoreSheet.
+
+### 🎬 yt-dlp Changes
+- **Audio quality preferences**: Independent bitrate caps for `Auto`, 64, 128, 192, and 256 kbps — composed with existing codec, resolution, FPS, HDR, and container selectors.
+- **Serialized URL loading**: Initial and replacement URL loads now use one cancellable serialized job, preventing overlapping libmpv commands when links are pasted rapidly.
+- **Graceful error recovery**: Recoverable URL load failures return to the player UI with an error message instead of escaping to the process-wide crash handler.
+- **Audio quality removed from MoreSheet**: yt-dlp audio quality selector moved from the player's MoreSheet to yt-dlp settings.
+
+### 📻 Audio Browsing
+- **MediaStore + filesystem discovery** for common audio formats, neutral media counts, audio MIME mapping, and Android 13 `READ_MEDIA_AUDIO` permission handling.
+- **Audio cards** show metadata titles, embedded cover artwork when available (via `audio-display=embedded-first`), and a music-note fallback icon.
+- **Portrait-only playback** — audio files force sensor-portrait orientation and prevent the rotation action from switching back to landscape.
+- **Sibling playlist includes audio** — when "Include audio" is on, the next/previous track list includes audio files from the same folder.
+- **Audio icon placeholder fix**: Exported icon now displays correctly for audio files without cover art.
+- **Audio pitch correction fix**: Pitch correction no longer persists when switching to a new video — resets to default per-file.
+- **Audio autoplay race condition fixed**: Eliminated a race condition that could cause audio files to fail starting playback.
+
+### 🌐 Network & External Playback
+- **WebDAV PROPFIND fix**: Connection checks now use a depth-zero `PROPFIND` request instead of Sardine's `HEAD`-based `exists()` call, making it work with servers like FileBrowser Quantum that reject `HEAD` on DAV collections.
+- **WebDAV trailing slash**: Collection URLs consistently keep a trailing slash during validation and browsing.
+- **External-player discovery**: Added a MIME-only intent filter so external-player pickers can find mpvRx before attaching the final video or audio URI.
+- **More protocol support**: Added `gopher://`, `sctp://`, and `data://` to network stream detection and intent filters.
+- **Stream compatibility improved**: Better handling of edge-case media streams and improved browsing reliability.
+
+### 🌲 Tree View Navigation
+- **Configurable path compression**: New `Off`, 1–5, and `Unlimited` choices for single-child folder flattening. Applied independently per navigation step, preserving predictable physical paths. Tree View refreshes instantly when the depth changes.
+
+### 🎨 Icon Consistency
+- Converted all three `painterResource(R.drawable.ic_material_symbols_check)` usages to `Icons.Default.Check` through the app's `AppIcon` / `Icon` system.
+- `SectionHeader.leadingIcon` and `CompactExpressiveIconButton.imageVector` now accept `AppIcon` instead of raw `ImageVector`, keeping everything on the unified icon pipeline.
+
+### 🔊 Audio Playback Runtime Fixes
+- **`local_media_path` extra**: Internal launches now pass the resolved filesystem path alongside the content URI, giving mpv a reliable fallback when `content://` URIs fail.
+- **Serialized load dispatcher**: Added a dedicated `Dispatchers.Default.limitedParallelism(1)` dispatcher for media loading — prevents race conditions when queuing multiple load commands.
+- **`vid=auto` before playback**: Non-M3U file loads explicitly reset the video track to auto before loading, avoiding "no video track" state from previous audio-only plays.
+- **`audio-display=embedded-first`**: Enabled MPV's embedded cover art rendering for audio files.
+- **Orientation on audio launch**: `setOrientation()` checks `isKnownAudioLaunch()` immediately, before the track-list event settles — fixes the black-screen + landscape glitch on audio start.
+- **Subtitle "Off" option**: Added an explicit "Off" choice in the player subtitle sheet so users can disable subtitles without cycling through all tracks.
+
+### 🗑️ Folder Deletion Behavior
+- **Media-only deletion (default)**: Deleting a folder now only removes audio/video files — other files (images, logs, documents) are left untouched.
+- **"Delete folder + all contents" toggle**: New option in Appearance Settings > File Browser to switch back to full recursive deletion when needed.
+- **Album View cleanup fix**: Fixed an issue where the last video file in a folder was deleted but the empty folder remained.
+
+### 📱 Tablet & Display
+- **Dynamic refresh rate**: The player can now dynamically adjust the display refresh rate to match the video frame rate for smoother playback.
+- **Dual-pane navigation fix**: Resolved a state leak that could cause crashes when navigating in tablet dual-pane mode.
+- **Dual-pane settings button hidden**: The redundant settings button is no longer shown in dual-pane mode on tablets.
+- **Folder card height fix**: Manual grid column counts now align properly with folder card heights in dual-pane layout.
+
+### 🔍 Settings Search
+- **Search history**: Recently searched terms are saved and displayed for quick re-selection.
+- **Search suggestions**: The search field now shows contextual suggestions as you type.
+- **Reflection-based fallback**: Settings search can dynamically discover settings via reflection when static indices are incomplete.
+
+
+
+## 1.5.0-preview.2 — Preview Release
+
+### 📦 MpvLib Update
+- Updated mpv library and its dependencies
+
+### ⚡ Performance & Startup
+- **Faster video open**: Opening a video file now uses `Dispatchers.Default` for the `playFile()` call — keeps the UI thread free and the player starts faster
+- **Leaner startup sync**: The MPV directory sync no longer blanket-copies `shaders/` and `fonts/` on every launch — only config files, scripts, and `script-opts/` are synced upfront. Shaders referenced in `mpv.conf` are pulled on demand via `syncReferencedShaders()`, and fonts are handled by the font manager. This cuts down startup time noticeably, especially for users with large shader packs
+- **Removed Dynamic Speed Overlay**: The old `SpeedControlSlider` (a full-size overlay with a dot-track slider) and `CompactSpeedIndicator` are gone. Hold-speed is now shown as a simple, clean text pill (e.g. "2x"). The `showDynamicSpeedOverlay` preference has been removed too — no more toggles, no more clutter
+- **Snap-to-preset hold speed**: The hold-speed gesture now snaps to fixed presets (0.5x → 1x → 1.5x → 2x → 2.5x → 3x → 3.5x → 4x) instead of a free-form slider. The settings slider also snaps to these values, so what you see is what you get
+- **Hold speed range capped**: Boost speed is now capped at 0.5x–4x range (previously went up to 6x)
+
+### 📱 Tablet Dual-Pane Layouts
+- **Folder view dual pane**: On tablets (600dp+ smallest screen width), you can now see your folder list on the left and a video list on the right — tap a folder, see its contents immediately beside it. A new "Dual Pane View" toggle in Appearance Settings lets you turn this on/off
+- **Settings dual pane**: The Settings screen also gets a two-panel layout on tablets — the section list stays on the left, and the selected settings page opens on the right. The currently active section is highlighted with a subtle background
+- **Back navigation in dual pane**: Pressing back in dual-pane mode deselects the folder/settings page instead of closing the screen
+
+### 🎥 Player & Subtitles
+- **Invert swipe subtitle direction**: New "Invert swipe subtitles direction" setting in Gesture Preferences. When enabled, swiping left-to-right seeks backward and right-to-left seeks forward — useful if you prefer the mirrored behaviour
+- **Screenshot overhaul**: Screenshot filename templates got a proper rework:
+  - `%wH`, `%wM`, `%wS`, `%wT` now use the **video playback position** (not the wall clock time) — so screenshot filenames actually match the video timestamp
+  - New template placeholders: `%F` (filename without extension), `%P` (position as `HH:MM:SS.mmm`), `%p` (position as `HH:MM:SS`)
+  - `%f` now resolves from the actual filename first, falling back to media-title — more reliable naming
+- **Korean Jamo subtitle fix**: Downloaded subtitles that use Korean Jamo (composite characters) now go through NFC Unicode normalization. No more broken/corrupted Korean glyphs in subtitles
+- **Subtitle search keyboard fix**: Added `android:windowSoftInputMode="adjustResize"` to PlayerActivity — the subtitle search dialog no longer gets hidden behind the on-screen keyboard
+- **Subtitle persistence fix**: External subtitles and subtitle settings now survive across playback sessions more reliably. Added `addSubtitleSuspend()` (suspend version) for better coroutine handling during subtitle loading
+- **Cache indicator fix**: The buffered range on the seekbar no longer double-counts the played portion — it now shows the correct remaining buffer ahead of the playhead
+- **Color hex fix**: `toColorHexString()` now manually extracts ARGB components instead of using `Int.toHexString()` which produced wrong values for some colors
+
+### 🛠️ Lua Script Improvements
+- **Lua `require()` support**: Custom Lua scripts using `require()` can now find modules in `script-modules/` subdirectories. The app recursively syncs helper folders from `scripts/` to internal storage, so Lua's C-level `fopen()` can actually read them. Modules are also cleaned up when scripts are disabled in settings
+
+### 🧹 Cleanup
+- **Removed libpython binaries**: Deleted ~50 MB of unused `libpython_bin.so` files from all 4 architectures — they were never loaded by the app
+- **Simplified MPV version display**: Removed the `cleanBundledMpvVersion()` hack in CrashActivity — MPV version now shows cleanly without needing string patching
+- **Fonts folder no longer auto-set**: When changing the base storage root, the fonts folder preference is no longer blindly overwritten — it's only cleared if it was pointing at the old root. This prevents accidental font-folder resets
+
+## 1.5.0-preview.1 — Preview Release
+
+### 📦 MpvLib Update
+- Updated mpv library and its dependencies 
+
+### ⚡ Performance & Stability
+- **Startup optimization**: Deferred cold-start DB initialization, grammar pre-load, and auto-update check to cut first-frame time significantly
+- **Memory leak fixes**: Plugged 5 memory leaks across PlayerActivity (screen-state receiver), PlayerViewModel (LRU caches, temp subtitle cleanup), MediaPlaybackService (bitmap leak), MainActivity (unused scope), and NetworkLifecycleObserver (uncancelled coroutine)
+- **UI smoothness**: Optimized seekbar spring animation, precomputed skip-segment colors, memoized immutable copies in PlayerControls, hoisted per-card preference collectors
+- **Player crash fix**: Resolved a crash in PlayerActivity during stream initialization
+- **Streaming optimizations**: Load network streams on `Dispatchers.IO` instead of Default to reduce CPU pool contention
+
+### 🎨 UI/UX Improvements
+- **Dynamic Grids**: Added responsive grid layouts — auto-adjusts column count based on screen width across FileSystemBrowser, FolderList, VideoList, Playlist, and RecentlyPlayed screens
+- **Centered controls**: Play/pause and navigation buttons now center in portrait mode
+- **Haptic feedback**: Sort dialog sliders now provide haptic ticks on snap
+- **Slider layout**: Column sliders placed side-by-side for better space usage
+- **Theme refresh**: Boosted container saturation and surface tints across all themes (light/dark) for vivid, non-washed-out appearance
+- **Subtitle sheet redesign**: Inline SeriesSelectionControls directly in the OnlineSubtitleSearchSheet search row
+- **Compressor back-press fix**: Video compressor overlay now handles system back press correctly
+
+### 🎥 Player & Streaming
+- **HLS/DASH streaming fix**: Direct media URLs (.m3u8/.mpd/.mp4/.ts) now bypass yt-dlp and use mpv's native ffmpeg HLS demuxer — these streams previously failed in yt-dlp's generic extractor
+- **yt-dlp audio selection**: New audio track selector in the yt-dlp panel; preferred languages sanitization for better auto-selection
+- **Collapsible advanced settings**: YtdlpSettingsScreen now organizes advanced options under collapsible sections
+- **Console option**: Added Console toggle in MoreSheet stats rows — opens the mpv debug console via script-message
+- **Subtitle hitbox fixes**: Dynamic hitbox detection for multi-line wrapped text; fixed hitbox under zoom/pan; lowered minimum subtitle scale limit
+- **Subtitle loading fix**: Fixed subtitle loading and player overlay issues with IntentSubtitleLoadPolicy and M3uPlaybackPolicy
+- **Negative brightness**: Added negative brightness range support in vertical sliders
+- **Streaming overlays**: Fixed streaming playback overlays and thumbnail rendering
+
+### 🔍 Anime Skip Provider
+- New **Anime Skip** provider (api.anime-skip.com GraphQL) for intro/ending detection — searches via MAL ID, pairs consecutive timestamps
+- Removed dead db.videasy.net TMDB mirror (providers now skip IMDB resolution without it)
+- Cleaned up WyzieSearchRepository: removed fallback mirror logic and dead VideasyTmdbTrendingResponse
+
+### 📁 Media Search Engine
+- **New MediaSearchEngine**: Dedicated search engine for searching files/folders with optimized indexing
+- **FolderListScreen integration**: Search across folders and videos using the new engine with VideoFolder references
+- **Multiple refactors**: Cleaned up search logic, improved readability, and added Kotlin smart-casting clarifications
 
 ### 🐛 Bug Fixes
-
-The **rotation/black-screen flash on exit** has haunted this fork for a while — this release fixes the large majority of cases, with several genuinely separate causes resolved:
-- System back (gesture/button) was sometimes silently disabled, which could stop background audio and skip folder-return logic.
-- The exit orientation lock could get overridden mid-transition by an unrelated background process.
-- The "instant exit" setting wasn't actually taking effect due to a timing bug.
-- Android 14's own predictive-back preview is now suppressed specifically for the player.
-- The manual background-play button had its own separate flash — fixed by locking orientation earlier in the process.
-
-Also fixed:
-- Audio-only folders not showing up when Audio Player is enabled.
-- Video pausing/restarting briefly when switching system day/night theme.
-- A UI blink when returning to the home screen after playback.
-- Single-tap on the FAB sometimes doing nothing.
-
-### 💡 Known Limitations
-
-- With the **system-wide Android "Predictive Back Animations"** developer setting on, a very brief black-screen flash can still occasionally occur on exit. Turning that system setting off avoids it entirely.
-- A few 10-bit/AVI files may still show inconsistent thumbnails on some devices.
-
-✨ Default Settings Changes
-Smooth Back Animation: now on by default
-Easy Unlock: now on by default
-Hide Player Buttons Background: now on by default
-Seekbar Style: now defaults to Standard (was Thick)
-Use Online Skip Markers: now off by default
-Bottom navigation tabs (Home, Recents, Playlists, Network): now off by default
----
-
+- Fixed mpv console ytdl_hook warnings (removed invalid 'all_subtitles' option)
+- Fixed video-aspect-override deprecation warnings
+- Resolved player crash during stream playback
+- Fixed subtitle swipe gesture hitbox
+- Fixed dynamic grid rendering edge cases
 
 ## 1.4.1-final
 

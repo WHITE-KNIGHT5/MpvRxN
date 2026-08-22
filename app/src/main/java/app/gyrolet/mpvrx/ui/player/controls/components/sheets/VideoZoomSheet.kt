@@ -1,7 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components.sheets
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -21,8 +29,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import app.gyrolet.mpvrx.ui.components.IconSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,8 +48,9 @@ import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.components.PlayerSheet
 import app.gyrolet.mpvrx.presentation.components.SliderItem
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
 import org.koin.compose.koinInject
 
 @Composable
@@ -51,6 +59,8 @@ fun VideoZoomSheet(
   onSetVideoZoom: (Float) -> Unit,
   onResetVideoPan: () -> Unit,
   onDismissRequest: () -> Unit,
+  zoomControlEnabled: Boolean = true,
+  panControlEnabled: Boolean = true,
   modifier: Modifier = Modifier,
 ) {
   val playerPreferences = koinInject<PlayerPreferences>()
@@ -61,12 +71,12 @@ fun VideoZoomSheet(
   val currentOnSetVideoZoom by rememberUpdatedState(onSetVideoZoom)
 
   LaunchedEffect(Unit) {
-    val mpvZoom = MPVLib.getPropertyDouble("video-zoom")?.toFloat() ?: videoZoom
+    val mpvZoom = PlaybackSession.getPropertyDouble("video-zoom")?.toFloat() ?: videoZoom
     zoom = mpvZoom
   }
 
   LaunchedEffect(zoom) {
-    currentOnSetVideoZoom(zoom)
+    if (zoomControlEnabled) currentOnSetVideoZoom(zoom)
   }
 
   PlayerSheet(onDismissRequest = onDismissRequest) {
@@ -76,12 +86,14 @@ fun VideoZoomSheet(
       panAndZoomEnabled = panAndZoomEnabled,
       onZoomChange = { newZoom -> zoom = newZoom },
       onSetAsDefault = {
-        playerPreferences.defaultVideoZoom.set(zoom)
+        if (zoomControlEnabled) playerPreferences.defaultVideoZoom.set(zoom)
       },
       onReset = {
-        zoom = 0f
-        playerPreferences.defaultVideoZoom.set(0f)
-        onResetVideoPan()
+        if (zoomControlEnabled) {
+          zoom = 0f
+          playerPreferences.defaultVideoZoom.set(0f)
+        }
+        if (panControlEnabled) onResetVideoPan()
       },
       onPanAndZoomToggle = { enabled ->
         playerPreferences.panAndZoomEnabled.set(enabled)
@@ -89,6 +101,8 @@ fun VideoZoomSheet(
           onResetVideoPan()
         }
       },
+      zoomControlEnabled = zoomControlEnabled,
+      panControlEnabled = panControlEnabled,
       modifier = modifier,
     )
   }
@@ -103,6 +117,8 @@ private fun ZoomVideoSheet(
   onSetAsDefault: () -> Unit,
   onReset: () -> Unit,
   onPanAndZoomToggle: (Boolean) -> Unit,
+  zoomControlEnabled: Boolean,
+  panControlEnabled: Boolean,
   modifier: Modifier = Modifier,
 ) {
   val isDefault = zoom == defaultZoom
@@ -130,9 +146,16 @@ private fun ZoomVideoSheet(
           val newZoom = (zoom - 0.01f).coerceAtLeast(-1f)
           onZoomChange(newZoom)
         },
+        enabled = zoomControlEnabled,
         modifier = Modifier.size(36.dp),
       ) {
-        Icon(Icons.Default.Remove, contentDescription = "Decrease zoom", modifier = Modifier.size(18.dp))
+        Icon(
+          Icons.RoundedFilled.Remove,
+          contentDescription =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_decrease_zoom),
+          modifier = Modifier.size(18.dp),
+        )
       }
 
       SliderItem(
@@ -142,6 +165,7 @@ private fun ZoomVideoSheet(
         onChange = onZoomChange,
         max = 3f,
         min = -1f,
+        enabled = zoomControlEnabled,
         modifier = Modifier.weight(1f),
       )
 
@@ -150,9 +174,16 @@ private fun ZoomVideoSheet(
           val newZoom = (zoom + 0.01f).coerceAtMost(3f)
           onZoomChange(newZoom)
         },
+        enabled = zoomControlEnabled,
         modifier = Modifier.size(36.dp),
       ) {
-        Icon(Icons.Default.Add, contentDescription = "Increase zoom", modifier = Modifier.size(18.dp))
+        Icon(
+          Icons.RoundedFilled.Add,
+          contentDescription =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_increase_zoom),
+          modifier = Modifier.size(18.dp),
+        )
       }
     }
 
@@ -173,39 +204,26 @@ private fun ZoomVideoSheet(
       Row(
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Switch(
+        IconSwitch(
           checked = panAndZoomEnabled,
           onCheckedChange = onPanAndZoomToggle,
           modifier = Modifier.scale(0.8f),
-          thumbContent = {
-            Crossfade(
-              targetState = panAndZoomEnabled,
-              animationSpec = tween(durationMillis = 200),
-              label = "SwitchIconAnimation"
-            ) { isChecked ->
-              if (isChecked) {
-                Icon(
-                  Icons.Filled.Check,
-                  contentDescription = null,
-                  modifier = Modifier.size(SwitchDefaults.IconSize),
-                  tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-              } else {
-                Icon(
-                  Icons.Filled.Close,
-                  contentDescription = null,
-                  modifier = Modifier.size(SwitchDefaults.IconSize),
-                  tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-            }
-          }
+          enabled = panControlEnabled,
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-          text = "Pan & Zoom",
+          text =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_pan_zoom),
           style = MaterialTheme.typography.bodyMedium,
-          color = if (panAndZoomEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+          color =
+            if (!panControlEnabled) {
+              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            } else if (panAndZoomEnabled) {
+              MaterialTheme.colorScheme.primary
+            } else {
+              MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
       }
 
@@ -216,7 +234,7 @@ private fun ZoomVideoSheet(
       ) {
         OutlinedButton(
           onClick = onSetAsDefault,
-          enabled = !isDefault,
+          enabled = zoomControlEnabled && !isDefault,
           modifier = Modifier.weight(1f),
         ) {
           Text(stringResource(R.string.set_as_default), style = MaterialTheme.typography.labelMedium)
@@ -224,7 +242,7 @@ private fun ZoomVideoSheet(
 
         Button(
           onClick = onReset,
-          enabled = !isZero,
+          enabled = (zoomControlEnabled && !isZero) || panControlEnabled,
           modifier = Modifier.weight(1f),
         ) {
           Text(stringResource(R.string.generic_reset), style = MaterialTheme.typography.labelMedium)
@@ -233,7 +251,3 @@ private fun ZoomVideoSheet(
     }
   }
 }
-
-
-
-

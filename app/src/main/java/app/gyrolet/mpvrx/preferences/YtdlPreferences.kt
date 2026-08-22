@@ -1,7 +1,18 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.preferences
 
 import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.getEnum
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlAudioPreference
+import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlAudioQuality
 import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlCodecPreference
 import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlContainerPreference
 import app.gyrolet.mpvrx.ui.player.ytdlp.YtdlHdrPreference
@@ -17,6 +28,8 @@ class YtdlPreferences(
   val maxFps = preferenceStore.getInt("ytdl_max_fps", 0)
   val hdrPreference = preferenceStore.getEnum("ytdl_hdr_preference", YtdlHdrPreference.ANY)
   val containerPreference = preferenceStore.getEnum("ytdl_container_preference", YtdlContainerPreference.ANY)
+  val audioPreference = preferenceStore.getEnum("ytdl_audio_preference", YtdlAudioPreference.AUTO)
+  val audioQuality = preferenceStore.getEnum("ytdl_audio_quality", YtdlAudioQuality.AUTO)
   val formatSort = preferenceStore.getString("ytdl_format_sort", "")
   val mergeOutputFormat = preferenceStore.getString("ytdl_merge_output_format", "")
 

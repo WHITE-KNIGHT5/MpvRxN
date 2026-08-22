@@ -1,5 +1,16 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.browser.dialogs
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -15,12 +26,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -33,24 +46,26 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ripple
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import app.gyrolet.mpvrx.ui.icons.AppIcon
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.AppShapeScale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -93,9 +108,10 @@ fun SortDialog(
       Column {
         HorizontalDivider()
         Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
+          modifier =
+            Modifier
+              .fillMaxWidth()
+              .verticalScroll(rememberScrollState()),
         ) {
           if (showSortOptions) {
             DialogSectionTitle(text = "Sort by")
@@ -127,10 +143,11 @@ fun SortDialog(
                   selected = option.isSelected,
                   onClick = { if (enableViewModeOptions) option.onClick() },
                   shape = SegmentedButtonDefaults.itemShape(index = index, count = viewModeSelector.options.size),
-                  colors = SegmentedButtonDefaults.colors(
-                    activeContentColor = MaterialTheme.colorScheme.primary,
-                    activeBorderColor = MaterialTheme.colorScheme.primary,
-                  ),
+                  colors =
+                    SegmentedButtonDefaults.colors(
+                      activeContentColor = MaterialTheme.colorScheme.primary,
+                      activeBorderColor = MaterialTheme.colorScheme.primary,
+                    ),
                 ) {
                   Text(text = option.label)
                 }
@@ -149,10 +166,11 @@ fun SortDialog(
                 selected = isFirstSelected,
                 onClick = { if (enableLayoutModeOptions) layoutModeSelector.onViewModeChange(true) },
                 shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                colors = SegmentedButtonDefaults.colors(
-                  activeContentColor = MaterialTheme.colorScheme.primary,
-                  activeBorderColor = MaterialTheme.colorScheme.primary,
-                ),
+                colors =
+                  SegmentedButtonDefaults.colors(
+                    activeContentColor = MaterialTheme.colorScheme.primary,
+                    activeBorderColor = MaterialTheme.colorScheme.primary,
+                  ),
                 icon = {
                   Icon(
                     imageVector = layoutModeSelector.firstOptionIcon,
@@ -167,10 +185,11 @@ fun SortDialog(
                 selected = !isFirstSelected,
                 onClick = { if (enableLayoutModeOptions) layoutModeSelector.onViewModeChange(false) },
                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                colors = SegmentedButtonDefaults.colors(
-                  activeContentColor = MaterialTheme.colorScheme.primary,
-                  activeBorderColor = MaterialTheme.colorScheme.primary,
-                ),
+                colors =
+                  SegmentedButtonDefaults.colors(
+                    activeContentColor = MaterialTheme.colorScheme.primary,
+                    activeBorderColor = MaterialTheme.colorScheme.primary,
+                  ),
                 icon = {
                   Icon(
                     imageVector = layoutModeSelector.secondOptionIcon,
@@ -180,6 +199,35 @@ fun SortDialog(
                 },
               ) {
                 Text(text = layoutModeSelector.secondOptionLabel)
+              }
+            }
+            if (layoutModeSelector.checkboxLabel != null && layoutModeSelector.onCheckboxChange != null) {
+              Spacer(modifier = Modifier.height(4.dp))
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                  Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                      if (enableLayoutModeOptions) {
+                        layoutModeSelector.onCheckboxChange.invoke(!layoutModeSelector.isCheckboxChecked)
+                      }
+                    }.padding(vertical = 2.dp),
+              ) {
+                Checkbox(
+                  checked = layoutModeSelector.isCheckboxChecked,
+                  onCheckedChange = { checked ->
+                    if (enableLayoutModeOptions) {
+                      layoutModeSelector.onCheckboxChange.invoke(checked)
+                    }
+                  },
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                  text = layoutModeSelector.checkboxLabel,
+                  style = MaterialTheme.typography.bodyMedium,
+                )
               }
             }
           }
@@ -192,34 +240,39 @@ fun SortDialog(
           if (visibilityToggles.isNotEmpty()) {
             HorizontalDivider(modifier = Modifier.padding(top = 10.dp))
             Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .animateContentSize(animationSpec = tween(durationMillis = 250))
+              modifier =
+                Modifier
+                  .fillMaxWidth()
+                  .animateContentSize(animationSpec = tween(durationMillis = 250)),
             ) {
               Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .clickable { isFieldsExpanded = !isFieldsExpanded }
-                  .padding(vertical = 4.dp),
+                modifier =
+                  Modifier
+                    .fillMaxWidth()
+                    .clickable { isFieldsExpanded = !isFieldsExpanded }
+                    .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
               ) {
                 Text(
-                  text = "Fields",
+                  text =
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_fields),
                   style = MaterialTheme.typography.titleSmall,
                 )
                 Icon(
-                  imageVector = if (isFieldsExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                  imageVector = if (isFieldsExpanded) Icons.RoundedFilled.KeyboardArrowUp else Icons.RoundedFilled.KeyboardArrowDown,
                   contentDescription = if (isFieldsExpanded) "Collapse" else "Expand",
                   tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                  modifier = Modifier.size(20.dp)
+                  modifier = Modifier.size(20.dp),
                 )
               }
               if (isFieldsExpanded) {
                 FlowRow(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(align = Alignment.Top),
+                  modifier =
+                    Modifier
+                      .fillMaxWidth()
+                      .wrapContentHeight(align = Alignment.Top),
                   horizontalArrangement = Arrangement.spacedBy(6.dp),
                   verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -228,12 +281,13 @@ fun SortDialog(
                       selected = toggle.checked,
                       onClick = { toggle.onCheckedChange(!toggle.checked) },
                       label = { Text(text = toggle.label) },
-                      border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = toggle.checked,
-                        selectedBorderWidth = 1.dp,
-                        selectedBorderColor = MaterialTheme.colorScheme.primary,
-                      ),
+                      border =
+                        FilterChipDefaults.filterChipBorder(
+                          enabled = true,
+                          selected = toggle.checked,
+                          selectedBorderWidth = 1.dp,
+                          selectedBorderColor = MaterialTheme.colorScheme.primary,
+                        ),
                     )
                   }
                 }
@@ -245,20 +299,26 @@ fun SortDialog(
     },
     confirmButton = {
       TextButton(onClick = onDismiss) {
-        Text(text = "Done")
+        Text(
+          text =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_done),
+        )
       }
     },
     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     tonalElevation = 6.dp,
     shape = MaterialTheme.shapes.extraLarge,
-    modifier = modifier
-      .widthIn(max = 500.dp)
-      .fillMaxWidth(0.88f),
-    properties = DialogProperties(
-      usePlatformDefaultWidth = false,
-      dismissOnBackPress = true,
-      dismissOnClickOutside = true,
-    ),
+    modifier =
+      modifier
+        .widthIn(max = 500.dp)
+        .fillMaxWidth(0.88f),
+    properties =
+      DialogProperties(
+        usePlatformDefaultWidth = false,
+        dismissOnBackPress = true,
+        dismissOnClickOutside = true,
+      ),
   )
 }
 
@@ -271,9 +331,10 @@ private fun SortTypeSelector(
   modifier: Modifier = Modifier,
 ) {
   Row(
-    modifier = modifier
-      .fillMaxWidth()
-      .horizontalScroll(rememberScrollState()),
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .horizontalScroll(rememberScrollState()),
     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -285,43 +346,46 @@ private fun SortTypeSelector(
         modifier = Modifier.padding(2.dp),
       ) {
         Box(
-          modifier = Modifier
-            .size(64.dp)
-            .clip(AppShapeScale.large)
-            .background(
-              color = if (selected) {
-                MaterialTheme.colorScheme.primaryContainer
-              } else {
-                MaterialTheme.colorScheme.surfaceContainerHighest
-              },
-            )
-            .clickable(
-              onClick = { onSortTypeChange(type) },
-              interactionSource = remember { MutableInteractionSource() },
-              indication = ripple(bounded = true),
-            ),
+          modifier =
+            Modifier
+              .size(64.dp)
+              .clip(AppShapeScale.large)
+              .background(
+                color =
+                  if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                  } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                  },
+              ).clickable(
+                onClick = { onSortTypeChange(type) },
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true),
+              ),
           contentAlignment = Alignment.Center,
         ) {
           Icon(
             imageVector = icons[index],
             contentDescription = type,
             modifier = Modifier.size(30.dp),
-            tint = if (selected) {
-              MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-              MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            tint =
+              if (selected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+              } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+              },
           )
         }
         Text(
           text = type,
           style = MaterialTheme.typography.labelSmall,
           fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-          color = if (selected) {
-            MaterialTheme.colorScheme.primary
-          } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-          },
+          color =
+            if (selected) {
+              MaterialTheme.colorScheme.primary
+            } else {
+              MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
       }
     }
@@ -347,13 +411,21 @@ private fun SortOrderSelector(
         selected = index == selectedIndex,
         onClick = { onSortOrderChange(index == 0) },
         shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-        colors = SegmentedButtonDefaults.colors(
-          activeContentColor = MaterialTheme.colorScheme.primary,
-          activeBorderColor = MaterialTheme.colorScheme.primary,
-        ),
+        colors =
+          SegmentedButtonDefaults.colors(
+            activeContentColor = MaterialTheme.colorScheme.primary,
+            activeBorderColor = MaterialTheme.colorScheme.primary,
+          ),
         icon = {
           Icon(
-            imageVector = if (index == 0) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            imageVector =
+              if (index ==
+                0
+              ) {
+                Icons.RoundedFilled.KeyboardArrowUp
+              } else {
+                Icons.RoundedFilled.KeyboardArrowDown
+              },
             contentDescription = null,
             modifier = Modifier.size(16.dp),
           )
@@ -381,28 +453,31 @@ private fun GridColumnsNextSection(
 ) {
   if (folderGridColumnSelector == null && videoGridColumnSelector == null) return
 
-  HorizontalDivider(modifier = Modifier.padding(top = 10.dp))
-  DialogSectionTitle(text = "Grid Columns")
+  val haptic = LocalHapticFeedback.current
 
-  Row(
-    modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(16.dp),
-    verticalAlignment = Alignment.Top,
-  ) {
-    if (folderGridColumnSelector != null) {
+  HorizontalDivider(modifier = Modifier.padding(top = 10.dp))
+
+  if (folderGridColumnSelector != null && videoGridColumnSelector != null) {
+    DialogSectionTitle(text = "Grid Columns")
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
       Column(modifier = Modifier.weight(1f)) {
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
+          verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "Folder Grid",
+            text = folderGridColumnSelector.label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
           )
           Text(
-            text = "${folderGridColumnSelector.currentValue} cols",
+            text = if (folderGridColumnSelector.unitSuffix.isEmpty()) "${folderGridColumnSelector.currentValue}" else "${folderGridColumnSelector.currentValue} ${folderGridColumnSelector.unitSuffix}",
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -410,28 +485,34 @@ private fun GridColumnsNextSection(
         }
         Slider(
           value = folderGridColumnSelector.currentValue.toFloat(),
-          onValueChange = { folderGridColumnSelector.onValueChange(it.toInt()) },
+          onValueChange = {
+            val newValue = it.roundToInt()
+            if (newValue != folderGridColumnSelector.currentValue) {
+              folderGridColumnSelector.onValueChange(newValue)
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+          },
           valueRange = folderGridColumnSelector.valueRange,
           steps = folderGridColumnSelector.steps,
           modifier = Modifier.fillMaxWidth(),
         )
       }
-    }
 
-    if (videoGridColumnSelector != null) {
       Column(modifier = Modifier.weight(1f)) {
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
+          verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "Video Grid",
+            text = videoGridColumnSelector.label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
           )
           Text(
-            text = "${videoGridColumnSelector.currentValue} cols",
+            text = if (videoGridColumnSelector.unitSuffix.isEmpty()) "${videoGridColumnSelector.currentValue}" else "${videoGridColumnSelector.currentValue} ${videoGridColumnSelector.unitSuffix}",
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -439,13 +520,47 @@ private fun GridColumnsNextSection(
         }
         Slider(
           value = videoGridColumnSelector.currentValue.toFloat(),
-          onValueChange = { videoGridColumnSelector.onValueChange(it.toInt()) },
+          onValueChange = {
+            val newValue = it.roundToInt()
+            if (newValue != videoGridColumnSelector.currentValue) {
+              videoGridColumnSelector.onValueChange(newValue)
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+          },
           valueRange = videoGridColumnSelector.valueRange,
           steps = videoGridColumnSelector.steps,
           modifier = Modifier.fillMaxWidth(),
         )
       }
     }
+  } else {
+    val selector = folderGridColumnSelector ?: videoGridColumnSelector!!
+    Row(
+      modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      DialogSectionTitle(text = selector.label)
+      Text(
+        text = if (selector.unitSuffix.isEmpty()) "${selector.currentValue}" else "${selector.currentValue} ${selector.unitSuffix}",
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+      )
+    }
+    Slider(
+      value = selector.currentValue.toFloat(),
+      onValueChange = {
+        val newValue = it.roundToInt()
+        if (newValue != selector.currentValue) {
+          selector.onValueChange(newValue)
+          haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+      },
+      valueRange = selector.valueRange,
+      steps = selector.steps,
+      modifier = Modifier.fillMaxWidth(),
+    )
   }
 }
 
@@ -475,6 +590,9 @@ data class ViewModeSelector(
   val secondOptionIcon: AppIcon,
   val isFirstOptionSelected: Boolean,
   val onViewModeChange: (Boolean) -> Unit,
+  val checkboxLabel: String? = null,
+  val isCheckboxChecked: Boolean = false,
+  val onCheckboxChange: ((Boolean) -> Unit)? = null,
 )
 
 data class GridColumnSelector(
@@ -483,4 +601,5 @@ data class GridColumnSelector(
   val onValueChange: (Int) -> Unit,
   val valueRange: ClosedFloatingPointRange<Float> = 1f..4f,
   val steps: Int = 2,
+  val unitSuffix: String = "cols",
 )

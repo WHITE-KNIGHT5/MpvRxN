@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 internal class ScreenUnlockPlaybackController {
@@ -8,7 +17,6 @@ internal class ScreenUnlockPlaybackController {
     wasPlayingBeforePause: Boolean,
     isCurrentlyPaused: Boolean?,
     backgroundPlaybackActive: Boolean,
-    isInPictureInPictureMode: Boolean,
     isUserFinishing: Boolean,
     isFinishing: Boolean,
   ) {
@@ -16,12 +24,13 @@ internal class ScreenUnlockPlaybackController {
 
     pendingResumeAfterUnlock =
       autoplayAfterScreenUnlockEnabled &&
-        wasPlayingWhenScreenTurnedOff &&
-        !backgroundPlaybackActive &&
-        !isInPictureInPictureMode &&
-        !isUserFinishing &&
-        !isFinishing
+      wasPlayingWhenScreenTurnedOff &&
+      !backgroundPlaybackActive &&
+      !isUserFinishing &&
+      !isFinishing
   }
+
+  fun hasPendingResume(): Boolean = pendingResumeAfterUnlock
 
   fun consumeResumeAfterUnlockIfReady(isDeviceLocked: Boolean): Boolean {
     if (!pendingResumeAfterUnlock || isDeviceLocked) return false

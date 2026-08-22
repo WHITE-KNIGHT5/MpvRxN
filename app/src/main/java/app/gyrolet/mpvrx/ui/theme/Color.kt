@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.theme
 
 import androidx.compose.ui.graphics.Color
@@ -254,4 +263,3 @@ val surfaceContainerLowPureBlack = Color(0xFF0A0A0A)
 val surfaceContainerPureBlack = Color(0xFF121212)
 val surfaceContainerHighPureBlack = Color(0xFF1A1A1A)
 val surfaceContainerHighestPureBlack = Color(0xFF222222)
-

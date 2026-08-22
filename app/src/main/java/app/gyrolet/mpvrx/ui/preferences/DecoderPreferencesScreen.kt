@@ -1,14 +1,16 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.preferences
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
-
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
@@ -19,7 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,8 +32,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.AlertDialog
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,21 +46,27 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.BuildConfig
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.domain.anime4k.Anime4KManager
+import app.gyrolet.mpvrx.preferences.AdvancedPreferences
 import app.gyrolet.mpvrx.preferences.DecoderPreferences
+import app.gyrolet.mpvrx.preferences.MpvConfigOverride
+import app.gyrolet.mpvrx.preferences.MpvConfigControlledFeatures
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.Debanding
 import app.gyrolet.mpvrx.ui.player.MPVProfile
+import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
+import app.gyrolet.mpvrx.ui.utils.LocalShowSettingsBackArrow
 import app.gyrolet.mpvrx.ui.utils.popSafely
-import app.gyrolet.mpvrx.ui.preferences.VulkanUtils
+import app.gyrolet.mpvrx.utils.device.VulkanCapabilities
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
-import app.gyrolet.mpvrx.ui.preferences.SettingsScrollManager
-import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
 import org.koin.compose.koinInject
 
 @Serializable
@@ -69,9 +75,22 @@ object DecoderPreferencesScreen : Screen {
   @Composable
   override fun Content() {
     val preferences = koinInject<DecoderPreferences>()
+    val advancedPreferences = koinInject<AdvancedPreferences>()
+    val storedConfigOverrides by advancedPreferences.mpvConfOverrides.collectAsState()
+    val configOwnedOptions =
+      remember(storedConfigOverrides) { MpvConfigOverride.resolveOptionNames(storedConfigOverrides) }
+    val profileConfigOwned = "profile" in configOwnedOptions
+    val rendererBackendConfigOwned = setOf("gpu-api", "gpu-context").any(configOwnedOptions::contains)
+    val decoderConfigOwned = MpvConfigControlledFeatures.HARDWARE_DECODER.any(configOwnedOptions::contains)
+    val shadersConfigOwned = MpvConfigControlledFeatures.ANIME4K.any(configOwnedOptions::contains)
+    val debandingConfigOwned =
+      setOf("vf", "deband", "deband-iterations", "deband-threshold", "deband-range", "deband-grain")
+        .any(configOwnedOptions::contains)
+    val yuv420ConfigOwned = "vf" in configOwnedOptions
     val backstack = LocalBackStack.current
     val context = LocalContext.current
-    val isVulkanSupported = remember { VulkanUtils.isVulkanSupported(context) }
+    val isDeviceVulkanSupported = remember { VulkanCapabilities.isDeviceSupported(context) }
+    val isVulkanSupported = BuildConfig.MPV_SUPPORTS_VULKAN && isDeviceVulkanSupported
     var showGpuNextWarning by remember { mutableStateOf(false) }
     var anime4kExpanded by remember { mutableStateOf(false) }
     Scaffold(
@@ -86,33 +105,35 @@ object DecoderPreferencesScreen : Screen {
             )
           },
           navigationIcon = {
-            IconButton(onClick = { backstack.popSafely() }) {
-              Icon(
-                Icons.Default.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
+            if (LocalShowSettingsBackArrow.current) {
+              IconButton(onClick = { backstack.popSafely() }) {
+                Icon(
+                  Icons.RoundedFilled.ArrowBack,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.secondary,
+                )
+              }
             }
           },
         )
       },
     ) { padding ->
       ProvidePreferenceLocals {
-        val listState = rememberLazyListState()
-        LaunchedEffect(Unit) {
-            SettingsScrollManager.consumeScrollIndex()?.let { index ->
-                listState.animateScrollToItem(index)
-            }
-        }
+        val (settingsListState, settingsHighlight) =
+          rememberSettingsSearchList(DecoderPreferencesScreen, MaterialTheme.colorScheme.primary)
         LazyColumn(
-            state = listState,
+          state = settingsListState,
           modifier =
             Modifier
               .fillMaxSize()
-              .padding(padding),
+              .padding(padding)
+              .then(settingsHighlight),
         ) {
           item {
-            PreferenceSectionHeader(title = stringResource(R.string.pref_decoder))
+            PreferenceSectionHeader(
+              title = stringResource(R.string.pref_decoder),
+              modifier = Modifier.settingsSearchTarget(R.string.pref_decoder),
+            )
           }
 
           item {
@@ -123,6 +144,7 @@ object DecoderPreferencesScreen : Screen {
                 value = currentProfile,
                 onValueChange = { preferences.profile.set(it.value) },
                 values = MPVProfile.entries,
+                enabled = !profileConfigOwned,
                 title = { Text(stringResource(R.string.pref_decoder_profile_title)) },
                 summary = {
                   Text(
@@ -136,7 +158,9 @@ object DecoderPreferencesScreen : Screen {
 
               val tryHWDecoding by preferences.tryHWDecoding.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_decoder_try_hw_dec_title),
                 value = tryHWDecoding,
+                enabled = !decoderConfigOwned,
                 onValueChange = {
                   preferences.tryHWDecoding.set(it)
                 },
@@ -148,16 +172,17 @@ object DecoderPreferencesScreen : Screen {
               val gpuNext by preferences.gpuNext.collectAsState()
               val useVulkan by preferences.useVulkan.collectAsState() // Added to check Vulkan state
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_decoder_gpu_next_title),
                 value = gpuNext,
                 onValueChange = { enabled ->
-                    if (enabled && !gpuNext && !useVulkan) { // Only show warning if Vulkan is disabled
-                        showGpuNextWarning = true
-                    } else {
-                        preferences.gpuNext.set(enabled)
-                        if (enabled && !useVulkan) { // Only disable Anime4K if Vulkan is disabled
-                            preferences.enableAnime4K.set(false)
-                        }
+                  if (enabled && !gpuNext && !useVulkan) { // Only show warning if Vulkan is disabled
+                    showGpuNextWarning = true
+                  } else {
+                    preferences.gpuNext.set(enabled)
+                    if (enabled && !useVulkan) { // Only disable Anime4K if Vulkan is disabled
+                      preferences.enableAnime4K.set(false)
                     }
+                  }
                 },
                 title = { Text(stringResource(R.string.pref_decoder_gpu_next_title)) },
                 summary = {
@@ -169,76 +194,89 @@ object DecoderPreferencesScreen : Screen {
               )
 
               if (showGpuNextWarning) {
-                  AlertDialog(
-                      onDismissRequest = { showGpuNextWarning = false },
-                      title = { Text(stringResource(R.string.pref_decoder_gpu_next_enable_title)) },
-                      text = {
-                          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                              Text(stringResource(R.string.pref_decoder_gpu_next_warning))
-                              Text(stringResource(R.string.pref_decoder_gpu_next_purple_screen_fix))
-                              
-                              Surface(
-                                  color = MaterialTheme.colorScheme.errorContainer,
-                                  shape = MaterialTheme.shapes.small
-                              ) {
-                                  Column(modifier = Modifier.padding(8.dp)) {
-                                      Text(
-                                          text = stringResource(R.string.pref_anime4k_incompatibility),
-                                          style = MaterialTheme.typography.titleSmall,
-                                          color = MaterialTheme.colorScheme.onErrorContainer
-                                      )
-                                      Text(
-                                          text = stringResource(R.string.pref_anime4k_gpu_next_error),
-                                          style = MaterialTheme.typography.bodySmall,
-                                          color = MaterialTheme.colorScheme.onErrorContainer
-                                      )
-                                  }
-                              }
-                          }
-                      },
-                      confirmButton = {
-                          Button(onClick = {
-                              preferences.gpuNext.set(true)
-                              preferences.enableAnime4K.set(false) // Ensure Anime4K is disabled on confirmation
-                              showGpuNextWarning = false
-                          }) {
-                              Text(stringResource(R.string.pref_decoder_gpu_next_enable_anyway))
-                          }
-                      },
-                      dismissButton = {
-                          TextButton(onClick = { showGpuNextWarning = false }) {
-                              Text(stringResource(R.string.generic_cancel))
-                          }
+                AlertDialog(
+                  onDismissRequest = { showGpuNextWarning = false },
+                  title = { Text(stringResource(R.string.pref_decoder_gpu_next_enable_title)) },
+                  text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      Text(stringResource(R.string.pref_decoder_gpu_next_warning))
+                      Text(stringResource(R.string.pref_decoder_gpu_next_purple_screen_fix))
+
+                      Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.small,
+                      ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                          Text(
+                            text = stringResource(R.string.pref_anime4k_incompatibility),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                          )
+                          Text(
+                            text = stringResource(R.string.pref_anime4k_gpu_next_error),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                          )
+                        }
                       }
-                  )
+                    }
+                  },
+                  confirmButton = {
+                    Button(onClick = {
+                      preferences.gpuNext.set(true)
+                      preferences.enableAnime4K.set(false) // Ensure Anime4K is disabled on confirmation
+                      showGpuNextWarning = false
+                    }) {
+                      Text(stringResource(R.string.pref_decoder_gpu_next_enable_anyway))
+                    }
+                  },
+                  dismissButton = {
+                    TextButton(onClick = { showGpuNextWarning = false }) {
+                      Text(stringResource(R.string.generic_cancel))
+                    }
+                  },
+                )
               }
 
               PreferenceDivider()
 
               SwitchPreference(
-                value = useVulkan,
+                modifier = Modifier.settingsSearchTarget(R.string.pref_decoder_vulkan_experimental_title),
+                value = useVulkan && isVulkanSupported,
                 onValueChange = { enabled ->
-                  preferences.useVulkan.set(enabled)
-                  // When Vulkan is disabled, ensure Anime4K and GPU Next are not both enabled
-                  if (!enabled) {
-                    val anime4kEnabled = preferences.enableAnime4K.get()
-                    val gpuNextEnabled = preferences.gpuNext.get()
-                    if (anime4kEnabled && gpuNextEnabled) {
-                      // Disable GPU Next to keep Anime4K
-                      preferences.gpuNext.set(false)
+                  if (isVulkanSupported) {
+                    preferences.useVulkan.set(enabled)
+                    // When Vulkan is disabled, ensure Anime4K and GPU Next are not both enabled
+                    if (!enabled) {
+                      val anime4kEnabled = preferences.enableAnime4K.get()
+                      val gpuNextEnabled = preferences.gpuNext.get()
+                      if (anime4kEnabled && gpuNextEnabled) {
+                        // Disable GPU Next to keep Anime4K
+                        preferences.gpuNext.set(false)
+                      }
                     }
                   }
                 },
-                enabled = isVulkanSupported,
-                title = { Text(stringResource(R.string.pref_decoder_vulkan_title) + " (Experimental)") },
+                enabled = isVulkanSupported && !rendererBackendConfigOwned,
+                title = { Text(stringResource(R.string.pref_decoder_vulkan_experimental_title)) },
                 summary = {
                   Text(
                     stringResource(
-                      if (isVulkanSupported) R.string.pref_decoder_vulkan_summary
-                      else R.string.pref_decoder_vulkan_not_supported
+                      when {
+                        !BuildConfig.MPV_SUPPORTS_VULKAN && isDeviceVulkanSupported ->
+                          R.string.pref_decoder_vulkan_excluded_supported_device
+                        !BuildConfig.MPV_SUPPORTS_VULKAN ->
+                          R.string.pref_decoder_vulkan_excluded_unsupported_device
+                        isDeviceVulkanSupported -> R.string.pref_decoder_vulkan_summary
+                        else -> R.string.pref_decoder_vulkan_not_supported
+                      },
                     ),
-                    color = if (isVulkanSupported) MaterialTheme.colorScheme.outline
-                           else MaterialTheme.colorScheme.error,
+                    color =
+                      if (isVulkanSupported) {
+                        MaterialTheme.colorScheme.outline
+                      } else {
+                        MaterialTheme.colorScheme.error
+                      },
                   )
                 },
               )
@@ -247,9 +285,11 @@ object DecoderPreferencesScreen : Screen {
 
               val debanding by preferences.debanding.collectAsState()
               ListPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_decoder_debanding_title),
                 value = debanding,
                 onValueChange = { preferences.debanding.set(it) },
                 values = Debanding.entries,
+                enabled = !debandingConfigOwned,
                 title = { Text(stringResource(R.string.pref_decoder_debanding_title)) },
                 summary = {
                   Text(
@@ -263,7 +303,9 @@ object DecoderPreferencesScreen : Screen {
 
               val useYUV420p by preferences.useYUV420P.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_decoder_yuv420p_title),
                 value = useYUV420p,
+                enabled = !yuv420ConfigOwned,
                 onValueChange = {
                   preferences.useYUV420P.set(it)
                 },
@@ -277,18 +319,20 @@ object DecoderPreferencesScreen : Screen {
               )
 
               PreferenceDivider()
-              
+
               val enableAnime4K by preferences.enableAnime4K.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_anime4k_title),
                 value = enableAnime4K,
+                enabled = !shadersConfigOwned,
                 onValueChange = { enabled ->
-                    preferences.enableAnime4K.set(enabled)
-                    if (enabled && !useVulkan) { // Only disable GPU Next if Vulkan is disabled
-                        preferences.gpuNext.set(false)
-                    }
-                    if (enabled) {
-                        anime4kExpanded = true
-                    }
+                  preferences.enableAnime4K.set(enabled)
+                  if (enabled && !useVulkan) {
+                    preferences.gpuNext.set(false)
+                  }
+                  if (enabled) {
+                    anime4kExpanded = true
+                  }
                 },
                 title = { Text(stringResource(R.string.pref_anime4k_title)) },
                 summary = {
@@ -298,176 +342,150 @@ object DecoderPreferencesScreen : Screen {
                       color = MaterialTheme.colorScheme.outline,
                     )
                     Text(
-                      text = "github.com/bloc97/Anime4K",
+                      text =
+                        androidx.compose.ui.res
+                          .stringResource(app.gyrolet.mpvrx.R.string.pref_anime4k_link),
                       color = MaterialTheme.colorScheme.primary,
                       style = MaterialTheme.typography.bodySmall,
                       textDecoration = TextDecoration.Underline,
-                      modifier = Modifier.clickable {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bloc97/Anime4K"))
-                        context.startActivity(intent)
-                      }
+                      modifier =
+                        Modifier.clickable {
+                          val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bloc97/Anime4K"))
+                          context.startActivity(intent)
+                        },
                     )
                   }
                 },
               )
 
-              if (enableAnime4K) {
+              if (enableAnime4K && !shadersConfigOwned) {
                 val rotationState by animateFloatAsState(
                   targetValue = if (anime4kExpanded) 180f else 0f,
-                  label = "anime4k_chevron_rotation"
+                  label = "anime4k_chevron_rotation",
                 )
 
                 PreferenceDivider()
 
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { anime4kExpanded = !anime4kExpanded }
-                    .padding(vertical = 12.dp, horizontal = 16.dp),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
+                Surface(
+                  modifier =
+                    Modifier
+                      .fillMaxWidth()
+                      .padding(horizontal = 8.dp, vertical = 4.dp),
+                  shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                  color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
-                  Text(
-                    text = "Anime4K Shaders Options",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                  )
-                  Icon(
-                    Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (anime4kExpanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.rotate(rotationState)
-                  )
-                }
-
-                AnimatedVisibility(visible = anime4kExpanded) {
                   Column {
-                    val anime4kQuality by preferences.anime4kQuality.collectAsState()
-                    ListPreference(
-                      value = anime4kQuality,
-                      onValueChange = { preferences.anime4kQuality.set(it) },
-                      values = Anime4KManager.Quality.entries,
-                      valueToText = { AnnotatedString(context.getString(it.titleRes)) },
-                      title = { Text(stringResource(R.string.pref_anime4k_quality_title)) },
-                      summary = {
-                        Text(
-                          stringResource(anime4kQuality.titleRes),
-                          color = MaterialTheme.colorScheme.outline,
+                    Row(
+                      modifier =
+                        Modifier
+                          .fillMaxWidth()
+                          .clickable { anime4kExpanded = !anime4kExpanded }
+                          .padding(vertical = 12.dp, horizontal = 16.dp),
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                      verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                      Text(
+                        text =
+                          androidx.compose.ui.res.stringResource(
+                            app.gyrolet.mpvrx.R.string.ui_anime4k_shaders_options,
+                          ),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                      )
+                      Icon(
+                        Icons.RoundedFilled.KeyboardArrowDown,
+                        contentDescription = if (anime4kExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.rotate(rotationState),
+                      )
+                    }
+
+                    AnimatedVisibility(visible = anime4kExpanded) {
+                      Column {
+                        val anime4kIn4k by preferences.anime4kIn4k.collectAsState()
+                        SwitchPreference(
+                          value = anime4kIn4k,
+                          onValueChange = { preferences.anime4kIn4k.set(it) },
+                          title = { Text(stringResource(R.string.pref_anime4k_in_4k_title)) },
+                          summary = {
+                            Text(
+                              stringResource(R.string.pref_anime4k_in_4k_summary),
+                              color = MaterialTheme.colorScheme.outline,
+                            )
+                          },
                         )
-                      },
-                    )
 
-                    PreferenceDivider()
+                        PreferenceDivider()
 
-                    val anime4kDarken by preferences.anime4kDarken.collectAsState()
-                    SwitchPreference(
-                      value = anime4kDarken,
-                      onValueChange = { preferences.anime4kDarken.set(it) },
-                      title = { Text(stringResource(R.string.pref_anime4k_darken_title)) },
-                      summary = {
-                        Text(
-                          stringResource(R.string.pref_anime4k_darken_summary),
-                          color = MaterialTheme.colorScheme.outline,
+                        val anime4kQuality by preferences.anime4kQuality.collectAsState()
+                        ListPreference(
+                          value = anime4kQuality,
+                          onValueChange = { preferences.anime4kQuality.set(it) },
+                          values = Anime4KManager.Quality.entries,
+                          valueToText = { AnnotatedString(context.getString(it.titleRes)) },
+                          title = { Text(stringResource(R.string.pref_anime4k_quality_title)) },
+                          summary = {
+                            Text(
+                              stringResource(anime4kQuality.titleRes),
+                              color = MaterialTheme.colorScheme.outline,
+                            )
+                          },
                         )
-                      },
-                    )
 
-                    PreferenceDivider()
+                        PreferenceDivider()
 
-                    val anime4kThin by preferences.anime4kThin.collectAsState()
-                    SwitchPreference(
-                      value = anime4kThin,
-                      onValueChange = { preferences.anime4kThin.set(it) },
-                      title = { Text(stringResource(R.string.pref_anime4k_thin_title)) },
-                      summary = {
-                        Text(
-                          stringResource(R.string.pref_anime4k_thin_summary),
-                          color = MaterialTheme.colorScheme.outline,
+                        val anime4kDarken by preferences.anime4kDarken.collectAsState()
+                        SwitchPreference(
+                          value = anime4kDarken,
+                          onValueChange = { preferences.anime4kDarken.set(it) },
+                          title = { Text(stringResource(R.string.pref_anime4k_darken_title)) },
+                          summary = {
+                            Text(
+                              stringResource(R.string.pref_anime4k_darken_summary),
+                              color = MaterialTheme.colorScheme.outline,
+                            )
+                          },
                         )
-                      },
-                    )
 
-                    PreferenceDivider()
+                        PreferenceDivider()
 
-                    val anime4kDeblur by preferences.anime4kDeblur.collectAsState()
-                    SwitchPreference(
-                      value = anime4kDeblur,
-                      onValueChange = { preferences.anime4kDeblur.set(it) },
-                      title = { Text(stringResource(R.string.pref_anime4k_deblur_title)) },
-                      summary = {
-                        Text(
-                          stringResource(R.string.pref_anime4k_deblur_summary),
-                          color = MaterialTheme.colorScheme.outline,
+                        val anime4kThin by preferences.anime4kThin.collectAsState()
+                        SwitchPreference(
+                          value = anime4kThin,
+                          onValueChange = { preferences.anime4kThin.set(it) },
+                          title = { Text(stringResource(R.string.pref_anime4k_thin_title)) },
+                          summary = {
+                            Text(
+                              stringResource(R.string.pref_anime4k_thin_summary),
+                              color = MaterialTheme.colorScheme.outline,
+                            )
+                          },
                         )
-                      },
-                    )
+
+                        PreferenceDivider()
+
+                        val anime4kDeblur by preferences.anime4kDeblur.collectAsState()
+                        SwitchPreference(
+                          value = anime4kDeblur,
+                          onValueChange = { preferences.anime4kDeblur.set(it) },
+                          title = { Text(stringResource(R.string.pref_anime4k_deblur_title)) },
+                          summary = {
+                            Text(
+                              stringResource(R.string.pref_anime4k_deblur_summary),
+                              color = MaterialTheme.colorScheme.outline,
+                            )
+                          },
+                        )
+                      }
+                    }
                   }
                 }
               }
             }
           }
-
         }
       }
     }
   }
-}
-
-object VulkanUtils {
-    private const val TAG = "VulkanUtils"
-
-    /**
-     * Checks if the device supports Vulkan for MPV rendering
-     *
-     * Requirements for MPV androidvk context:
-     * - Android 13 (API 33) minimum for Vulkan 1.3
-     * - Vulkan 1.3 (0x00403000) hardware version
-     * - GPU must also support OpenGL ES 3.1 or higher
-     *
-     * @return true if Vulkan 1.3+ is supported for MPV, false otherwise
-     */
-    fun isVulkanSupported(context: Context): Boolean {
-        try {
-            // Vulkan 1.3 requires Android 13 (API 33) minimum
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                Log.d(TAG, "Vulkan not supported: Android version ${Build.VERSION.SDK_INT} < 33 (Tiramisu)")
-                return false
-            }
-
-            val packageManager = context.packageManager
-
-            // Check for OpenGL ES 3.1+ support (required by Android for Vulkan)
-            val configInfo = packageManager.systemAvailableFeatures
-                .firstOrNull { it.name == null }
-
-            val glesVersion = configInfo?.reqGlEsVersion ?: 0
-            val glesMajor = glesVersion shr 16
-            val glesMinor = glesVersion and 0xFFFF
-
-            Log.d(TAG, "Device OpenGL ES version: $glesMajor.$glesMinor (raw: 0x${glesVersion.toString(16)})")
-
-            // OpenGL ES 3.1 = 0x00030001
-            if (glesVersion < 0x00030001) {
-                Log.d(TAG, "Vulkan not supported: OpenGL ES $glesMajor.$glesMinor < 3.1")
-                return false
-            }
-
-            // Check for Vulkan 1.3 hardware version (required for proper MPV support)
-            if (packageManager.hasSystemFeature(
-                    PackageManager.FEATURE_VULKAN_HARDWARE_VERSION,
-                    0x00403000 // Vulkan 1.3
-                )) {
-                Log.d(TAG, "Vulkan 1.3 supported ✓")
-                return true
-            }
-
-            Log.d(TAG, "Vulkan not supported: Vulkan 1.3 not available")
-            return false
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking Vulkan support", e)
-            return false
-        }
-    }
 }

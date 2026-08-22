@@ -1,7 +1,26 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.preferences
 
+import app.gyrolet.mpvrx.preferences.preference.Preference
 import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.getEnum
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+
+import app.gyrolet.mpvrx.ui.browser.music.MusicSortField
+import app.gyrolet.mpvrx.ui.browser.music.MusicSortOrder
+import app.gyrolet.mpvrx.ui.browser.music.MusicViewMode
 
 /**
  * Preferences for the video browser (folder and video lists)
@@ -18,14 +37,38 @@ class BrowserPreferences(
   val videoSortType = preferenceStore.getEnum("video_sort_type", VideoSortType.Title)
   val videoSortOrder = preferenceStore.getEnum("video_sort_order", SortOrder.Ascending)
 
+  // Music view mode and sorting preferences
+  val musicViewMode = preferenceStore.getEnum("music_view_mode", MusicViewMode.GRID)
+  val musicSortField = preferenceStore.getEnum("music_sort_field", MusicSortField.TITLE)
+  val musicSortOrder = preferenceStore.getEnum("music_sort_order", MusicSortOrder.ASCENDING)
+
+  // Network sorting preferences
+  val networkSortType = preferenceStore.getEnum("network_sort_type", NetworkSortType.Title)
+  val networkSortOrder = preferenceStore.getEnum("network_sort_order", SortOrder.Ascending)
+  val networkLayoutMode = preferenceStore.getEnum("network_layout_mode", MediaLayoutMode.LIST)
+  val jellyfinLayoutMode = preferenceStore.getEnum("jellyfin_layout_mode", MediaLayoutMode.GRID)
+
   val folderViewMode = preferenceStore.getEnum("folder_view_mode", FolderViewMode.AlbumView)
+  val dualPaneForTablet = preferenceStore.getBoolean("dual_pane_for_tablet", true)
 
   private val isTablet = context.resources.configuration.smallestScreenWidthDp >= 600
-  val folderGridColumnsPortrait = preferenceStore.getInt("folder_grid_columns_portrait", if (isTablet) 4 else 3)
-  val folderGridColumnsLandscape = preferenceStore.getInt("folder_grid_columns_landscape", 5)
+  val maxColumns = if (isTablet) 8 else 4
 
-  val videoGridColumnsPortrait = preferenceStore.getInt("video_grid_columns_portrait", if (isTablet) 4 else 2)
-  val videoGridColumnsLandscape = preferenceStore.getInt("video_grid_columns_landscape", 4)
+  private val _folderGridColumnsPortrait =
+    preferenceStore.getInt(
+      "folder_grid_columns_portrait",
+      if (isTablet) 4 else 3,
+    )
+  private val _folderGridColumnsLandscape = preferenceStore.getInt("folder_grid_columns_landscape", 5)
+
+  private val _videoGridColumnsPortrait = preferenceStore.getInt("video_grid_columns_portrait", if (isTablet) 4 else 2)
+  private val _videoGridColumnsLandscape = preferenceStore.getInt("video_grid_columns_landscape", 4)
+
+  val folderGridColumnsPortrait: Preference<Int> = CoercedPreference(_folderGridColumnsPortrait, maxColumns)
+  val folderGridColumnsLandscape: Preference<Int> = CoercedPreference(_folderGridColumnsLandscape, 8)
+
+  val videoGridColumnsPortrait: Preference<Int> = CoercedPreference(_videoGridColumnsPortrait, maxColumns)
+  val videoGridColumnsLandscape: Preference<Int> = CoercedPreference(_videoGridColumnsLandscape, 8)
 
   val showExtensionField = preferenceStore.getBoolean("show_extension_field", false)
   val showDurationField = preferenceStore.getBoolean("show_duration_field", true)
@@ -33,18 +76,27 @@ class BrowserPreferences(
   // Visibility preferences for video card chips
   val showVideoThumbnails = preferenceStore.getBoolean("show_video_thumbnails", true)
   val thumbnailMode = preferenceStore.getEnum("thumbnail_mode", ThumbnailMode.Smart)
+  val thumbnailQuality = preferenceStore.getEnum("thumbnail_quality", ThumbnailQuality.High)
   val thumbnailFramePosition = preferenceStore.getFloat("thumbnail_frame_position", 33f)
   val showSizeChip = preferenceStore.getBoolean("show_size_chip", true)
+
   // Metadata-dependent chips (disabled by default for better performance)
   val showResolutionChip = preferenceStore.getBoolean("show_resolution_chip", false)
   val showFramerateInResolution = preferenceStore.getBoolean("show_framerate_in_resolution", false)
   val showSubtitleIndicator = preferenceStore.getBoolean("show_subtitle_indicator", false)
+  val showCodecSupportIndicator = preferenceStore.getBoolean("show_codec_support_indicator", false)
   val showProgressBar = preferenceStore.getBoolean("show_progress_bar", true)
   val centerGridTitles = preferenceStore.getBoolean("center_grid_titles", true)
   val mediaLayoutMode = preferenceStore.getEnum("media_layout_mode", MediaLayoutMode.LIST)
+  val folderViewFolderLayoutMode = preferenceStore.getEnum("folder_view_folder_layout_mode", MediaLayoutMode.LIST)
+  val folderViewVideoLayoutMode = preferenceStore.getEnum("folder_view_video_layout_mode", MediaLayoutMode.LIST)
+  val separateFolderVideoLayout = preferenceStore.getBoolean("separate_folder_video_layout", false)
+  val manualGridColumnsEnabled = preferenceStore.getBoolean("manual_grid_columns_enabled", false)
+  val musicCoverArtSize = preferenceStore.getInt("music_cover_art_size", 48)
 
   // Visibility preferences for folder card chips
   val showTotalVideosChip = preferenceStore.getBoolean("show_total_videos_chip", true)
+
   // Metadata-dependent chips (disabled by default for better performance)
   val showTotalDurationChip = preferenceStore.getBoolean("show_total_duration_chip", false)
   val showTotalSizeChip = preferenceStore.getBoolean("show_total_size_chip", true)
@@ -55,11 +107,17 @@ class BrowserPreferences(
   // Auto-scroll to last played media preference (like MX Player)
   val autoScrollToLastPlayed = preferenceStore.getBoolean("auto_scroll_to_last_played", false)
 
+  // Maximum single-child folder levels skipped in one Tree View navigation step.
+  val treeFlattenDepth = preferenceStore.getEnum("tree_flatten_depth", TreeFlattenDepth.Unlimited)
+  val includeAudioBrowser = preferenceStore.getBoolean("include_audio_browser", false)
+  val minimumAudioDurationSeconds = preferenceStore.getInt("minimum_audio_duration_seconds", 0)
+  val mediaLibraryType = preferenceStore.getEnum("media_library_type", MediaLibraryType.Video)
+
   // Watched threshold preference (percentage 1-100)
   val watchedThreshold = preferenceStore.getInt("watched_threshold", 95)
 
-  // Audio files visibility toggle
-  val showAudioFiles = preferenceStore.getBoolean("show_audio_files", false)
+  // When deleting a folder, delete all files instead of only media files
+  val deleteFolderAllContents = preferenceStore.getBoolean("delete_folder_all_contents", false)
 }
 
 /**
@@ -115,6 +173,24 @@ enum class VideoSortType {
 }
 
 /**
+ * Network sorting options
+ */
+enum class NetworkSortType {
+  Title,
+  Date,
+  Size,
+  ;
+
+  val displayName: String
+    get() =
+      when (this) {
+        Title -> "Title"
+        Date -> "Date"
+        Size -> "Size"
+      }
+}
+
+/**
  * Folder view mode options
  */
 enum class FolderViewMode {
@@ -132,16 +208,35 @@ enum class FolderViewMode {
       }
 }
 
+enum class TreeFlattenDepth(
+  val maxLevels: Int,
+  val displayName: String,
+) {
+  Off(0, "Off (show every folder)"),
+  One(1, "1 level"),
+  Two(2, "2 levels"),
+  Three(3, "3 levels"),
+  Four(4, "4 levels"),
+  Five(5, "5 levels"),
+  Unlimited(-1, "Unlimited"),
+}
+
 enum class MediaLayoutMode {
   LIST,
   GRID,
   ;
 
-  val displayName:  String
-    get() = when (this) {
-      LIST -> "List"
-      GRID -> "Grid"
-    }
+  val displayName: String
+    get() =
+      when (this) {
+        LIST -> "List"
+        GRID -> "Grid"
+      }
+}
+
+enum class MediaLibraryType {
+  Video,
+  Audio,
 }
 
 enum class ThumbnailMode {
@@ -159,4 +254,35 @@ enum class ThumbnailMode {
         FrameAtPosition -> "Frame position"
         EmbeddedThumbnail -> "Embedded thumbnail"
       }
+}
+
+enum class ThumbnailQuality(
+  val maxSizePx: Int,
+  val displayName: String,
+) {
+  Balanced(720, "Balanced (720p)"),
+  High(1080, "High (1080p)"),
+  Ultra(1440, "Ultra (1440p)"),
+}
+
+internal class CoercedPreference(
+  private val delegate: Preference<Int>,
+  private val maxVal: Int,
+) : Preference<Int> {
+  override fun key(): String = delegate.key()
+
+  override fun get(): Int = delegate.get().coerceIn(1, maxVal)
+
+  override fun set(value: Int) = delegate.set(value.coerceIn(1, maxVal))
+
+  override fun isSet(): Boolean = delegate.isSet()
+
+  override fun delete() = delegate.delete()
+
+  override fun defaultValue(): Int = delegate.defaultValue().coerceIn(1, maxVal)
+
+  override fun changes(): Flow<Int> = delegate.changes().map { it.coerceIn(1, maxVal) }
+
+  override fun stateIn(scope: kotlinx.coroutines.CoroutineScope): StateFlow<Int> =
+    changes().stateIn(scope, SharingStarted.Eagerly, get())
 }

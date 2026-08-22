@@ -1,117 +1,27 @@
 <p align="center">
   <img src="fastlane\metadata\android\en-US\images\icon.png" width="250" height="250" />
 </p>
-<h1 align="center">MpvRxN</h1>
-<p align="center">
-  <img src="assets/demo.gif" width="100%">
-</p>
 
-MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
+<h1 align="center">mpvRx</h1>
 
-- <i> MpvRxN: vibe-coded with Claude AI </> </i>
 <p align="center">
   <b>Feature-rich, Efficient Powerful Android video player based on libmpv.</b>
   <br>
-
   <i>No ads. No trackers. No noise. Just a serious video player with a calmer surface and a sharper edge.</i>
 </p>
+
+> [!IMPORTANT]
+> **Well Development is now Resumed**
+
+
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
-  <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" />
-  <img
+  <img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" />
+  <img src="https://img.shields.io/github/v/release/Riteshp2001/mpvRx.svg?logo=github&label=Release&cacheSeconds=3600" />
+  <img src="https://img.shields.io/github/downloads/Riteshp2001/mpvRx/total?logo=github&cacheSeconds=3600" />
+</p>
 
 ---
-
-# Changelogs
-
-All notable changes to [MpvRxN](https://github.com/WHITE-KNIGHT5/MpvRxN) are documented here.
-
----
-
-## [v1.5.0] — June 2026
-
-### ✨ New Features
-
-- **Audio file support with thumbnails** — new toggle in *Settings → Audio → "Audio Player"*. Shows MP3, FLAC, AAC,  M4A, OPUS, and more alongside videos in every folder, with embedded album art. Off by default — no extra scanning until enabled.
-- **Swipe to switch tabs** — swipe left/right anywhere on the home screen to switch tabs, even when the navigation bar is completely hidden. Wraps from last tab back to Home; always opens on Home.
-- **Long-press folder/title to scroll top** — long-press the folder name (in any folder screen) or the home title to instantly scroll back to the top.
-- **FAB quick play** — single tap plays the most recently played video; long-press opens the original menu (Open File, Recently Played, Open Link).
-- **Long-press the speed button** to reset playback speed to your default.
-- **Easy Unlock toggle** — when enabled, a lock icon appears on both sides of the screen while controls are locked; tap either to unlock. Swipe-to-unlock always works regardless of this setting.
-- **Search auto-opens the keyboard** when tapped.
-- **Smooth Back Animation toggle(A13+)** (Settings → Appearance → Animations) — choose between a when on: "predictive back animation" when off animation won't happen(Android 13+).
-**Background play doesn't exist app** — Now when we press background play button the player doesn't go back to launcher instead it goes back where the file is being play.
-- **Folder navigation via notification** — opening the app from a folder-specific notification jumps straight to that folder.
-
-### 🎨 UI & Player Improvements
-
-- **Transparent overlays** — volume, brightness, speed, and seek overlays now have fully transparent backgrounds instead of dark semi-transparent ones, with white text/icons for readability.
-- **Speed pill cleanup** — removed the arrow icon from the speed pill; now shows only the value (e.g. `1.5x`), no border.
-- **Speed panel removed** — the full slider panel that used to appear during swipe-to-change-speed is gone; only the simple pill shows now.
-- **Changed swipe speed start point** — swiping to change speed now starts from the preset nearest your hold-speed setting, instead of always jumping to 2x.
-- **Seekbar** — consistently thin (no longer changes thickness while scrubbing), smaller thumb for a cleaner look. Portrait layout now puts the seekbar on top with timers shown below.
-- **Landscape play/pause button** — removed background color and ripple effect.
-- **Pill position** — speed/seek pill moved higher on screen in portrait.
-
-### ⚡ Performance
-
-- **Folder loading** — first open loads from MediaStore and caches to disk; every open after is instant (even after an app restart or device reboot), with a silent background refresh to stay up to date.
-- **Camera-folder hang fixed** — playback info is now fetched in a single batched DB call instead of one query per video.
-
-### 🎬 Picture-in-Picture
-
-- **PiP controls fixed** — Play/Pause, Rewind (−10s), and Forward (+10s) buttons inside PiP mode now work correctly.
-
-- ### ✨ Default Settings Changes
-- Smooth Back Animation: now on by default
-- Easy Unlock: now on by default
-- Hide Player Buttons Background: now on by default
-- Seekbar Style: now defaults to Standard
-- Use Online Skip Markers: now off by default
-- Bottom navigation tabs (Home, Recents, Playlists, Network): now off by default
-**[You can turn on them in Settings if you want]**
-
-### 🐛 Bug Fixes
-
-**Rotation/black-screen flash on exit** — this has been a recurring issue across many sessions, with several genuinely separate root causes found and fixed one at a time:
-- The system back callback was being silently disabled during normal playback, so pressing back via gesture/button could skip custom exit logic entirely (background audio stopping, folder-return not happening) — only the on-screen back arrow worked correctly. Now always enabled.
-- The exit-orientation lock could be overwritten mid-transition by an unrelated async process (video-aspect-ratio orientation logic), undoing the fix intermittently.
-- The "instant exit" animation setting wasn't actually taking effect due to a call-ordering bug (`overridePendingTransition` was called after `finish()`, too late to apply).
-- Android 14+'s own predictive-back preview snapshot (shown during a swipe gesture) is now explicitly suppressed for the player's exit transition.
-- The manual "background play" button had its own separate flash, caused by system UI bars being restored before orientation was locked — fixed by locking orientation first.
-- PiP broadcast handling hardened (separate, explicit broadcast actions with `FLAG_MUTABLE`) instead of relying on default intent matching, which was contributing to flashes during PiP-related transitions.
-- *(Historical first attempt)* The very first fix for this bug — disabling `enableOnBackInvokedCallback` app-wide — masked the issue but also disabled predictive back everywhere. This was later replaced by enabling it specifically for the player with full custom handling above, fixing the underlying causes instead of just hiding the symptom. 
-
-### 🔧 Build & Identity
-
-- **Package name**: `app.gyrolet.mpvrxn` — installs alongside the original MpvRx without conflict.
-- **Launcher name**: `MpvRx` (unchanged) · **Home screen title**: `MpvRxN`
-- **APK signing** automated via GitHub Actions — every build is signed and installs without warnings.
-- **Builds**: `arm64-v8a` and `armeabi-v7a` only (x86/x86_64 removed).
-- **APK naming**: `MpvRxN-arm64-v8a.apk` / `MpvRxN-armeabi-v7a.apk`.
-- **About screen**: shows `MpvRxN`, version, author, and fork GitHub URL.
-
-### 💡 Known Limitations
-- Some things that work properly on some devices may not work on some other devices.
-- With the **system-wide Android "Predictive Back Animations" developer setting** enabled, a very brief black-screen flash can still occasionally occur on exit. Disabling that system setting avoids it entirely; this is separate from the in-app "Smooth Back Animation" toggle.
-- A few 10-bit/AVI files may still show inconsistent thumbnails on some devices.
-- The day/night theme-switch playback interruption fix may not fully resolve the issue on every device/Android skin, since part of the relevant surface-handling code lives in a precompiled library (`mpvlib.aar`) outside this fork's source.
-
----
-
-## Earlier Fork Changes (pre-v1.5.0)
-
-These are the original modifications made when first forking from upstream MpvRx, before the v1.5.0 development cycle above.
-
-- Removed dark backgrounds from all gesture overlays (volume, brightness, speed, seek) — replaced with transparent backgrounds and white text.
-- Removed the FastForward arrow icon from the speed pill.
-- Removed the full speed-slider panel during swipe gestures in favor of the simple pill.
-- Changed swipe-speed always starting at 2x regardless of hold-speed setting.
-- FAB quick-play (single tap to play most recent video, long-press for menu) introduced for the first time.
-- Attempted to fix for the landscape rotation-flash bug (`enableOnBackInvokedCallback="false"` app-wide).
-- Changed `applicationId` to `app.gyrolet.mpvrxn` to allow installing alongside the original app.
-- Set up GitHub Actions CI/CD with automatic APK signing (keystore secrets) and trimmed build to `arm64-v8a`/`armeabi-v7a` only.
-
 
 ## Showcase
 
@@ -138,7 +48,7 @@ These are the original modifications made when first forking from upstream MpvRx
 
 ## Features
 
-MpvRx pushes the mpv-android experience further with deep customization, thermal-aware performance, and unique quality-of-life features. Here's what sets it apart:
+mpvRx pushes the mpv-android experience further with deep customization, thermal-aware performance, and unique quality-of-life features. Here's what sets it apart:
 
 <details close>
 <summary><b>🎨 Theme & Visual System</b></summary>
@@ -150,6 +60,7 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | **Player Controls Animation** | 5 animation styles: Default, Elastic Bounce, Cinematic Scale, Slide Up, Minimal Fade |
 | **Always Dark Mode** | Option to keep player controls in dark theme regardless of app theme |
 | **Themed Player Controls** | Adaptive controls that match your app theme or system accent |
+| **Material 3 Expressive UI** | Expressive components, spring-based navigation, responsive grids, and polished predictive-back motion |
 
 </details>
 
@@ -163,6 +74,7 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | **Horizontal Swipe to Seek** | Swipe across video to seek with live time/delta overlay |
 | **Long-Press Dynamic Speed** | Long-press activates configurable speed boost; swipe left/right to adjust across 8 presets |
 | **Subtitle Drag Gesture** | Long-press center screen to drag subtitles vertically when active |
+| **Subtitle Zoom & Dialogue Seek** | Pinch subtitle text to resize it and swipe across subtitles to seek between dialogue lines |
 | **Pinch-to-Zoom with Pan** | Pinch to zoom (-1x to 3x) with simultaneous pan and single-finger pan after zoom |
 | **Volume Boost via Gesture** | Vertical swipe volume can exceed 100% into configurable boost range |
 | **Swap Volume/Brightness Sides** | Option to swap which screen side controls volume vs brightness |
@@ -228,6 +140,9 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | **Comprehensive Styling** | Font, size, bold, italic, border, shadow, colors, justification, scale by window |
 | **Three Online Search Modes** | Wyzie, SubtitleHub (6 aggregated sources), and Hybrid (both merged) |
 | **TMDB Integration** | Full media search with season/episode browsing for subtitles |
+| **Subtitle Font Manager** | Choose a font directory, reload fonts, clear the cache, and select a default subtitle font |
+| **Speech-to-Subtitle Generation** | Experimental subtitle generation from the active audio using supported cloud or offline Whisper providers |
+| **Explicit Subtitle Off** | Disable subtitles directly without cycling through every available track |
 
 </details>
 
@@ -237,13 +152,30 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | Feature | Description |
 |---|---|
 | **Fully Customizable Layout** | Four configurable zones (top-left/right, bottom-left/right) + portrait bottom row |
-| **24+ Button Types** | Mirror, Vertical Flip, A-B Loop, Custom Skip, Background Playback, Ambient, and more |
+| **25+ Button Types** | Cast, Mirror, Vertical Flip, A-B Loop, Custom Skip, Background Playback, Ambient, and more |
 | **Custom User Buttons** | Create arbitrary buttons executing Lua, JavaScript, or mpv commands |
 | **Landscape/Portrait Adaptive Layouts** | Completely different control layouts per orientation |
 | **"Slide to Unlock" Controls** | Slide mechanism when controls are locked |
 | **Hide Button Backgrounds** | Transparent buttons with only icons visible |
 | **Centralized "More Sheet"** | Quick access to all player buttons and custom controls |
 | **In-Player Settings** | Toggle 10+ settings (gestures, PiP, UI behavior) without leaving playback |
+
+</details>
+
+<details close>
+<summary><b>📺 Google Cast</b></summary>
+
+| Feature | Description |
+|---|---|
+| **Native Cast Button** | Standard stateful Google Cast route icon in both portrait and landscape player controls |
+| **Device Discovery** | Google Cast framework discovery and native device chooser for Chromecast and Cast-enabled TVs |
+| **Position Handoff** | Transfers the current title, play state, duration, and playback position to the receiver |
+| **Local File Casting** | Tokenized temporary LAN server exposes `file://` and `content://` media with byte-range seeking and CORS headers |
+| **Remote Stream Casting** | Direct handoff for receiver-accessible HTTP and HTTPS media URLs |
+| **Expanded Remote Controls** | Cast SDK controller, notification, lock-screen actions, reconnection, and receiver volume controls |
+| **Return to Phone** | Restores local playback at the receiver's latest position when the Cast session ends |
+
+> Cast uses Google's Default Media Receiver. The TV/Chromecast must support the media container and codecs; mpv-only formats are not transcoded automatically.
 
 </details>
 
@@ -270,6 +202,41 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | **"NEW" Badges** | Configurable threshold for new video indicators |
 | **Grid/List Layout** | Per-orientation column count settings |
 | **Multi-Protocol Network** | Built-in SMB, FTP, and WebDAV clients |
+| **Syncplay Rooms** | Join a Syncplay server room to synchronize pause, resume, seeking, and playback position with other viewers |
+| **Responsive & Dual-Pane Layouts** | Automatic grid sizing plus optional folder/settings dual-pane views on tablets |
+| **Audio Library Mode** | MediaStore and filesystem audio browsing with square artwork, metadata titles, and mixed sibling playlists |
+</details>
+
+<details close>
+<summary><b>🍿 Jellyfin Client (Expressive Cinematic UI)</b></summary>
+
+| Feature | Description |
+|---|---|
+| **Native Server Integration** | Direct connection with Jellyfin accounts, fast token authentication, and multi-server management |
+| **Material 3 Expressive UI** | Cinematic interface with spring-based transitions and fluid layout hierarchy |
+| **Featured Hero Banner** | Auto-advancing 16:9 backdrop banner with smooth gradient scrims, ratings, badges, and quick play |
+| **Continue Watching & Recently Watched** | Horizontal resume carousels with relative timestamps and progress bars tracking playback progress |
+| **Library Filter Chips** | Instant switching between Movies, TV Shows, Anime, Music, and BoxSets with dynamic item counts |
+| **Poster & Backdrop Cards** | 2:3 vertical posters and 16:9 backdrop cards with community ratings, release years, and unplayed badges |
+| **Cinematic Detail Sheet** | Full-bleed modal sheet with backdrops, floating posters, storyline synopsis, and season/episode picker |
+| **Server-Synced Favorites** | Heart action synced bidirectionally with your Jellyfin server account (`UserData.IsFavorite`) |
+| **Direct & Transcoded Streaming** | High-performance direct stream playback with audio track and subtitle stream switching |
+
+</details>
+
+<details close>
+<summary><b>⚡ Unified Media & Torrent Streaming</b></summary>
+
+| Feature | Description |
+|---|---|
+| **Sequential Torrent Engine** | Powered by high-speed native Go bridge (`anacrolix/torrent`) with sequential piece prioritization |
+| **Instant Streaming** | Stream magnet links, `.torrent` files, direct web streams (HLS, MP4), and YouTube URLs |
+| **Cinematic Discovery** | Hero banner carousel, Continue Watching row, and 2:3 vertical poster cards for saved media |
+| **Automated TMDB Enrichment** | Fetches posters, backdrops, storyline synopsis, release years, and media types via Wyzie/TMDB |
+| **Cinematic Media Details** | Modal bottom sheet with floating poster, metadata badges, "Watch Now / Resume", and "Copy Magnet" |
+| **Intelligent Episode Parser** | Robust parser supporting anime numbering, season/episode formats (S01E02, 1x02), and quality tags |
+| **Episode Search & Sorting** | Filter and sort episodes within multi-file torrents with watched status checkmarks |
+| **Unified Media Hub** | Save direct streams, YouTube links, and torrents into your collection with one-tap ingestion |
 
 </details>
 
@@ -278,10 +245,12 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 
 | Feature | Description |
 |---|---|
-| **Provider Support** | OpenCode and Groq with configurable API keys and models |
+| **Provider Support** | OpenAI, Anthropic, Groq, OpenRouter, Together, and OpenCode Zen with provider-specific models and API protocols |
 | **AI Subtitle Translation** | Translate subtitles with custom prompts |
 | **AI Subtitle Formatting** | Reformat subtitle styling with custom prompts |
 | **AI File Renaming** | Bulk rename video files with custom rename prompts |
+| **Reasoning-Safe Parsing** | Removes reasoning blocks and code fences while accepting structured provider responses and citations |
+| **Speech Providers** | Cloud transcription plus experimental offline Whisper subtitle generation |
 
 </details>
 
@@ -293,6 +262,7 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | **Dual Language** | Lua (.lua) and JavaScript (.js) script support |
 | **Sora Code Editor** | Built-in editor with TextMate syntax highlighting |
 | **Runtime Script Loading** | Enable/disable scripts without restarting |
+| **Lua Module Support** | Recursive `script-modules/` synchronization enables custom scripts to use `require()` helpers |
 | **Config Editor** | Built-in editor for mpv.conf and input.conf |
 
 </details>
@@ -305,26 +275,28 @@ MpvRx pushes the mpv-android experience further with deep customization, thermal
 | **Stats Page 6** | Live system monitor: FPS, dropped frames, codecs, network sparkline, battery |
 | **Video Compressor** | Built-in FFmpeg-based compression with presets |
 | **12 Video Filter Presets** | Vivid, Cinematic, Dramatic, Ghibli Style, Neon Pop, Deep Black, and more |
-| **Custom Skip Segments** | Intro/outro/recap/credits/preview detection from IntroDB, TIDB, AniSkip |
+| **Custom Skip Segments** | Intro/outro/recap/credits/preview detection from IntroDB, TIDB, AniSkip, Anime Skip |
 | **A-B Loop** | In-player looping with visual markers on seekbar |
 | **Frame Navigation** | Frame-by-frame forward/backward with frame number display |
 | **Sleep Timer** | Built-in with quick presets (15/30/45/60 min) |
 | **Adaptive Background Playback** | Auto-PiP on Home, auto-resume after screen unlock |
+| **Unified Background Playback** | One persistent audio/video switch; Back can return to browser lists without stopping the current media |
 | **Notification Styles** | None, Media, or Progress with Chapters (Android 16+) |
 | **Safe Area / Window Offset** | Prevents camera notch overlap |
 | **Display Cutout Mode** | Full-bleed on notch devices |
 | **Remember Brightness** | Persists brightness level set during playback |
 | **M3U Playlist Support** | Parse and play local M3U playlists |
 | **yt-dlp Integration** | High-performance streaming support for YouTube, Twitch, Bilibili, and more via a native Python bridge (SDK 29+ bypass) |
+| **yt-dlp Quality Controls** | Independent codec, resolution, FPS, HDR, container, and audio-bitrate preferences |
+| **Dynamic Refresh Rate** | Matches supported display refresh rates to the current video's frame rate for smoother motion |
+| **Audio Blob Visualizer** | OpenGL ES 3.0 FFT-reactive blob with bloom, touch rotation, pinch zoom, and an Audio Settings toggle |
+| **Screenshot Templates** | Filename placeholders for source name, playback position, and millisecond-accurate timestamps |
 
 </details>
 
 ---
 
-## 🔋 Battery Optimization guide for Mpv Players
-
-<details close>
-<summary><b>📜 Guide</b></summary>
+## 🔋 Battery Optimization guide for Mpv
 
 First Pro Tip Keep Mpv Conf empty if you are newbie
 
@@ -332,19 +304,68 @@ First Pro Tip Keep Mpv Conf empty if you are newbie
 - **Disable Vulkan entirely.** Vulkan is great for Video Playback but also Heavy.
 - **Use the `fast` mpv profile.** It's literally built into mpvRx use that Mpv Profiles and Set it to Default  or in _mpv.conf_ `profile=fast`
 - **Don't use shaders.** That Anime4K preset you using that's what's eating your battery. Shaders run on the GPU every single frame. If you're watching 24fps content and you have a shader pipeline running, congratulations — you're doing 24 unnecessary GPU compute passes per second for a Minute amount of visible benefit on a phone screen .
-- **Don't use AI-generated configs.** That means you, the person who copied a Reddit config with 200 lines of `scale=ewa_lanczossharp` and `dscale=mitchell` and `cscale=sinc` and a dozen `glsl-shaders` entries. Most  of You have no idea what any of those do. You just made your phone render video like it's preparing for a 4K cinema projection. On a 6-inch screen. Grow some Brains Its your android Phone not some ... 4k Television
+- **Don't use AI-generated configs.** That means you, the person who copied a Reddit config with 200 lines of `scale=ewa_lanczossharp` and `dscale=mitchell` and `cscale=sinc` and a dozen `glsl-shaders` entries. Most  of You have no idea what any of those do. You just made your phone render video like it's preparing for a 4K cinema projection. On a 6-inch screen. Grow some Brains Its your android Phone not some Fuckin.. 4k Television
 
 **My POV:** mpv's default config with `profile=fast` and the `gpu` backend plays video with negligible battery impact — often **less** than OEM players because mpv doesn't have a billion proprietary DRM modules, analytics SDKs, and ad frameworks burning CPU in the background. The next time your battery drops more than 20-25% watching a 2-hour movie, don't blame mpv. Blame the 14 shaders you blindly copy-pasted.
 
-_Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W ( See Page 6 of MpvRx - video player More Settings -> Page6) usage than ur Mpv Conf are Proper for Video watching thats what i have experimented and telling rest all i don't know About in detail technicality's if anyone wanna tell me In depth guide then keep it to yourself i dont wanna listen_
-
-</details>
+_Just a Pro tip if your battery consumption stays within 200 mAh and belwo 0.9W ( See Page 6 of mpvRx - video player More Settings -> Page6) useage than ur Mpv Conf are Proper for Video watching thats what i have experimented and telling rest all i don't know About in detail technicality's if anyone wanna tell me In depth guide then keep it to yourself i dont wanna listen_
 
 ---
 
-## Support💝
-<details close>
-If you find MpvRx/N useful and would like to support,consider buying a coffee to MpvRx original dev! Your support keeps the project alive.
+<div align="center">
+  <a href="https://github.com/Riteshp2001/mpvRx/releases">
+    <img src="https://img.shields.io/badge/Download-Stable_Release-blue?style=for-the-badge&logo=github" alt="Stable Release">
+  </a>
+  <!-- <a href="https://riteshp2001.github.io/mpvRx/">
+    <img src="https://img.shields.io/badge/Download-Preview_Build-orange?style=for-the-badge&logo=github" alt="Preview Build">
+  </a> -->
+</div>
+
+<!-- <div align="center">
+  <i>Note: Previews may be unstable and are intended for testing purposes only.</i>
+</div> -->
+
+If something breaks, feels off, or deserves another pass, _don't be Dumb and ask for Trash Features which only you require it wll be auto deleted_, 
+report it in the [Issues](https://github.com/Riteshp2001/mpvRx/issues).
+
+---
+
+## Build
+
+### Requirements
+
+- JDK 17
+- Android SDK with modern build tools installed
+- Git
+
+### Debug Build
+
+```powershell
+./gradlew.bat :app:assembleStandardDebug
+```
+
+### Release Variants
+
+| Variant | Description |
+|---|---|
+| `standard` | Main release with in-app update support |
+
+### APK Variants
+
+| Variant | Description |
+|---|---|
+| `universal` | Works on all supported devices |
+| `arm64-v8a` | Recommended for most current Android devices |
+| `armeabi-v7a` | For older 32-bit ARM devices |
+| `x86` | For 32-bit Intel and AMD Android devices |
+| `x86_64` | For 64-bit Intel and AMD Android devices |
+
+---
+
+## Support
+
+If you find mpvRx useful and would like to support its development, consider buying me a coffee! Your support keeps the project alive and helps push new features.
+
 <div align="center">
 
 ### ☕ Buy Me a Coffee
@@ -366,16 +387,62 @@ Scan with any UPI app (Google Pay, PhonePe, Paytm, BHIM)
 </div>
 
 ---
-</details>
+
+## Release Notes For Maintainers
+
+To cut a signed GitHub release through Actions, configure these repository secrets:
+
+| Secret Name | Description |
+|---|---|
+| `SIGNING_KEYSTORE` | Base64-encoded keystore file (`.jks` or `.keystore`) |
+| `SIGNING_KEY_ALIAS` | Key alias inside the keystore |
+| `SIGNING_STORE_PASSWORD` | Password for the keystore |
+| `KEY_PASSWORD` | Password for the signing key |
+
+Then bump `versionCode` and `versionName` in `app/build.gradle.kts`, create a tag, and push it:
+
+```bash
+git tag -a v1.3.1 -m "Release version 1.3.1"
+git push origin v1.3.1
+```
+
+Preview releases use the same flow with preview tags such as:
+
+```bash
+git tag -a v1.3.1-preview.1 -m "Preview release"
+git push origin v1.3.1-preview.1
+```
+
+---
 
 ## Acknowledgments
 
-- Fork of
-[MpvRx](https://github.com/Riteshp2001/mpvRx)
 - [mpv-android](https://github.com/mpv-android)
 - [mpvExtended](https://github.com/marlboro-advance/mpvEx)
 - [mpvKt](https://github.com/abdallahmehiz/mpvKt)
+- [PixelPlayer](https://github.com/theovilardo/PixelPlayer) 
+- [MpvRex](https://github.com/sfsakhawat999/mpvRex)
 - [Next Player](https://github.com/anilbeesetti/nextplayer)
 - [Gramophone](https://github.com/FoedusProgramme/Gramophone)
 - [hdr-toys](https://github.com/natural-harmonia-gropius/hdr-toys)
+- [AFinity](https://github.com/MakD/AFinity)
+- [anacrolix/torrent](https://github.com/anacrolix/torrent)
 - [**SunnyVishnu3**](https://github.com/SunnyVishnu3) for the `yt-dlp` native integration and SDK 29+ bypass logic.
+
+---
+
+## License
+
+Distributed under **GNU Affero General Public License v3.0 (AGPL-3.0-or-later)**. See `LICENSE` for more information.
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/#Riteshp2001/mpvRx&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Riteshp2001/mpvRx&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Riteshp2001/mpvRx&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Riteshp2001/mpvRx&type=date&legend=top-left" />
+ </picture>
+</a>

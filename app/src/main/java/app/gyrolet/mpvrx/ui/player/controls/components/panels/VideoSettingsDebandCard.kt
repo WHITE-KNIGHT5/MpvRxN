@@ -1,7 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,18 +39,24 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.preferences.preference.deleteAndGet
 import app.gyrolet.mpvrx.presentation.components.ExpandableCard
 import app.gyrolet.mpvrx.presentation.components.SliderItem
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.DebandSettings
 import app.gyrolet.mpvrx.ui.player.Debanding
 import app.gyrolet.mpvrx.ui.player.controls.CARDS_MAX_WIDTH
 import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
 import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
+import app.gyrolet.mpvrx.ui.utils.currentMpvConfigOverrideOptions
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import org.koin.compose.koinInject
 
 @Composable
 fun VideoSettingsDebandCard(modifier: Modifier = Modifier) {
   val decoderPreferences = koinInject<DecoderPreferences>()
+  val configOwnedOptions = currentMpvConfigOverrideOptions()
+  val modeOptions = setOf("deband", "vf")
+  val modeEnabled = modeOptions.none(configOwnedOptions::contains)
+  val debandOptions = modeOptions + DebandSettings.entries.map(DebandSettings::mpvProperty)
   val deband by decoderPreferences.debanding.collectAsState()
   var isExpanded by remember { mutableStateOf(true) }
 
@@ -50,7 +64,7 @@ fun VideoSettingsDebandCard(modifier: Modifier = Modifier) {
     isExpanded,
     title = {
       Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium)) {
-        Icon(Icons.Default.Gradient, null)
+        Icon(Icons.RoundedFilled.Gradient, null)
         Text(stringResource(R.string.player_sheets_deband_title))
       }
     },
@@ -70,28 +84,29 @@ fun VideoSettingsDebandCard(modifier: Modifier = Modifier) {
           Debanding.entries.forEach {
             IconToggleButton(
               checked = deband == it,
+              enabled = modeEnabled,
               onCheckedChange = { _ ->
                 decoderPreferences.debanding.set(it)
                 when (it) {
                   Debanding.None -> {
-                    MPVLib.setOptionString("deband", "no")
-                    MPVLib.command("vf", "remove", "@deband")
+                    PlaybackSession.setOptionString("deband", "no")
+                    PlaybackSession.command("vf", "remove", "@deband")
                   }
                   Debanding.CPU -> {
-                    MPVLib.setOptionString("deband", "no")
-                    MPVLib.command("vf", "add", "@deband:gradfun=radius=12")
+                    PlaybackSession.setOptionString("deband", "no")
+                    PlaybackSession.command("vf", "add", "@deband:gradfun=radius=12")
                   }
                   Debanding.GPU -> {
-                    MPVLib.setOptionString("deband", "yes")
-                    MPVLib.command("vf", "remove", "@deband")
+                    PlaybackSession.setOptionString("deband", "yes")
+                    PlaybackSession.command("vf", "remove", "@deband")
                   }
                 }
               },
             ) {
               when (it) {
-                Debanding.None -> Icon(Icons.Default.NotInterested, null)
-                Debanding.CPU -> Icon(Icons.Default.Memory, null)
-                Debanding.GPU -> Icon(Icons.Default.DeveloperBoard, null)
+                Debanding.None -> Icon(Icons.RoundedFilled.NotInterested, null)
+                Debanding.CPU -> Icon(Icons.RoundedFilled.Memory, null)
+                Debanding.GPU -> Icon(Icons.RoundedFilled.DeveloperBoard, null)
               }
             }
           }
@@ -100,12 +115,13 @@ fun VideoSettingsDebandCard(modifier: Modifier = Modifier) {
 
           Spacer(Modifier.weight(1f))
           TextButton(
+            enabled = debandOptions.none(configOwnedOptions::contains),
             onClick = {
               decoderPreferences.debanding.set(Debanding.None)
-              MPVLib.setOptionString("deband", "no")
-              MPVLib.command("vf", "remove", "@deband")
+              PlaybackSession.setOptionString("deband", "no")
+              PlaybackSession.command("vf", "remove", "@deband")
               DebandSettings.entries.forEach {
-                MPVLib.setPropertyInt(it.mpvProperty, it.preference(decoderPreferences).deleteAndGet())
+                PlaybackSession.setPropertyInt(it.mpvProperty, it.preference(decoderPreferences).deleteAndGet())
               }
             },
           ) {
@@ -113,7 +129,7 @@ fun VideoSettingsDebandCard(modifier: Modifier = Modifier) {
               horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              Icon(Icons.Default.ResetIso, null)
+              Icon(Icons.RoundedFilled.ResetIso, null)
               Text(stringResource(R.string.generic_reset))
             }
           }
@@ -127,17 +143,14 @@ fun VideoSettingsDebandCard(modifier: Modifier = Modifier) {
             valueText = value.toString(),
             onChange = {
               debandSettings.preference(decoderPreferences).set(it)
-              MPVLib.setPropertyInt(debandSettings.mpvProperty, it)
+              PlaybackSession.setPropertyInt(debandSettings.mpvProperty, it)
             },
             min = debandSettings.start,
             max = debandSettings.end,
+            enabled = debandSettings.mpvProperty !in configOwnedOptions,
           )
         }
       }
     }
   }
 }
-
-
-
-

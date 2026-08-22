@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.dialogs
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.dialogs
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -51,7 +59,7 @@ fun DeleteConfirmationDialog(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         Icon(
-          imageVector = Icons.Default.Delete,
+          imageVector = Icons.RoundedFilled.Delete,
           contentDescription = null,
           tint = MaterialTheme.colorScheme.error,
           modifier = Modifier.size(28.dp),
@@ -69,9 +77,10 @@ fun DeleteConfirmationDialog(
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         Card(
-          colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-          ),
+          colors =
+            CardDefaults.cardColors(
+              containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
           shape = MaterialTheme.shapes.large,
           modifier = Modifier.fillMaxWidth(),
         ) {
@@ -81,7 +90,7 @@ fun DeleteConfirmationDialog(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
           ) {
             Icon(
-              imageVector = Icons.Outlined.Warning,
+              imageVector = Icons.RoundedFilled.Warning,
               contentDescription = null,
               tint = MaterialTheme.colorScheme.onErrorContainer,
               modifier = Modifier.size(20.dp),
@@ -97,18 +106,20 @@ fun DeleteConfirmationDialog(
 
         if (itemNames.isNotEmpty()) {
           Card(
-            colors = CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
+            colors =
+              CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+              ),
             shape = MaterialTheme.shapes.large,
             modifier = Modifier.fillMaxWidth(),
           ) {
             Column(
-              modifier = Modifier
-                .padding(14.dp)
-                .fillMaxWidth()
-                .heightIn(max = 200.dp)
-                .verticalScroll(rememberScrollState()),
+              modifier =
+                Modifier
+                  .padding(14.dp)
+                  .fillMaxWidth()
+                  .heightIn(max = 200.dp)
+                  .verticalScroll(rememberScrollState()),
               verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
               itemNames.forEachIndexed { index, name ->
@@ -143,20 +154,23 @@ fun DeleteConfirmationDialog(
           onConfirm()
           onDismiss()
         },
-        colors = ButtonDefaults.buttonColors(
-          containerColor = MaterialTheme.colorScheme.error,
-          contentColor = MaterialTheme.colorScheme.onError,
-        ),
+        colors =
+          ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+          ),
         shape = MaterialTheme.shapes.extraLarge,
       ) {
         Icon(
-          imageVector = Icons.Default.Delete,
+          imageVector = Icons.RoundedFilled.Delete,
           contentDescription = null,
           modifier = Modifier.size(18.dp),
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-          text = "Delete",
+          text =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.delete),
           fontWeight = FontWeight.Bold,
         )
       }
@@ -167,12 +181,16 @@ fun DeleteConfirmationDialog(
         shape = MaterialTheme.shapes.extraLarge,
       ) {
         Icon(
-          imageVector = Icons.Default.Close,
+          imageVector = Icons.RoundedFilled.Close,
           contentDescription = null,
           modifier = Modifier.size(16.dp),
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text("Cancel", fontWeight = FontWeight.Medium)
+        Text(
+          androidx.compose.ui.res
+            .stringResource(app.gyrolet.mpvrx.R.string.generic_cancel),
+          fontWeight = FontWeight.Medium,
+        )
       }
     },
     containerColor = MaterialTheme.colorScheme.surface,

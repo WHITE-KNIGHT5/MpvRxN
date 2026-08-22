@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.browser.playlist
 
 import android.app.Application
@@ -55,12 +64,13 @@ class PlaylistViewModel(
     viewModelScope.launch(Dispatchers.IO) {
       try {
         // Get initial cached data synchronously
-        val cachedPlaylists = repository.getAllPlaylists()
+        val cachedPlaylists = repository.getAllPlaylists(isAudio = false)
         if (cachedPlaylists.isNotEmpty()) {
           // Show cached data immediately (without video counts for speed)
-          val quickLoad = cachedPlaylists.sortedBy { it.name.lowercase() }.map { playlist ->
-            PlaylistWithCount(playlist, 0) // Show 0 count initially
-          }
+          val quickLoad =
+            cachedPlaylists.sortedBy { it.name.lowercase() }.map { playlist ->
+              PlaylistWithCount(playlist, 0) // Show 0 count initially
+            }
           _playlistsWithCount.value = quickLoad
           _hasCompletedInitialLoad.value = true
         }
@@ -71,13 +81,14 @@ class PlaylistViewModel(
 
     // Then observe for updates with actual counts
     viewModelScope.launch(Dispatchers.IO) {
-      repository.observeAllPlaylists().collectLatest { playlistsFromDb ->
+      repository.observeAllPlaylists(isAudio = false).collectLatest { playlistsFromDb ->
         val sortedPlaylists = playlistsFromDb.sortedBy { it.name.lowercase() }
 
-        val playlistsWithCounts = sortedPlaylists.map { playlist ->
-          val count = getActualVideoCount(playlist.id)
-          PlaylistWithCount(playlist, count)
-        }
+        val playlistsWithCounts =
+          sortedPlaylists.map { playlist ->
+            val count = getActualVideoCount(playlist.id)
+            PlaylistWithCount(playlist, count)
+          }
 
         _playlistsWithCount.value = playlistsWithCounts
         _hasCompletedInitialLoad.value = true
@@ -99,11 +110,13 @@ class PlaylistViewModel(
     }
 
     // For regular playlists, check if files still exist
-    val bucketIds = items.map { item ->
-      File(item.filePath).parent ?: ""
-    }.toSet()
+    val bucketIds =
+      items
+        .map { item ->
+          File(item.filePath).parent ?: ""
+        }.toSet()
 
-    val allVideos = MediaFileRepository.getVideosForBuckets(getApplication(), bucketIds)
+    val allVideos = MediaFileRepository.getVideosForBuckets(getApplication(), bucketIds, includeAudioOverride = true)
 
     return items.count { item ->
       allVideos.any { video -> video.path == item.filePath }
@@ -114,13 +127,14 @@ class PlaylistViewModel(
     viewModelScope.launch(Dispatchers.IO) {
       try {
         _isLoading.value = true
-        val playlistsFromDb = repository.getAllPlaylists()
+        val playlistsFromDb = repository.getAllPlaylists(isAudio = false)
         val sortedPlaylists = playlistsFromDb.sortedBy { it.name.lowercase() }
 
-        val playlistsWithCounts = sortedPlaylists.map { playlist ->
-          val count = getActualVideoCount(playlist.id)
-          PlaylistWithCount(playlist, count)
-        }
+        val playlistsWithCounts =
+          sortedPlaylists.map { playlist ->
+            val count = getActualVideoCount(playlist.id)
+            PlaylistWithCount(playlist, count)
+          }
 
         _playlistsWithCount.value = playlistsWithCounts
       } catch (e: Exception) {
@@ -131,24 +145,23 @@ class PlaylistViewModel(
     }
   }
 
-  suspend fun createPlaylist(name: String): Long {
-    return repository.createPlaylist(name)
-  }
+  suspend fun createPlaylist(name: String): Long = repository.createPlaylist(name, isAudio = false)
 
-  suspend fun createM3UPlaylist(url: String, userAgent: String? = null): Result<Long> {
-    return repository.createM3UPlaylist(url, userAgent)
-  }
+  suspend fun createM3UPlaylist(
+    url: String,
+    userAgent: String? = null,
+  ): Result<Long> = repository.createM3UPlaylist(url, userAgent)
 
-  suspend fun createM3UPlaylistFromFile(uri: android.net.Uri): Result<Long> {
-    return repository.createM3UPlaylistFromFile(getApplication(), uri)
-  }
+  suspend fun createM3UPlaylistFromFile(uri: android.net.Uri): Result<Long> =
+    repository.createM3UPlaylistFromFile(getApplication(), uri)
 
-  suspend fun refreshM3UPlaylist(playlistId: Int): Result<Unit> {
-    return repository.refreshM3UPlaylist(playlistId)
-  }
+  suspend fun refreshM3UPlaylist(playlistId: Int): Result<Unit> = repository.refreshM3UPlaylist(playlistId)
 
   suspend fun deletePlaylist(playlist: PlaylistEntity) {
     repository.deletePlaylist(playlist)
   }
-}
 
+  suspend fun updatePlaylist(playlist: PlaylistEntity) {
+    repository.updatePlaylist(playlist)
+  }
+}

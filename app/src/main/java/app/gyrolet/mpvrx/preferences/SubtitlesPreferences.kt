@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.preferences
 
 import androidx.compose.ui.graphics.Color
@@ -6,15 +15,16 @@ import app.gyrolet.mpvrx.preferences.preference.PreferenceStore
 import app.gyrolet.mpvrx.preferences.preference.getEnum
 import app.gyrolet.mpvrx.repository.subtitle.OnlineSubtitleSearchMode
 import app.gyrolet.mpvrx.repository.subtitlehub.MpvRxSubtitleHubSources
-import app.gyrolet.mpvrx.ui.player.controls.components.panels.SubtitlesBorderStyle
 import app.gyrolet.mpvrx.ui.icons.AppIcon
 import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.controls.components.panels.SubtitlesBorderStyle
 
 class SubtitlesPreferences(
   preferenceStore: PreferenceStore,
 ) {
   val preferredLanguages = preferenceStore.getString("sub_preferred_languages")
   val autoloadMatchingSubtitles = preferenceStore.getBoolean("sub_autoload_enabled", true)
+  val autoEnableSubtitles = preferenceStore.getBoolean("sub_auto_enable", true)
 
   val fontsFolder = preferenceStore.getString("sub_fonts_folder")
   val font = preferenceStore.getString("sub_font", "")
@@ -43,13 +53,13 @@ class SubtitlesPreferences(
   val defaultSubSpeed = preferenceStore.getFloat("sub_default_speed", 1f)
 
   val pickerPath = preferenceStore.getString("sub_picker_path")
-  
+
   val subtitleSaveFolder = preferenceStore.getString("sub_save_folder", "")
   val subdlLanguages = preferenceStore.getStringSet("subdl_languages", setOf("en"))
   val subtitleSearchLanguages = subdlLanguages
   val onlineSubtitleSearchMode = preferenceStore.getOnlineSubtitleSearchMode()
   val subtitleHubSources = preferenceStore.getStringSet("subtitle_hub_sources", MpvRxSubtitleHubSources.DEFAULT)
-  
+
   val wyzieSources = preferenceStore.getStringSet("wyzie_sources", setOf("all"))
   val wyzieFormats = preferenceStore.getStringSet("wyzie_formats", setOf("srt", "ass"))
   val wyzieEncodings = preferenceStore.getStringSet("wyzie_encodings", setOf("utf-8"))
@@ -72,10 +82,12 @@ private fun PreferenceStore.getOnlineSubtitleSearchMode() =
       when (stored) {
         OnlineSubtitleSearchMode.WYZIE.name -> OnlineSubtitleSearchMode.WYZIE
         OnlineSubtitleSearchMode.SUBHUB.name,
-        "MPVRX_SUBTITLE_HUB" -> OnlineSubtitleSearchMode.SUBHUB
+        "MPVRX_SUBTITLE_HUB",
+        -> OnlineSubtitleSearchMode.SUBHUB
         OnlineSubtitleSearchMode.HYBRID.name,
         "HYBRID_SEQUENTIAL",
-        "HYBRID_PARALLEL" -> OnlineSubtitleSearchMode.HYBRID
+        "HYBRID_PARALLEL",
+        -> OnlineSubtitleSearchMode.HYBRID
         else -> OnlineSubtitleSearchMode.HYBRID
       }
     },
@@ -85,8 +97,8 @@ enum class SubtitleJustification(
   val value: String,
   val icon: AppIcon,
 ) {
-  Left("left", Icons.Default.FormatAlignLeft),
-  Center("center", Icons.Default.FormatAlignCenter),
-  Right("right", Icons.Default.FormatAlignRight),
-  Auto("auto", Icons.Default.FormatAlignJustify),
+  Left("left", Icons.RoundedFilled.FormatAlignLeft),
+  Center("center", Icons.RoundedFilled.FormatAlignCenter),
+  Right("right", Icons.RoundedFilled.FormatAlignRight),
+  Auto("auto", Icons.RoundedFilled.FormatAlignJustify),
 }

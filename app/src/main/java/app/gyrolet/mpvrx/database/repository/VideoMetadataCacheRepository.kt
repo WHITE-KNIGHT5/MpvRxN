@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.database.repository
 
 import android.content.Context
@@ -50,6 +59,7 @@ class VideoMetadataCacheRepository(
     file: File,
     uri: Uri,
     displayName: String,
+    includeVideoCodec: Boolean = false,
   ): MediaInfoOps.VideoMetadata? =
     withContext(Dispatchers.IO) {
       val path = file.absolutePath
@@ -60,7 +70,7 @@ class VideoMetadataCacheRepository(
       val cached = dao.getMetadata(path, dateModified, size)
       if (cached != null && !shouldRefreshCachedMetadata(file, cached)) {
         Log.d(TAG, "Cache hit for $displayName")
-        return@withContext MediaInfoOps.VideoMetadata(
+        val metadata = MediaInfoOps.VideoMetadata(
           sizeBytes = cached.size,
           durationMs = cached.duration,
           width = cached.width,
@@ -69,31 +79,39 @@ class VideoMetadataCacheRepository(
           hasEmbeddedSubtitles = cached.hasEmbeddedSubtitles,
           subtitleCodec = cached.subtitleCodec,
         )
+        if (!includeVideoCodec) return@withContext metadata
+
+        val codec = MediaInfoOps.extractVideoCodec(context, uri, displayName)
+        return@withContext metadata.copy(
+          videoCodec = codec.label,
+          videoCodecMimeType = codec.mimeType,
+        )
       }
 
       // Cache miss - extract metadata
       Log.d(TAG, "Cache miss for $displayName, extracting metadata")
       val result = MediaInfoOps.extractBasicMetadata(context, uri, displayName)
 
-      result.onSuccess { metadata ->
-        // Save to cache
-        dao.insertMetadata(
-          VideoMetadataEntity(
-            path = path,
-            size = size,
-            dateModified = dateModified,
-            duration = metadata.durationMs,
-            width = metadata.width,
-            height = metadata.height,
-            fps = metadata.fps,
-            hasEmbeddedSubtitles = metadata.hasEmbeddedSubtitles,
-            subtitleCodec = metadata.subtitleCodec,
-            lastScanned = System.currentTimeMillis(),
-          ),
-        )
-      }.onFailure { error ->
-        Log.w(TAG, "Failed to extract metadata for $displayName: ${error.message}")
-      }
+      result
+        .onSuccess { metadata ->
+          // Save to cache
+          dao.insertMetadata(
+            VideoMetadataEntity(
+              path = path,
+              size = size,
+              dateModified = dateModified,
+              duration = metadata.durationMs,
+              width = metadata.width,
+              height = metadata.height,
+              fps = metadata.fps,
+              hasEmbeddedSubtitles = metadata.hasEmbeddedSubtitles,
+              subtitleCodec = metadata.subtitleCodec,
+              lastScanned = System.currentTimeMillis(),
+            ),
+          )
+        }.onFailure { error ->
+          Log.w(TAG, "Failed to extract metadata for $displayName: ${error.message}")
+        }
 
       result.getOrNull()
     }
@@ -105,6 +123,7 @@ class VideoMetadataCacheRepository(
    */
   suspend fun getOrExtractMetadataBatch(
     files: List<Triple<File, Uri, String>>,
+    videoCodecPaths: Set<String> = emptySet(),
   ): Map<String, MediaInfoOps.VideoMetadata> =
     withContext(Dispatchers.IO) {
       if (files.isEmpty()) return@withContext emptyMap()
@@ -143,15 +162,16 @@ class VideoMetadataCacheRepository(
 
       // Add cached results
       for ((path, _, cached) in cachedFiles) {
-        results[path] = MediaInfoOps.VideoMetadata(
-          sizeBytes = cached.size,
-          durationMs = cached.duration,
-          width = cached.width,
-          height = cached.height,
-          fps = cached.fps,
-          hasEmbeddedSubtitles = cached.hasEmbeddedSubtitles,
-          subtitleCodec = cached.subtitleCodec,
-        )
+        results[path] =
+          MediaInfoOps.VideoMetadata(
+            sizeBytes = cached.size,
+            durationMs = cached.duration,
+            width = cached.width,
+            height = cached.height,
+            fps = cached.fps,
+            hasEmbeddedSubtitles = cached.hasEmbeddedSubtitles,
+            subtitleCodec = cached.subtitleCodec,
+          )
       }
 
       // Extract metadata for uncached files in parallel
@@ -161,37 +181,40 @@ class VideoMetadataCacheRepository(
         uncachedFiles.chunked(PARALLEL_PROCESSING_LIMIT).forEach { batch ->
           coroutineScope {
             val batchResults =
-              batch.map { (file, uri, displayName) ->
-                async {
-                  val path = file.absolutePath
-                  val size = file.length()
-                  val dateModified = file.lastModified() / 1000
+              batch
+                .map { (file, uri, displayName) ->
+                  async {
+                    val path = file.absolutePath
+                    val size = file.length()
+                    val dateModified = file.lastModified() / 1000
 
-                  val result = MediaInfoOps.extractBasicMetadata(context, uri, displayName)
-                  result.onSuccess { metadata ->
-                    synchronized(extractedMetadata) {
-                      extractedMetadata.add(
-                        VideoMetadataEntity(
-                          path = path,
-                          size = size,
-                          dateModified = dateModified,
-                          duration = metadata.durationMs,
-                          width = metadata.width,
-                          height = metadata.height,
-                          fps = metadata.fps,
-                          hasEmbeddedSubtitles = metadata.hasEmbeddedSubtitles,
-                          subtitleCodec = metadata.subtitleCodec,
-                          lastScanned = System.currentTimeMillis(),
-                        ),
-                      )
-                    }
-                    path to metadata
-                  }.onFailure { error ->
-                    Log.w(TAG, "Failed to extract metadata for $displayName: ${error.message}")
+                    val result = MediaInfoOps.extractBasicMetadata(context, uri, displayName)
+                    result
+                      .onSuccess { metadata ->
+                        synchronized(extractedMetadata) {
+                          extractedMetadata.add(
+                            VideoMetadataEntity(
+                              path = path,
+                              size = size,
+                              dateModified = dateModified,
+                              duration = metadata.durationMs,
+                              width = metadata.width,
+                              height = metadata.height,
+                              fps = metadata.fps,
+                              hasEmbeddedSubtitles = metadata.hasEmbeddedSubtitles,
+                              subtitleCodec = metadata.subtitleCodec,
+                              lastScanned = System.currentTimeMillis(),
+                            ),
+                          )
+                        }
+                        path to metadata
+                      }.onFailure { error ->
+                        Log.w(TAG, "Failed to extract metadata for $displayName: ${error.message}")
+                      }
+                    result.getOrNull()?.let { path to it }
                   }
-                  result.getOrNull()?.let { path to it }
-                }
-              }.awaitAll().filterNotNull()
+                }.awaitAll()
+                .filterNotNull()
 
             results.putAll(batchResults)
           }
@@ -201,6 +224,31 @@ class VideoMetadataCacheRepository(
         if (extractedMetadata.isNotEmpty()) {
           dao.insertMetadataBatch(extractedMetadata)
           Log.d(TAG, "Batch inserted ${extractedMetadata.size} metadata entries to cache")
+        }
+      }
+
+      if (videoCodecPaths.isNotEmpty()) {
+        val sourceByPath = files.associateBy { it.first.absolutePath }
+        val missingCodec =
+          results
+            .filter { (path, metadata) -> path in videoCodecPaths && metadata.videoCodec.isBlank() }
+            .keys
+            .toList()
+        missingCodec.chunked(PARALLEL_PROCESSING_LIMIT).forEach { batch ->
+          coroutineScope {
+            val codecResults =
+              batch.mapNotNull { path ->
+                val source = sourceByPath[path] ?: return@mapNotNull null
+                async {
+                  val codec = MediaInfoOps.extractVideoCodec(context, source.second, source.third)
+                  path to results.getValue(path).copy(
+                    videoCodec = codec.label,
+                    videoCodecMimeType = codec.mimeType,
+                  )
+                }
+              }.awaitAll()
+            results.putAll(codecResults)
+          }
         }
       }
 
@@ -222,12 +270,13 @@ class VideoMetadataCacheRepository(
       videos.chunked(PARALLEL_PROCESSING_LIMIT).forEach { batch ->
         coroutineScope {
           val results =
-            batch.map { (file, uri, displayName) ->
-              async {
-                val metadata = getOrExtractMetadata(file, uri, displayName)
-                file.absolutePath to metadata
-              }
-            }.awaitAll()
+            batch
+              .map { (file, uri, displayName) ->
+                async {
+                  val metadata = getOrExtractMetadata(file, uri, displayName)
+                  file.absolutePath to metadata
+                }
+              }.awaitAll()
 
           // Emit each result as it completes
           results.forEach { result ->
@@ -241,25 +290,25 @@ class VideoMetadataCacheRepository(
    * Batch extract metadata for videos without blocking UI
    * Processes in parallel and returns all results at once
    */
-  suspend fun extractMetadataBatch(
-    videos: List<Triple<File, Uri, String>>,
-  ): Map<String, MediaInfoOps.VideoMetadata> =
+  suspend fun extractMetadataBatch(videos: List<Triple<File, Uri, String>>): Map<String, MediaInfoOps.VideoMetadata> =
     withContext(Dispatchers.IO) {
       val results = mutableMapOf<String, MediaInfoOps.VideoMetadata>()
 
       videos.chunked(PARALLEL_PROCESSING_LIMIT).forEach { batch ->
         coroutineScope {
           val batchResults =
-            batch.map { (file, uri, displayName) ->
-              async {
-                val metadata = getOrExtractMetadata(file, uri, displayName)
-                if (metadata != null) {
-                  file.absolutePath to metadata
-                } else {
-                  null
+            batch
+              .map { (file, uri, displayName) ->
+                async {
+                  val metadata = getOrExtractMetadata(file, uri, displayName)
+                  if (metadata != null) {
+                    file.absolutePath to metadata
+                  } else {
+                    null
+                  }
                 }
-              }
-            }.awaitAll().filterNotNull()
+              }.awaitAll()
+              .filterNotNull()
 
           results.putAll(batchResults)
         }
@@ -288,9 +337,10 @@ class VideoMetadataCacheRepository(
 
       Log.d(TAG, "Validating ${cachedPaths.size} cached entries...")
 
-      val stalePaths = cachedPaths.filterNot { path ->
-        File(path).exists()
-      }
+      val stalePaths =
+        cachedPaths.filterNot { path ->
+          File(path).exists()
+        }
 
       if (stalePaths.isNotEmpty()) {
         stalePaths.chunked(999).forEach { chunk ->

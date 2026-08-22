@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.components.expressive
 
 import androidx.compose.animation.core.animateDpAsState
@@ -6,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.Dp
-import app.gyrolet.mpvrx.ui.theme.AppMotion
 
 private val dpExpressiveSpring = spring<Dp>(dampingRatio = 0.9f, stiffness = 700f)
 

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components
 
 import androidx.compose.foundation.BorderStroke
@@ -40,6 +49,7 @@ fun ControlsButton(
   onLongClick: () -> Unit = {},
   title: String? = null,
   color: Color? = null,
+  enabled: Boolean = true,
 ) {
   val interactionSource = remember { MutableInteractionSource() }
   val appearancePreferences = koinInject<AppearancePreferences>()
@@ -51,6 +61,7 @@ fun ControlsButton(
       modifier
         .clip(CircleShape)
         .combinedClickable(
+          enabled = enabled,
           onClick = {
             clickEvent()
             onClick()
@@ -74,10 +85,16 @@ fun ControlsButton(
         )
       },
   ) {
+    val resolvedColor =
+      if (enabled) {
+        color ?: MaterialTheme.colorScheme.onSurface
+      } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+      }
     Icon(
       imageVector = icon,
       contentDescription = title,
-      tint = color ?: MaterialTheme.colorScheme.onSurface,
+      tint = resolvedColor,
       modifier =
         Modifier
           .padding(MaterialTheme.spacing.small)
@@ -107,8 +124,7 @@ fun ControlsGroup(
 @Composable
 private fun PreviewControlsButton() {
   ControlsButton(
-    Icons.Default.CatchingPokemon,
+    Icons.RoundedFilled.CatchingPokemon,
     onClick = {},
   )
 }
-

@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.dialogs
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.dialogs
 
 import android.content.Context
 import android.content.res.Configuration
@@ -18,17 +24,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.utils.storage.StorageVolumeUtils
 import java.io.File
 
@@ -58,53 +63,72 @@ fun FilePickerDialog(
   onPathChanged: ((String?) -> Unit)? = null,
   onSystemPickerRequest: () -> Unit,
   matchToName: String? = null,
-  allowedExtensions: List<String> = listOf(
-    // Common & modern
-    "srt", "vtt", "ass", "ssa",
-
-    // DVD / Blu-ray
-    "sub", "idx", "sup",
-
-    // Streaming / XML / Professional
-    "xml", "ttml", "dfxp", "itt", "ebu", "imsc", "usf",
-
-    // Online platforms
-    "sbv", "srv1", "srv2", "srv3", "json",
-
-    // Legacy & niche
-    "sami", "smi", "mpl", "pjs", "stl", "rt", "psb", "cap",
-
-    // Broadcast captions
-    "scc", "vttx",
-
-    // Karaoke / lyrics
-    "lrc", "krc",
-
-    // Fallback / raw text
-    "txt"
-  )
-
+  allowedExtensions: List<String> =
+    listOf(
+      // Common & modern
+      "srt",
+      "vtt",
+      "ass",
+      "ssa",
+      // DVD / Blu-ray
+      "sub",
+      "idx",
+      "sup",
+      // Streaming / XML / Professional
+      "xml",
+      "ttml",
+      "dfxp",
+      "itt",
+      "ebu",
+      "imsc",
+      "usf",
+      // Online platforms
+      "sbv",
+      "srv1",
+      "srv2",
+      "srv3",
+      "json",
+      // Legacy & niche
+      "sami",
+      "smi",
+      "mpl",
+      "pjs",
+      "stl",
+      "rt",
+      "psb",
+      "cap",
+      // Broadcast captions
+      "scc",
+      "vttx",
+      // Karaoke / lyrics
+      "lrc",
+      "krc",
+      // Fallback / raw text
+      "txt",
+    ),
 ) {
   if (!isOpen) return
 
   val context = LocalContext.current
-  
+
   // Get all available storage volumes
-  val storageVolumes = remember(isOpen) {
-    StorageVolumeUtils.getAllStorageVolumes(context)
-  }
-  
+  val storageVolumes =
+    remember(isOpen) {
+      StorageVolumeUtils.getAllStorageVolumes(context)
+    }
+
   // If there's only one storage volume, start there directly
   // Otherwise, start at storage root view to show all volumes
   // Respect currentPath if it's valid and exists
   var selectedPath by remember(isOpen, currentPath, storageVolumes) {
-    val initialPath = if (currentPath.isNotEmpty() && File(currentPath).exists()) {
-      currentPath
-    } else if (storageVolumes.size == 1) {
-      StorageVolumeUtils.getVolumePath(storageVolumes.first())
-    } else {
-      null // Show storage root with all volumes
-    }
+    val initialPath =
+      if (currentPath.isNotEmpty() && File(currentPath).exists()) {
+        currentPath
+      } else if (storageVolumes.size == 1) {
+        StorageVolumeUtils.getVolumePath(storageVolumes.first())
+      } else {
+        null // Show storage root with all volumes
+      }
     mutableStateOf(initialPath)
   }
 
@@ -115,44 +139,51 @@ fun FilePickerDialog(
 
   // Determine what to show based on selectedPath
   val showStorageRoot = selectedPath == null
-  
-  val currentDir = remember(selectedPath) { 
-    selectedPath?.let { File(it) }
-  }
-  
-  // Get folders and allowed files
-  val (folders, files) = remember(selectedPath, matchToName) {
-    if (showStorageRoot) {
-      Pair(emptyList<File>(), emptyList<File>())
-    } else {
-      val allFiles = currentDir?.listFiles { file -> !file.name.startsWith(".") } ?: emptyArray()
-      
-      // Use NaturalOrderComparator for better sorting (e.g., Ep 2 < Ep 10)
-      val dirs = allFiles.filter { it.isDirectory }.sortedWith { f1, f2 -> 
-          app.gyrolet.mpvrx.utils.sort.SortUtils.NaturalOrderComparator.DEFAULT.compare(f1.name, f2.name)
-      }
-      
-      val filteredFiles = allFiles.filter { file -> 
-          !file.isDirectory && allowedExtensions.any { ext -> file.name.endsWith(ext, ignoreCase = true) } 
-      }
 
-      // Final sorted files: matches first (alphabetical), then others (alphabetical)
-      val finalSortedFiles = filteredFiles.sortedWith { f1, f2 ->
-          val m1 = matchToName != null && f1.name.contains(matchToName, ignoreCase = true)
-          val m2 = matchToName != null && f2.name.contains(matchToName, ignoreCase = true)
-          
-          if (m1 && !m2) {
-              -1
-          } else if (!m1 && m2) {
-              1
-          } else {
-              app.gyrolet.mpvrx.utils.sort.SortUtils.NaturalOrderComparator.DEFAULT.compare(f1.name, f2.name)
-          }
-      }
-      
-      Pair(dirs, finalSortedFiles)
+  val currentDir =
+    remember(selectedPath) {
+      selectedPath?.let { File(it) }
     }
-  }
+
+  // Get folders and allowed files
+  val (folders, files) =
+    remember(selectedPath, matchToName) {
+      if (showStorageRoot) {
+        Pair(emptyList<File>(), emptyList<File>())
+      } else {
+        val allFiles = currentDir?.listFiles { file -> !file.name.startsWith(".") } ?: emptyArray()
+
+        // Use NaturalOrderComparator for better sorting (e.g., Ep 2 < Ep 10)
+        val dirs =
+          allFiles.filter { it.isDirectory }.sortedWith { f1, f2 ->
+            app.gyrolet.mpvrx.utils.sort.SortUtils.NaturalOrderComparator.DEFAULT
+              .compare(f1.name, f2.name)
+          }
+
+        val filteredFiles =
+          allFiles.filter { file ->
+            !file.isDirectory && allowedExtensions.any { ext -> file.name.endsWith(ext, ignoreCase = true) }
+          }
+
+        // Final sorted files: matches first (alphabetical), then others (alphabetical)
+        val finalSortedFiles =
+          filteredFiles.sortedWith { f1, f2 ->
+            val m1 = matchToName != null && f1.name.contains(matchToName, ignoreCase = true)
+            val m2 = matchToName != null && f2.name.contains(matchToName, ignoreCase = true)
+
+            if (m1 && !m2) {
+              -1
+            } else if (!m1 && m2) {
+              1
+            } else {
+              app.gyrolet.mpvrx.utils.sort.SortUtils.NaturalOrderComparator.DEFAULT
+                .compare(f1.name, f2.name)
+            }
+          }
+
+        Pair(dirs, finalSortedFiles)
+      }
+    }
 
   val configuration = LocalConfiguration.current
   val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
@@ -161,158 +192,177 @@ fun FilePickerDialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(usePlatformDefaultWidth = false),
   ) {
-      Surface(
-          modifier = modifier.fillMaxWidth(if (isPortrait) 0.9f else 0.50f),
-          shape = MaterialTheme.shapes.extraLarge,
-          color = MaterialTheme.colorScheme.surface,
-          tonalElevation = 6.dp,
+    Surface(
+      modifier = modifier.fillMaxWidth(if (isPortrait) 0.9f else 0.50f),
+      shape = MaterialTheme.shapes.extraLarge,
+      color = MaterialTheme.colorScheme.surface,
+      tonalElevation = 6.dp,
+    ) {
+      Column(
+        modifier = Modifier.padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
       ) {
-          Column(
-              modifier = Modifier.padding(24.dp),
-              verticalArrangement = Arrangement.spacedBy(16.dp)
-          ) {
-              // Title Section - orientation-aware layout
-              if (isPortrait) {
-                // Portrait: title/path stacked on top, nav buttons centered below
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                  Column(modifier = Modifier.fillMaxWidth()) {
-                      Text(
-                        text = "Select Subtitle",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                      )
-                      Text(
-                        text = selectedPath ?: "Select a storage location",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp),
-                      )
-                  }
-                  Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                  ) {
-                    NavigationButtons(
-                      selectedPath = selectedPath,
-                      onBack = { selectedPath = currentDir?.parent },
-                      onHome = { selectedPath = Environment.getExternalStorageDirectory().absolutePath },
-                      onSystemPicker = onSystemPickerRequest,
-                      buttonSize = 48.dp,
-                      iconSize = 26.dp,
-                    )
-                  }
-                }
-              } else {
-                // Landscape: title/path left, nav buttons right (same row)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                  Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.SpaceBetween,
-                      verticalAlignment = Alignment.CenterVertically
-                  ) {
-                      Column(modifier = Modifier.weight(1f)) {
-                          Text(
-                            text = "Select Subtitle",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                          )
-                          Text(
-                            text = selectedPath ?: "Select a storage location",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
-                          )
-                      }
-                      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NavigationButtons(
-                          selectedPath = selectedPath,
-                          onBack = { selectedPath = currentDir?.parent },
-                          onHome = { selectedPath = Environment.getExternalStorageDirectory().absolutePath },
-                          onSystemPicker = onSystemPickerRequest,
-                          buttonSize = 40.dp,
-                          iconSize = 24.dp,
-                        )
-                      }
-                  }
-                }
-              }
-
-              // Content Section
-              Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-              ) {
-                // Folder/Volume/File list
-                LazyColumn(
-                  modifier =
-                    Modifier
-                      .fillMaxWidth()
-                      .height(400.dp),
-                  verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                  if (showStorageRoot) {
-                    // Show storage volumes
-                    items(storageVolumes) { volume ->
-                      val volumePath = StorageVolumeUtils.getVolumePath(volume)
-                      if (volumePath != null) {
-                        StorageVolumeItem(
-                          context = context,
-                          volume = volume,
-                          volumePath = volumePath,
-                          onClick = { selectedPath = volumePath },
-                        )
-                      }
-                    }
-                    if (storageVolumes.isEmpty()) {
-                      item {
-                         Text("No storage devices found", modifier = Modifier.padding(16.dp))
-                      }
-                    }
-                  } else {
-                    // Show folders
-                    items(folders) { folder ->
-                      FolderItem(
-                        folder = folder,
-                        onClick = { selectedPath = folder.absolutePath },
-                      )
-                    }
-                    // Show files
-                    items(files) { file ->
-                        FileItem(
-                            file = file,
-                            onClick = { onFileSelected(file.absolutePath) }
-                        )
-                    }
-                    if (folders.isEmpty() && files.isEmpty()) {
-                      item {
-                         Text("No folders or supported files", modifier = Modifier.padding(16.dp))
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Footer Section (Analyze padding here)
-              Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.End
-              ) {
-                  TextButton(
-                    onClick = onDismiss,
-                    shape = MaterialTheme.shapes.extraLarge,
-                    // Reduced padding for the button itself if needed, or rely on Row padding
-                  ) {
-                    Text("Cancel", fontWeight = FontWeight.Medium)
-                  }
-              }
+        // Title Section - orientation-aware layout
+        if (isPortrait) {
+          // Portrait: title/path stacked on top, nav buttons centered below
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+              Text(
+                text =
+                  androidx.compose.ui.res
+                    .stringResource(app.gyrolet.mpvrx.R.string.ui_select_subtitle),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+              )
+              Text(
+                text = selectedPath ?: "Select a storage location",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+              )
+            }
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            ) {
+              NavigationButtons(
+                selectedPath = selectedPath,
+                onBack = { selectedPath = currentDir?.parent },
+                onHome = { selectedPath = Environment.getExternalStorageDirectory().absolutePath },
+                onSystemPicker = onSystemPickerRequest,
+                buttonSize = 48.dp,
+                iconSize = 26.dp,
+              )
+            }
           }
+        } else {
+          // Landscape: title/path left, nav buttons right (same row)
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text =
+                    androidx.compose.ui.res.stringResource(
+                      app.gyrolet.mpvrx.R.string.ui_select_subtitle,
+                    ),
+                  style = MaterialTheme.typography.headlineMedium,
+                  fontWeight = FontWeight.Bold,
+                )
+                Text(
+                  text = selectedPath ?: "Select a storage location",
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = FontWeight.Medium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  modifier = Modifier.padding(top = 4.dp),
+                )
+              }
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NavigationButtons(
+                  selectedPath = selectedPath,
+                  onBack = { selectedPath = currentDir?.parent },
+                  onHome = { selectedPath = Environment.getExternalStorageDirectory().absolutePath },
+                  onSystemPicker = onSystemPickerRequest,
+                  buttonSize = 40.dp,
+                  iconSize = 24.dp,
+                )
+              }
+            }
+          }
+        }
+
+        // Content Section
+        Column(
+          modifier = Modifier.fillMaxWidth(),
+          verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+          // Folder/Volume/File list
+          LazyColumn(
+            modifier =
+              Modifier
+                .fillMaxWidth()
+                .height(400.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+          ) {
+            if (showStorageRoot) {
+              // Show storage volumes
+              items(storageVolumes, key = { StorageVolumeUtils.getVolumePath(it) ?: it.toString() }) { volume ->
+                val volumePath = StorageVolumeUtils.getVolumePath(volume)
+                if (volumePath != null) {
+                  StorageVolumeItem(
+                    context = context,
+                    volume = volume,
+                    volumePath = volumePath,
+                    onClick = { selectedPath = volumePath },
+                  )
+                }
+              }
+              if (storageVolumes.isEmpty()) {
+                item {
+                  Text(
+                    androidx.compose.ui.res.stringResource(
+                      app.gyrolet.mpvrx.R.string.ui_no_storage_devices_found,
+                    ),
+                    modifier = Modifier.padding(16.dp),
+                  )
+                }
+              }
+            } else {
+              // Show folders
+              items(folders, key = { it.absolutePath }) { folder ->
+                FolderItem(
+                  folder = folder,
+                  onClick = { selectedPath = folder.absolutePath },
+                )
+              }
+              // Show files
+              items(files, key = { it.absolutePath }) { file ->
+                FileItem(
+                  file = file,
+                  onClick = { onFileSelected(file.absolutePath) },
+                )
+              }
+              if (folders.isEmpty() && files.isEmpty()) {
+                item {
+                  Text(
+                    androidx.compose.ui.res.stringResource(
+                      app.gyrolet.mpvrx.R.string.ui_no_folders_or_supported_files,
+                    ),
+                    modifier = Modifier.padding(16.dp),
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        // Footer Section (Analyze padding here)
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.End,
+        ) {
+          TextButton(
+            onClick = onDismiss,
+            shape = MaterialTheme.shapes.extraLarge,
+            // Reduced padding for the button itself if needed, or rely on Row padding
+          ) {
+            Text(
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.generic_cancel),
+              fontWeight = FontWeight.Medium,
+            )
+          }
+        }
       }
+    }
   }
 }
 
@@ -327,14 +377,15 @@ private fun StorageVolumeItem(
   val description = volume.getDescription(context)
   val isPrimary = volume.isPrimary
   val isRemovable = volume.isRemovable
-  
-  val icon = when {
-    isPrimary -> Icons.Default.Home
-    isRemovable && volumePath.contains("usb", ignoreCase = true) -> Icons.Default.Usb
-    isRemovable -> Icons.Default.SdCard
-    else -> Icons.Default.Folder
-  }
-  
+
+  val icon =
+    when {
+      isPrimary -> Icons.RoundedFilled.Home
+      isRemovable && volumePath.contains("usb", ignoreCase = true) -> Icons.RoundedFilled.Usb
+      isRemovable -> Icons.RoundedFilled.SdCard
+      else -> Icons.RoundedFilled.Folder
+    }
+
   Row(
     modifier =
       modifier
@@ -388,7 +439,7 @@ private fun FolderItem(
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Icon(
-      imageVector = Icons.Default.Folder,
+      imageVector = Icons.RoundedFilled.Folder,
       contentDescription = null,
       tint = MaterialTheme.colorScheme.primary,
       modifier = Modifier.size(28.dp),
@@ -399,10 +450,11 @@ private fun FolderItem(
       fontWeight = FontWeight.Medium,
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
-      modifier = Modifier.basicMarquee(
-        animationMode = MarqueeAnimationMode.Immediately,
-        repeatDelayMillis = 2000,
-      ),
+      modifier =
+        Modifier.basicMarquee(
+          animationMode = MarqueeAnimationMode.Immediately,
+          repeatDelayMillis = 2000,
+        ),
     )
   }
 }
@@ -423,7 +475,7 @@ private fun FileItem(
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Icon(
-      imageVector = Icons.Filled.InsertDriveFile,
+      imageVector = Icons.RoundedFilled.InsertDriveFile,
       contentDescription = null,
       tint = MaterialTheme.colorScheme.secondary,
       modifier = Modifier.size(28.dp),
@@ -434,10 +486,11 @@ private fun FileItem(
       fontWeight = FontWeight.Normal,
       maxLines = 1,
       overflow = TextOverflow.Ellipsis,
-      modifier = Modifier.basicMarquee(
-        animationMode = MarqueeAnimationMode.Immediately,
-        repeatDelayMillis = 2000,
-      ),
+      modifier =
+        Modifier.basicMarquee(
+          animationMode = MarqueeAnimationMode.Immediately,
+          repeatDelayMillis = 2000,
+        ),
     )
   }
 }
@@ -456,38 +509,37 @@ private fun NavigationButtons(
     FilledTonalIconButton(
       onClick = onBack,
       modifier = Modifier.size(buttonSize),
-      colors = IconButtonDefaults.filledTonalIconButtonColors(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-      )
+      colors =
+        IconButtonDefaults.filledTonalIconButtonColors(
+          containerColor = MaterialTheme.colorScheme.secondaryContainer,
+          contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
     ) {
-      Icon(Icons.Filled.ArrowBack, "Back", modifier = Modifier.size(iconSize))
+      Icon(Icons.RoundedFilled.ArrowBack, "Back", modifier = Modifier.size(iconSize))
     }
   }
 
   FilledTonalIconButton(
     onClick = onHome,
     modifier = Modifier.size(buttonSize),
-    colors = IconButtonDefaults.filledTonalIconButtonColors(
-      containerColor = MaterialTheme.colorScheme.secondaryContainer,
-      contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    )
+    colors =
+      IconButtonDefaults.filledTonalIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+      ),
   ) {
-    Icon(Icons.Default.Home, "Home", modifier = Modifier.size(iconSize))
+    Icon(Icons.RoundedFilled.Home, "Home", modifier = Modifier.size(iconSize))
   }
 
   FilledTonalIconButton(
     onClick = onSystemPicker,
     modifier = Modifier.size(buttonSize),
-    colors = IconButtonDefaults.filledTonalIconButtonColors(
-      containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-      contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-    )
+    colors =
+      IconButtonDefaults.filledTonalIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+      ),
   ) {
-    Icon(Icons.Default.DriveFolderUpload, "System Picker", modifier = Modifier.size(iconSize))
+    Icon(Icons.RoundedFilled.DriveFolderUpload, "System Picker", modifier = Modifier.size(iconSize))
   }
 }
-
-
-
-

@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.dialogs
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.dialogs
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.utils.media.CopyPasteOps
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -162,7 +170,11 @@ fun FileOperationProgressDialog(
             ),
           shape = MaterialTheme.shapes.extraLarge,
         ) {
-          Text("Done", fontWeight = FontWeight.Bold)
+          Text(
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_done),
+            fontWeight = FontWeight.Bold,
+          )
         }
       } else {
         TextButton(
@@ -170,11 +182,17 @@ fun FileOperationProgressDialog(
           shape = MaterialTheme.shapes.extraLarge,
         ) {
           Icon(
-            imageVector = Icons.Default.Cancel,
-            contentDescription = "Cancel",
+            imageVector = Icons.RoundedFilled.Cancel,
+            contentDescription =
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.generic_cancel),
             modifier = Modifier.padding(end = 4.dp),
           )
-          Text("Cancel", fontWeight = FontWeight.Medium)
+          Text(
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.generic_cancel),
+            fontWeight = FontWeight.Medium,
+          )
         }
       }
     },
@@ -312,7 +330,3 @@ private fun SummaryRow(
     )
   }
 }
-
-
-
-

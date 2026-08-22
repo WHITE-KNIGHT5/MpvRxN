@@ -1,9 +1,26 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.database.entities
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity
+// Six DAO queries filter or update by filePath and the history views order by timestamp; without
+// these the table is scanned end to end every time.
+@Entity(
+  indices = [
+    Index(value = ["filePath"]),
+    Index(value = ["timestamp"]),
+  ],
+)
 data class RecentlyPlayedEntity(
   @PrimaryKey(autoGenerate = true) val id: Int = 0,
   val filePath: String,
@@ -17,4 +34,3 @@ data class RecentlyPlayedEntity(
   val launchSource: String? = null,
   val playlistId: Int? = null,
 )
-

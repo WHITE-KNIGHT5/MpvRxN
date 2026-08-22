@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.player.controls.components.sheets
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.player.controls.components.sheets
 
 import android.net.Uri
 import androidx.compose.foundation.clickable
@@ -20,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.TrackNode
 import app.gyrolet.mpvrx.ui.theme.spacing
 
@@ -41,7 +49,7 @@ fun AddTrackRow(
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
   ) {
     Icon(
-      Icons.Default.Add,
+      Icons.RoundedFilled.Add,
       contentDescription = null,
       modifier = Modifier.size(24.dp),
     )
@@ -61,8 +69,10 @@ fun AddTrackRow(
 
 @Composable
 fun getTrackTitle(track: TrackNode): String {
-  val hasTitle = !track.title.isNullOrBlank()
-  val hasLang = !track.lang.isNullOrBlank()
+  val title = track.effectiveTitle
+  val lang = track.effectiveLang
+  val hasTitle = !title.isNullOrBlank()
+  val hasLang = !lang.isNullOrBlank()
 
   if (track.isSubtitle && track.external == true && !hasTitle && !hasLang && track.externalFilename != null) {
     val decoded = Uri.decode(track.externalFilename)
@@ -75,11 +85,12 @@ fun getTrackTitle(track: TrackNode): String {
       stringResource(
         R.string.player_sheets_track_title_w_lang,
         track.id,
-        track.title,
-        track.lang,
+        title,
+        lang,
       )
-    hasTitle -> stringResource(R.string.player_sheets_track_title_wo_lang, track.id, track.title)
-    hasLang -> stringResource(R.string.player_sheets_track_lang_wo_title, track.id, track.lang)
+    hasTitle -> stringResource(R.string.player_sheets_track_title_wo_lang, track.id, title)
+    hasLang -> stringResource(R.string.player_sheets_track_lang_wo_title, track.id, lang)
+    !track.codecDesc.isNullOrBlank() -> stringResource(R.string.player_sheets_track_title_wo_lang, track.id, track.codecDesc)
     track.isSubtitle -> stringResource(R.string.player_sheets_chapter_title_substitute_subtitle, track.id)
     track.isAudio -> stringResource(R.string.player_sheets_chapter_title_substitute_audio, track.id)
     else -> ""

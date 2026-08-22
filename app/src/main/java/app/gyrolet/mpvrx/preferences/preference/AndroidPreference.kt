@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.preferences.preference
 
 import android.content.SharedPreferences
@@ -61,7 +70,8 @@ sealed class AndroidPreference<T>(
       .map { get() }
       .conflate()
 
-  override fun stateIn(scope: CoroutineScope): StateFlow<T> = changes().stateIn(scope, SharingStarted.Eagerly, get())
+  override fun stateIn(scope: CoroutineScope): StateFlow<T> =
+    changes().stateIn(scope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000), get())
 
   class StringPrimitive(
     preferences: SharedPreferences,
@@ -217,4 +227,3 @@ sealed class AndroidPreference<T>(
       }
   }
 }
-

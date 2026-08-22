@@ -1,7 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,11 +32,13 @@ import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.preferences.preference.deleteAndGet
 import app.gyrolet.mpvrx.presentation.components.ExpandableCard
 import app.gyrolet.mpvrx.presentation.components.SliderItem
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.VideoFilters
 import app.gyrolet.mpvrx.ui.player.controls.CARDS_MAX_WIDTH
 import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
 import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
+import app.gyrolet.mpvrx.ui.utils.currentMpvConfigOverrideOptions
 import me.zhanghai.compose.preference.FooterPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import org.koin.compose.koinInject
@@ -36,6 +46,8 @@ import org.koin.compose.koinInject
 @Composable
 fun VideoSettingsFiltersCard(modifier: Modifier = Modifier) {
   val decoderPreferences = koinInject<DecoderPreferences>()
+  val configOwnedOptions = currentMpvConfigOverrideOptions()
+  val hasOwnedFilter = VideoFilters.entries.any { it.mpvProperty in configOwnedOptions }
   var isExpanded by remember { mutableStateOf(true) }
 
   ExpandableCard(
@@ -45,7 +57,7 @@ fun VideoSettingsFiltersCard(modifier: Modifier = Modifier) {
       Row(
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
       ) {
-        Icon(Icons.Default.Tune, null)
+        Icon(Icons.RoundedFilled.Tune, null)
         Text(stringResource(R.string.player_sheets_filters_title))
       }
     },
@@ -55,9 +67,10 @@ fun VideoSettingsFiltersCard(modifier: Modifier = Modifier) {
     ProvidePreferenceLocals {
       Column {
         TextButton(
+          enabled = !hasOwnedFilter,
           onClick = {
             VideoFilters.entries.forEach {
-              MPVLib.setPropertyInt(it.mpvProperty, it.preference(decoderPreferences).deleteAndGet())
+              PlaybackSession.setPropertyInt(it.mpvProperty, it.preference(decoderPreferences).deleteAndGet())
             }
           },
         ) {
@@ -72,10 +85,11 @@ fun VideoSettingsFiltersCard(modifier: Modifier = Modifier) {
             valueText = value.toString(),
             onChange = {
               filter.preference(decoderPreferences).set(it)
-              MPVLib.setPropertyInt(filter.mpvProperty, it)
+              PlaybackSession.setPropertyInt(filter.mpvProperty, it)
             },
             max = filter.max,
             min = filter.min,
+            enabled = filter.mpvProperty !in configOwnedOptions,
           )
         }
 
@@ -90,7 +104,3 @@ fun VideoSettingsFiltersCard(modifier: Modifier = Modifier) {
     }
   }
 }
-
-
-
-

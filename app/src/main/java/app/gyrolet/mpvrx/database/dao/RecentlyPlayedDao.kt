@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.database.dao
 
 import androidx.room.Dao
@@ -14,22 +23,25 @@ interface RecentlyPlayedDao {
 
   @Query("DELETE FROM RecentlyPlayedEntity WHERE filePath = :filePath")
   suspend fun deleteExistingEntriesForFile(filePath: String)
-  
+
   @Query("SELECT * FROM RecentlyPlayedEntity WHERE filePath = :filePath LIMIT 1")
   suspend fun getByFilePath(filePath: String): RecentlyPlayedEntity?
 
-  @Query("SELECT * FROM RecentlyPlayedEntity ORDER BY timestamp DESC LIMIT 1")
+  // Existing history rows keep their id when they are replayed, while timestamp is refreshed.
+  // Recency must therefore be ordered by timestamp (with id only as a deterministic tie-breaker)
+  // or the browser can keep highlighting an older row as the current/recently played video.
+  @Query("SELECT * FROM RecentlyPlayedEntity ORDER BY timestamp DESC, id DESC LIMIT 1")
   suspend fun getLastPlayed(): RecentlyPlayedEntity?
 
-  @Query("SELECT * FROM RecentlyPlayedEntity ORDER BY timestamp DESC LIMIT 1")
+  @Query("SELECT * FROM RecentlyPlayedEntity ORDER BY timestamp DESC, id DESC LIMIT 1")
   fun observeLastPlayed(): Flow<RecentlyPlayedEntity?>
 
   @Query(
     """
-    SELECT * FROM RecentlyPlayedEntity 
+    SELECT * FROM RecentlyPlayedEntity
     WHERE (launchSource IS NULL OR launchSource = '' OR launchSource = 'normal' OR launchSource = 'playlist' OR launchSource = 'video_list')
     AND (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%'))
-    ORDER BY timestamp DESC 
+    ORDER BY timestamp DESC, id DESC
     LIMIT 1
   """,
   )
@@ -37,38 +49,44 @@ interface RecentlyPlayedDao {
 
   @Query(
     """
-    SELECT * FROM RecentlyPlayedEntity 
+    SELECT * FROM RecentlyPlayedEntity
     WHERE (launchSource IS NULL OR launchSource = '' OR launchSource = 'normal' OR launchSource = 'playlist' OR launchSource = 'video_list')
     AND (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%'))
-    ORDER BY timestamp DESC 
+    ORDER BY timestamp DESC, id DESC
     LIMIT 1
   """,
   )
   fun observeLastPlayedForHighlight(): Flow<RecentlyPlayedEntity?>
 
-  @Query("""
-    SELECT * FROM RecentlyPlayedEntity 
-    WHERE (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%')) 
-    ORDER BY timestamp DESC 
+  @Query(
+    """
+    SELECT * FROM RecentlyPlayedEntity
+    WHERE (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%'))
+    ORDER BY timestamp DESC, id DESC
     LIMIT :limit
-  """)
+  """,
+  )
   suspend fun getRecentlyPlayed(limit: Int = 10): List<RecentlyPlayedEntity>
 
-  @Query("""
-    SELECT * FROM RecentlyPlayedEntity 
-    WHERE (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%')) 
-    ORDER BY timestamp DESC 
+  @Query(
+    """
+    SELECT * FROM RecentlyPlayedEntity
+    WHERE (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%'))
+    ORDER BY timestamp DESC, id DESC
     LIMIT :limit
-  """)
+  """,
+  )
   fun observeRecentlyPlayed(limit: Int = 50): Flow<List<RecentlyPlayedEntity>>
 
-  @Query("""
-    SELECT * FROM RecentlyPlayedEntity 
+  @Query(
+    """
+    SELECT * FROM RecentlyPlayedEntity
     WHERE launchSource = :launchSource
     AND (NOT (filePath LIKE '%.m3u%' OR filePath LIKE '%.m3u8%'))
-    ORDER BY timestamp DESC 
+    ORDER BY timestamp DESC, id DESC
     LIMIT :limit
-  """)
+  """,
+  )
   suspend fun getRecentlyPlayedBySource(
     launchSource: String,
     limit: Int = 10,
@@ -99,7 +117,9 @@ interface RecentlyPlayedDao {
     videoTitle: String,
   )
 
-  @Query("UPDATE RecentlyPlayedEntity SET videoTitle = :videoTitle, duration = :duration, fileSize = :fileSize, width = :width, height = :height WHERE filePath = :filePath")
+  @Query(
+    "UPDATE RecentlyPlayedEntity SET videoTitle = :videoTitle, duration = :duration, fileSize = :fileSize, width = :width, height = :height WHERE filePath = :filePath",
+  )
   suspend fun updateVideoMetadata(
     filePath: String,
     videoTitle: String?,
@@ -112,7 +132,7 @@ interface RecentlyPlayedDao {
   @Query(
     """
     SELECT DISTINCT playlistId, MAX(timestamp) as timestamp
-    FROM RecentlyPlayedEntity 
+    FROM RecentlyPlayedEntity
     WHERE playlistId IS NOT NULL
     GROUP BY playlistId
     ORDER BY timestamp DESC
@@ -124,7 +144,7 @@ interface RecentlyPlayedDao {
   @Query(
     """
     SELECT DISTINCT playlistId, MAX(timestamp) as timestamp
-    FROM RecentlyPlayedEntity 
+    FROM RecentlyPlayedEntity
     WHERE playlistId IS NOT NULL
     GROUP BY playlistId
     ORDER BY timestamp DESC
@@ -138,7 +158,7 @@ interface RecentlyPlayedDao {
     val timestamp: Long,
   )
 
-  @Query("SELECT * FROM RecentlyPlayedEntity ORDER BY timestamp DESC")
+  @Query("SELECT * FROM RecentlyPlayedEntity ORDER BY timestamp DESC, id DESC")
   suspend fun getAllRecentlyPlayed(): List<RecentlyPlayedEntity>
 
   @Query("SELECT COUNT(*) FROM RecentlyPlayedEntity")
@@ -147,4 +167,3 @@ interface RecentlyPlayedDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertAll(items: List<RecentlyPlayedEntity>)
 }
-

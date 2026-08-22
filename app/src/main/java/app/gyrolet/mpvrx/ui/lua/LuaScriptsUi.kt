@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.lua
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.lua
 
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -19,7 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import app.gyrolet.mpvrx.ui.components.IconSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -96,7 +105,15 @@ fun rememberLuaScriptsCatalog(
         }
       }.onFailure { error ->
         state = LuaScriptsCatalogState(availableScripts = emptyList(), isLoading = false)
-        Toast.makeText(context, "Error loading scripts: ${error.message}", Toast.LENGTH_LONG).show()
+        Toast
+          .makeText(
+            context,
+            context.getString(
+              R.string.toast_error_loading_scripts,
+              error.message ?: context.getString(R.string.generic_unknown_error),
+            ),
+            Toast.LENGTH_LONG,
+          ).show()
       }
   }
 
@@ -169,7 +186,7 @@ fun LuaRuntimeStatusCard(
           contentAlignment = Alignment.Center,
         ) {
           Icon(
-            imageVector = Icons.Default.Code,
+            imageVector = Icons.RoundedFilled.Code,
             contentDescription = null,
             tint =
               if (enabled && hasStorageLocation) {
@@ -186,7 +203,9 @@ fun LuaRuntimeStatusCard(
         verticalArrangement = Arrangement.spacedBy(2.dp),
       ) {
         Text(
-          text = "Script runtime",
+          text =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_script_runtime),
           style = MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.SemiBold,
         )
@@ -197,7 +216,7 @@ fun LuaRuntimeStatusCard(
         )
       }
 
-      Switch(
+      IconSwitch(
         checked = enabled,
         onCheckedChange = onEnabledChange,
         enabled = hasStorageLocation,
@@ -207,9 +226,7 @@ fun LuaRuntimeStatusCard(
 }
 
 @Composable
-fun LuaScriptsLoadingState(
-  modifier: Modifier = Modifier,
-) {
+fun LuaScriptsLoadingState(modifier: Modifier = Modifier) {
   Row(
     modifier =
       modifier
@@ -253,7 +270,7 @@ fun LuaScriptsEmptyState(
           contentAlignment = Alignment.Center,
         ) {
           Icon(
-            imageVector = Icons.Default.Code,
+            imageVector = Icons.RoundedFilled.Code,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -337,7 +354,7 @@ fun LuaScriptToggleCard(
           contentAlignment = Alignment.Center,
         ) {
           Icon(
-            imageVector = Icons.Default.Code,
+            imageVector = Icons.RoundedFilled.Code,
             contentDescription = null,
             tint =
               if (active) {
@@ -375,7 +392,7 @@ fun LuaScriptToggleCard(
         )
       }
 
-      Switch(
+      IconSwitch(
         checked = selected,
         onCheckedChange = { onToggle() },
       )
@@ -384,16 +401,17 @@ fun LuaScriptToggleCard(
 }
 
 @Composable
-fun LuaSelectionFootnote(
-  modifier: Modifier = Modifier,
-) {
+fun LuaSelectionFootnote(modifier: Modifier = Modifier) {
   Text(
-    text = "Newly enabled scripts can load during playback. Scripts you turn off may need the video to be reopened before they fully stop running.",
+    text =
+      androidx.compose.ui.res.stringResource(
+        app.gyrolet.mpvrx.R.string.ui_newly_enabled_scripts_can_load_during_playback_scripts_you_turn,
+      ),
     style = MaterialTheme.typography.bodySmall,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(horizontal = 4.dp),
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .padding(horizontal = 4.dp),
   )
 }
-

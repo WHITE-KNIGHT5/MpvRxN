@@ -1,14 +1,28 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.preferences
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
-
+import android.Manifest
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -16,46 +30,46 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.preferences.AdvancedPreferences
+import app.gyrolet.mpvrx.preferences.AudioPreferences
 import app.gyrolet.mpvrx.preferences.IntroSegmentProvider
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.Screen
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.NotificationStyle
 import app.gyrolet.mpvrx.ui.player.PlayerOrientation
-import app.gyrolet.mpvrx.ui.player.controls.components.sheets.toFixed
 import app.gyrolet.mpvrx.ui.player.screenshot.ScreenshotFormat
+import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
 import app.gyrolet.mpvrx.ui.utils.LocalBackStack
+import app.gyrolet.mpvrx.ui.utils.LocalShowSettingsBackArrow
+import app.gyrolet.mpvrx.ui.utils.currentMpvConfigOverrideOptions
 import app.gyrolet.mpvrx.ui.utils.popSafely
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import me.zhanghai.compose.preference.SliderPreference
-import app.gyrolet.mpvrx.ui.preferences.SettingsScrollManager
-import app.gyrolet.mpvrx.ui.preferences.components.SwitchPreference
 import me.zhanghai.compose.preference.TextFieldPreference
-import androidx.compose.material3.TextField
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.platform.LocalContext
-import android.content.ComponentName
-import android.content.pm.PackageManager
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.ui.unit.dp
 
 @Serializable
 object PlayerPreferencesScreen : Screen {
@@ -63,10 +77,19 @@ object PlayerPreferencesScreen : Screen {
   @Composable
   override fun Content() {
     val backstack = LocalBackStack.current
+    val context = LocalContext.current
     val resources = LocalResources.current
     val preferences = koinInject<PlayerPreferences>()
+    val configOwnedOptions = currentMpvConfigOverrideOptions()
+    val audioPreferences = koinInject<AudioPreferences>()
+    val advancedPreferences = koinInject<AdvancedPreferences>()
+    val notificationPermissionLauncher =
+      rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+      ) { _ -> }
     var showTemplateDialog by remember { mutableStateOf(false) }
     var templateDraft by remember { mutableStateOf("") }
+    var showVideoMiniPlayerDependencyDialog by remember { mutableStateOf(false) }
     Scaffold(
       topBar = {
         TopAppBar(
@@ -79,37 +102,42 @@ object PlayerPreferencesScreen : Screen {
             )
           },
           navigationIcon = {
-            IconButton(onClick = { backstack.popSafely() }) {
-              Icon(
-                Icons.Outlined.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
+            if (LocalShowSettingsBackArrow.current) {
+              IconButton(onClick = { backstack.popSafely() }) {
+                Icon(
+                  Icons.RoundedFilled.ArrowBack,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.secondary,
+                )
+              }
             }
           },
         )
       },
     ) { padding ->
       ProvidePreferenceLocals {
-        val listState = rememberLazyListState()
-        LaunchedEffect(Unit) {
-            SettingsScrollManager.consumeScrollIndex()?.let { index ->
-                listState.animateScrollToItem(index)
-            }
-        }
+        val (settingsListState, settingsHighlight) =
+          rememberSettingsSearchList(PlayerPreferencesScreen, MaterialTheme.colorScheme.primary)
         LazyColumn(
-            state = listState,
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(padding),
+          state = settingsListState,
+          modifier =
+            Modifier
+              .fillMaxSize()
+              .padding(padding)
+              .then(settingsHighlight),
         ) {
-
           // ── General ───────────────────────────────────────────────────────
-          item { PreferenceSectionHeader(title = stringResource(R.string.pref_section_general)) }
+          item {
+            PreferenceSectionHeader(
+              title = stringResource(R.string.pref_section_general),
+              modifier = Modifier.settingsSearchTarget(R.string.pref_player),
+            )
+          }
           item {
             PreferenceCard {
               val orientation by preferences.orientation.collectAsState()
               ListPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_orientation),
                 value = orientation,
                 onValueChange = preferences.orientation::set,
                 values = PlayerOrientation.entries,
@@ -122,6 +150,7 @@ object PlayerPreferencesScreen : Screen {
 
               val savePositionOnQuit by preferences.savePositionOnQuit.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_save_position_on_quit),
                 value = savePositionOnQuit,
                 onValueChange = preferences.savePositionOnQuit::set,
                 title = { Text(stringResource(R.string.pref_player_save_position_on_quit)) },
@@ -131,6 +160,7 @@ object PlayerPreferencesScreen : Screen {
 
               val closeAfterEndOfVideo by preferences.closeAfterReachingEndOfVideo.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_close_after_eof),
                 value = closeAfterEndOfVideo,
                 onValueChange = preferences.closeAfterReachingEndOfVideo::set,
                 title = { Text(stringResource(R.string.pref_player_close_after_eof)) },
@@ -138,15 +168,92 @@ object PlayerPreferencesScreen : Screen {
 
               PreferenceDivider()
 
+              val videoBackgroundPlayback by audioPreferences.backgroundPlayback.collectAsState()
+              SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_video_background_playback_title),
+                value = videoBackgroundPlayback,
+                onValueChange = { enabled ->
+                  audioPreferences.backgroundPlayback.set(enabled)
+                  if (!enabled) {
+                    preferences.enableVideoMiniPlayer.set(false)
+                    showVideoMiniPlayerDependencyDialog = false
+                  }
+                  if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                  ) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                  }
+                },
+                title = { Text(stringResource(R.string.pref_video_background_playback_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_video_background_playback_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
+              val notificationStyle by advancedPreferences.notificationStyle.collectAsState()
+              val supportedNotificationStyles =
+                remember {
+                  NotificationStyle.entries.filter { it.isSupportedOn(Build.VERSION.SDK_INT) }
+                }
+              val selectedNotificationStyle =
+                notificationStyle.takeIf { it.isSupportedOn(Build.VERSION.SDK_INT) }
+                  ?: NotificationStyle.Media
+              ListPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_advanced_notification_style),
+                value = selectedNotificationStyle,
+                onValueChange = advancedPreferences.notificationStyle::set,
+                values = supportedNotificationStyles,
+                valueToText = { AnnotatedString(it.displayName) },
+                title = { Text(text = stringResource(R.string.pref_advanced_notification_style)) },
+                summary = {
+                  Text(
+                    text = selectedNotificationStyle.displayName,
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
               val autoplayNextVideo by preferences.autoplayNextVideo.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_autoplay_next_video_title),
                 value = autoplayNextVideo,
                 onValueChange = preferences.autoplayNextVideo::set,
                 title = { Text(stringResource(R.string.pref_autoplay_next_video_title)) },
                 summary = {
                   Text(
-                    if (autoplayNextVideo) stringResource(R.string.pref_autoplay_next_video_summary)
-                    else stringResource(R.string.pref_autoplay_next_video_summary_disabled),
+                    if (autoplayNextVideo) {
+                      stringResource(R.string.pref_autoplay_next_video_summary)
+                    } else {
+                      stringResource(R.string.pref_autoplay_next_video_summary_disabled)
+                    },
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
+              val autoplayNextAudio by preferences.autoplayNextAudio.collectAsState()
+              SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_autoplay_next_audio_title),
+                value = autoplayNextAudio,
+                onValueChange = preferences.autoplayNextAudio::set,
+                title = { Text(stringResource(R.string.pref_autoplay_next_audio_title)) },
+                summary = {
+                  Text(
+                    if (autoplayNextAudio) {
+                      stringResource(R.string.pref_autoplay_next_audio_summary)
+                    } else {
+                      stringResource(R.string.pref_autoplay_next_audio_summary_disabled)
+                    },
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
@@ -161,8 +268,11 @@ object PlayerPreferencesScreen : Screen {
                 title = { Text(stringResource(R.string.pref_playlist_mode_title)) },
                 summary = {
                   Text(
-                    if (playlistMode) stringResource(R.string.pref_playlist_mode_summary)
-                    else stringResource(R.string.pref_playlist_mode_summary_disabled),
+                    if (playlistMode) {
+                      stringResource(R.string.pref_playlist_mode_summary)
+                    } else {
+                      stringResource(R.string.pref_playlist_mode_summary_disabled)
+                    },
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
@@ -172,6 +282,7 @@ object PlayerPreferencesScreen : Screen {
 
               val rememberBrightness by preferences.rememberBrightness.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_remember_brightness),
                 value = rememberBrightness,
                 onValueChange = preferences.rememberBrightness::set,
                 title = { Text(stringResource(R.string.pref_player_remember_brightness)) },
@@ -181,6 +292,7 @@ object PlayerPreferencesScreen : Screen {
 
               val autoPiPOnNavigation by preferences.autoPiPOnNavigation.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_auto_pip_title),
                 value = autoPiPOnNavigation,
                 onValueChange = preferences.autoPiPOnNavigation::set,
                 title = { Text(stringResource(R.string.pref_auto_pip_title)) },
@@ -194,15 +306,43 @@ object PlayerPreferencesScreen : Screen {
 
               PreferenceDivider()
 
+              val enableVideoMiniPlayer by preferences.enableVideoMiniPlayer.collectAsState()
+              SwitchPreference(
+                value = enableVideoMiniPlayer,
+                onValueChange = { enabled ->
+                  when {
+                    !enabled -> preferences.enableVideoMiniPlayer.set(false)
+                    videoBackgroundPlayback -> preferences.enableVideoMiniPlayer.set(true)
+                    else -> {
+                      preferences.enableVideoMiniPlayer.set(false)
+                      showVideoMiniPlayerDependencyDialog = true
+                    }
+                  }
+                },
+                title = { Text(stringResource(R.string.pref_enable_video_mini_player_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_enable_video_mini_player_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
               val keepScreenOnWhenPaused by preferences.keepScreenOnWhenPaused.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_keep_screen_on_when_paused_title),
                 value = keepScreenOnWhenPaused,
                 onValueChange = preferences.keepScreenOnWhenPaused::set,
                 title = { Text(stringResource(R.string.pref_player_keep_screen_on_when_paused_title)) },
                 summary = {
                   Text(
-                    if (keepScreenOnWhenPaused) stringResource(R.string.pref_player_keep_screen_on_when_paused_summary)
-                    else stringResource(R.string.pref_player_keep_screen_on_when_paused_summary_disabled),
+                    if (keepScreenOnWhenPaused) {
+                      stringResource(R.string.pref_player_keep_screen_on_when_paused_summary)
+                    } else {
+                      stringResource(R.string.pref_player_keep_screen_on_when_paused_summary_disabled)
+                    },
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
@@ -212,13 +352,17 @@ object PlayerPreferencesScreen : Screen {
 
               val autoplayAfterScreenUnlock by preferences.autoplayAfterScreenUnlock.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_autoplay_after_screen_unlock_title),
                 value = autoplayAfterScreenUnlock,
                 onValueChange = preferences.autoplayAfterScreenUnlock::set,
                 title = { Text(stringResource(R.string.pref_player_autoplay_after_screen_unlock_title)) },
                 summary = {
                   Text(
-                    if (autoplayAfterScreenUnlock) stringResource(R.string.pref_player_autoplay_after_screen_unlock_summary)
-                    else stringResource(R.string.pref_player_autoplay_after_screen_unlock_summary_disabled),
+                    if (autoplayAfterScreenUnlock) {
+                      stringResource(R.string.pref_player_autoplay_after_screen_unlock_summary)
+                    } else {
+                      stringResource(R.string.pref_player_autoplay_after_screen_unlock_summary_disabled)
+                    },
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
@@ -227,32 +371,37 @@ object PlayerPreferencesScreen : Screen {
               PreferenceDivider()
 
               val enableMediaInfoIntent by preferences.enableMediaInfoIntent.collectAsState()
-              val context = LocalContext.current
               SwitchPreference(
                 value = enableMediaInfoIntent,
                 onValueChange = { enabled ->
                   preferences.enableMediaInfoIntent.set(enabled)
                   val componentName = ComponentName(context, "app.gyrolet.mpvrx.ui.mediainfo.MediaInfoActivityAlias")
-                  val newState = if (enabled) {
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                  } else {
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                  }
+                  val newState =
+                    if (enabled) {
+                      PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    } else {
+                      PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    }
                   try {
                     context.packageManager.setComponentEnabledSetting(
                       componentName,
                       newState,
-                      PackageManager.DONT_KILL_APP
+                      PackageManager.DONT_KILL_APP,
                     )
                   } catch (e: Exception) {
                     android.util.Log.e("PlayerPreferencesScreen", "Failed to set alias state", e)
                   }
                 },
-                title = { Text("Show Media Info in chooser") },
+                title = {
+                  Text(
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_show_media_info_in_chooser),
+                  )
+                },
                 summary = {
                   Text(
-                    "Show Media Info in system \"Open with\" / " +
-                    "sharing menus to analyze files from other apps.",
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_show_media_info_in_system),
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
@@ -266,6 +415,7 @@ object PlayerPreferencesScreen : Screen {
             PreferenceCard {
               val showDoubleTapOvals by preferences.showDoubleTapOvals.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.show_splash_ovals_on_double_tap_to_seek),
                 value = showDoubleTapOvals,
                 onValueChange = preferences.showDoubleTapOvals::set,
                 title = { Text(stringResource(R.string.show_splash_ovals_on_double_tap_to_seek)) },
@@ -275,6 +425,7 @@ object PlayerPreferencesScreen : Screen {
 
               val showSeekTimeWhileSeeking by preferences.showSeekTimeWhileSeeking.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.show_time_on_double_tap_to_seek),
                 value = showSeekTimeWhileSeeking,
                 onValueChange = preferences.showSeekTimeWhileSeeking::set,
                 title = { Text(stringResource(R.string.show_time_on_double_tap_to_seek)) },
@@ -297,9 +448,26 @@ object PlayerPreferencesScreen : Screen {
 
               PreferenceDivider()
 
+              val showChapterIndicators by preferences.showChapterIndicators.collectAsState()
+              SwitchPreference(
+                value = showChapterIndicators,
+                onValueChange = preferences.showChapterIndicators::set,
+                title = { Text(stringResource(R.string.pref_player_show_chapter_indicators_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_player_show_chapter_indicators_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
               val usePreciseSeeking by preferences.usePreciseSeeking.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_use_precise_seeking),
                 value = usePreciseSeeking,
+                enabled = setOf("hr-seek", "hr-seek-framedrop").none(configOwnedOptions::contains),
                 onValueChange = preferences.usePreciseSeeking::set,
                 title = { Text(stringResource(R.string.pref_player_use_precise_seeking)) },
               )
@@ -308,6 +476,7 @@ object PlayerPreferencesScreen : Screen {
 
               val useThumbFastSeekPreview by preferences.useThumbFastSeekPreview.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_seek_preview_thumbfast_title),
                 value = useThumbFastSeekPreview,
                 onValueChange = preferences.useThumbFastSeekPreview::set,
                 title = { Text(stringResource(R.string.pref_player_seek_preview_thumbfast_title)) },
@@ -323,6 +492,7 @@ object PlayerPreferencesScreen : Screen {
 
               val customSkipDuration by preferences.customSkipDuration.collectAsState()
               SliderPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_custom_skip_duration_title),
                 value = customSkipDuration.toFloat(),
                 onValueChange = { preferences.customSkipDuration.set(it.roundToInt()) },
                 title = { Text(stringResource(R.string.pref_player_custom_skip_duration_title)) },
@@ -341,6 +511,7 @@ object PlayerPreferencesScreen : Screen {
 
               val enableIntroDb by preferences.enableIntroDb.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_online_skip_markers_title),
                 value = enableIntroDb,
                 onValueChange = preferences.enableIntroDb::set,
                 title = { Text(stringResource(R.string.pref_online_skip_markers_title)) },
@@ -357,17 +528,18 @@ object PlayerPreferencesScreen : Screen {
 
                 val introSegmentProvider by preferences.introSegmentProvider.collectAsState()
                 ListPreference(
+                  modifier = Modifier.settingsSearchTarget(R.string.pref_marker_provider_title),
                   value = introSegmentProvider,
                   onValueChange = preferences.introSegmentProvider::set,
                   values = IntroSegmentProvider.entries,
-                valueToText = { AnnotatedString(it.displayName) },
-                title = { Text(stringResource(R.string.pref_marker_provider_title)) },
-                summary = {
-                  Text(
-                    stringResource(R.string.pref_marker_provider_summary),
-                    color = MaterialTheme.colorScheme.outline,
-                  )
-                },
+                  valueToText = { AnnotatedString(it.displayName) },
+                  title = { Text(stringResource(R.string.pref_marker_provider_title)) },
+                  summary = {
+                    Text(
+                      stringResource(R.string.pref_marker_provider_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
                 )
               }
 
@@ -375,6 +547,7 @@ object PlayerPreferencesScreen : Screen {
 
               val detectFromChapters by preferences.detectIntroOutroFromChapters.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_chapter_detect_title),
                 value = detectFromChapters,
                 onValueChange = preferences.detectIntroOutroFromChapters::set,
                 title = { Text(stringResource(R.string.pref_chapter_detect_title)) },
@@ -424,7 +597,12 @@ object PlayerPreferencesScreen : Screen {
                           value = value,
                           onValueChange = onValueChange,
                           modifier = Modifier.fillMaxWidth(),
-                          placeholder = { Text("e.g. intro, opening, op") },
+                          placeholder = {
+                            Text(
+                              androidx.compose.ui.res
+                                .stringResource(app.gyrolet.mpvrx.R.string.ui_e_g_intro_opening_op),
+                            )
+                          },
                           singleLine = true,
                         )
                       }
@@ -469,7 +647,12 @@ object PlayerPreferencesScreen : Screen {
                           value = value,
                           onValueChange = onValueChange,
                           modifier = Modifier.fillMaxWidth(),
-                          placeholder = { Text("e.g. outro, ending, ed") },
+                          placeholder = {
+                            Text(
+                              androidx.compose.ui.res
+                                .stringResource(app.gyrolet.mpvrx.R.string.ui_e_g_outro_ending_ed),
+                            )
+                          },
                           singleLine = true,
                         )
                       }
@@ -482,6 +665,7 @@ object PlayerPreferencesScreen : Screen {
 
               val autoSkipIntro by preferences.autoSkipIntro.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_auto_skip_intro_title),
                 value = autoSkipIntro,
                 onValueChange = preferences.autoSkipIntro::set,
                 title = { Text(stringResource(R.string.pref_auto_skip_intro_title)) },
@@ -497,6 +681,7 @@ object PlayerPreferencesScreen : Screen {
 
               val autoSkipOutro by preferences.autoSkipOutro.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_auto_skip_outro_title),
                 value = autoSkipOutro,
                 onValueChange = preferences.autoSkipOutro::set,
                 title = { Text(stringResource(R.string.pref_auto_skip_outro_title)) },
@@ -516,6 +701,7 @@ object PlayerPreferencesScreen : Screen {
             PreferenceCard {
               val showSystemStatusBar by preferences.showSystemStatusBar.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_display_show_status_bar),
                 value = showSystemStatusBar,
                 onValueChange = preferences.showSystemStatusBar::set,
                 title = { Text(stringResource(R.string.pref_player_display_show_status_bar)) },
@@ -525,6 +711,7 @@ object PlayerPreferencesScreen : Screen {
 
               val showSystemNavigationBar by preferences.showSystemNavigationBar.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_nav_bar_title),
                 value = showSystemNavigationBar,
                 onValueChange = preferences.showSystemNavigationBar::set,
                 title = { Text(stringResource(R.string.pref_nav_bar_title)) },
@@ -555,6 +742,7 @@ object PlayerPreferencesScreen : Screen {
 
               val reduceMotion by preferences.reduceMotion.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_display_reduce_player_animation),
                 value = reduceMotion,
                 onValueChange = preferences.reduceMotion::set,
                 title = { Text(stringResource(R.string.pref_player_display_reduce_player_animation)) },
@@ -564,6 +752,7 @@ object PlayerPreferencesScreen : Screen {
 
               val showLoadingCircle by preferences.showLoadingCircle.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_controls_show_loading_circle),
                 value = showLoadingCircle,
                 onValueChange = preferences.showLoadingCircle::set,
                 title = { Text(stringResource(R.string.pref_player_controls_show_loading_circle)) },
@@ -573,6 +762,7 @@ object PlayerPreferencesScreen : Screen {
 
               val allowGesturesInPanels by preferences.allowGesturesInPanels.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.pref_player_controls_allow_gestures_in_panels),
                 value = allowGesturesInPanels,
                 onValueChange = preferences.allowGesturesInPanels::set,
                 title = { Text(stringResource(R.string.pref_player_controls_allow_gestures_in_panels)) },
@@ -582,6 +772,7 @@ object PlayerPreferencesScreen : Screen {
 
               val swapVolumeAndBrightness by preferences.swapVolumeAndBrightness.collectAsState()
               SwitchPreference(
+                modifier = Modifier.settingsSearchTarget(R.string.swap_the_volume_and_brightness_slider),
                 value = swapVolumeAndBrightness,
                 onValueChange = preferences.swapVolumeAndBrightness::set,
                 title = { Text(stringResource(R.string.swap_the_volume_and_brightness_slider)) },
@@ -590,7 +781,7 @@ object PlayerPreferencesScreen : Screen {
           }
 
           // ── Screenshots ─────────────────────────────────────────────────
-          item { PreferenceSectionHeader(title = "Screenshots") }
+          item { PreferenceSectionHeader(title = stringResource(R.string.pref_screenshots_section)) }
           item {
             PreferenceCard {
               val screenshotFormat by preferences.screenshotFormat.collectAsState()
@@ -599,8 +790,18 @@ object PlayerPreferencesScreen : Screen {
                 onValueChange = preferences.screenshotFormat::set,
                 values = ScreenshotFormat.entries,
                 valueToText = { AnnotatedString(it.title) },
-                title = { Text("Image format") },
-                summary = { Text("${screenshotFormat.title} .${screenshotFormat.extension}", color = MaterialTheme.colorScheme.outline) },
+                title = {
+                  Text(
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_image_format),
+                  )
+                },
+                summary = {
+                  Text(
+                    "${screenshotFormat.title} .${screenshotFormat.extension}",
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
               )
 
               PreferenceDivider()
@@ -609,14 +810,25 @@ object PlayerPreferencesScreen : Screen {
               SwitchPreference(
                 value = includeSubtitles,
                 onValueChange = preferences.includeSubtitlesInSnapshot::set,
-                title = { Text("Include subtitles in screenshots") },
+                title = {
+                  Text(
+                    androidx.compose.ui.res.stringResource(
+                      app.gyrolet.mpvrx.R.string.ui_include_subtitles_in_screenshots,
+                    ),
+                  )
+                },
               )
 
               PreferenceDivider()
 
               val screenshotTemplate by preferences.screenshotTemplate.collectAsState()
               Preference(
-                title = { Text("Filename template") },
+                title = {
+                  Text(
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_filename_template),
+                  )
+                },
                 summary = { Text(screenshotTemplate, color = MaterialTheme.colorScheme.outline) },
                 onClick = {
                   templateDraft = screenshotTemplate
@@ -630,7 +842,12 @@ object PlayerPreferencesScreen : Screen {
               SliderPreference(
                 value = screenshotQuality.toFloat(),
                 onValueChange = { preferences.screenshotQuality.set(it.roundToInt().coerceIn(1, 100)) },
-                title = { Text("JPEG/WebP quality") },
+                title = {
+                  Text(
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_jpeg_webp_quality),
+                  )
+                },
                 valueRange = 1f..100f,
                 summary = { Text("$screenshotQuality", color = MaterialTheme.colorScheme.outline) },
                 onSliderValueChange = { preferences.screenshotQuality.set(it.roundToInt().coerceIn(1, 100)) },
@@ -643,7 +860,12 @@ object PlayerPreferencesScreen : Screen {
               SliderPreference(
                 value = pngCompression.toFloat(),
                 onValueChange = { preferences.screenshotPngCompression.set(it.roundToInt().coerceIn(0, 9)) },
-                title = { Text("PNG compression") },
+                title = {
+                  Text(
+                    androidx.compose.ui.res
+                      .stringResource(app.gyrolet.mpvrx.R.string.ui_png_compression),
+                  )
+                },
                 valueRange = 0f..9f,
                 summary = { Text("$pngCompression", color = MaterialTheme.colorScheme.outline) },
                 onSliderValueChange = { preferences.screenshotPngCompression.set(it.roundToInt().coerceIn(0, 9)) },
@@ -657,8 +879,20 @@ object PlayerPreferencesScreen : Screen {
                 SwitchPreference(
                   value = webpLossless,
                   onValueChange = preferences.screenshotWebpLossless::set,
-                  title = { Text("WebP lossless") },
-                  summary = { Text("Uses mpv native lossless output; Android fallback uses lossless on Android 11+.", color = MaterialTheme.colorScheme.outline) },
+                  title = {
+                    Text(
+                      androidx.compose.ui.res
+                        .stringResource(app.gyrolet.mpvrx.R.string.ui_webp_lossless),
+                    )
+                  },
+                  summary = {
+                    Text(
+                      androidx.compose.ui.res.stringResource(
+                        app.gyrolet.mpvrx.R.string.ui_uses_mpv_native_lossless_output_android_fallback_uses_lossless_o,
+                      ),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
                 )
               }
             }
@@ -770,32 +1004,94 @@ object PlayerPreferencesScreen : Screen {
                   )
                 },
               )
+
+              PreferenceDivider()
+
+              val showProviderStatusOverlay by preferences.showProviderStatusOverlay.collectAsState()
+              SwitchPreference(
+                value = showProviderStatusOverlay,
+                onValueChange = preferences.showProviderStatusOverlay::set,
+                title = { Text(stringResource(R.string.pref_provider_status_overlay_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_provider_status_overlay_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
             }
           }
         }
       }
     }
+    if (showVideoMiniPlayerDependencyDialog) {
+      AlertDialog(
+        onDismissRequest = { showVideoMiniPlayerDependencyDialog = false },
+        title = { Text(stringResource(R.string.pref_video_mini_player_dependency_title)) },
+        text = { Text(stringResource(R.string.pref_video_mini_player_dependency_message)) },
+        confirmButton = {
+          TextButton(
+            onClick = {
+              audioPreferences.backgroundPlayback.set(true)
+              preferences.enableVideoMiniPlayer.set(true)
+              showVideoMiniPlayerDependencyDialog = false
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+              ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+              }
+            },
+          ) {
+            Text(stringResource(R.string.pref_video_mini_player_dependency_confirm))
+          }
+        },
+        dismissButton = {
+          TextButton(
+            onClick = {
+              preferences.enableVideoMiniPlayer.set(false)
+              showVideoMiniPlayerDependencyDialog = false
+            },
+          ) {
+            Text(stringResource(R.string.generic_cancel))
+          }
+        },
+      )
+    }
     if (showTemplateDialog) {
       AlertDialog(
         onDismissRequest = { showTemplateDialog = false },
-        title = { Text("Filename template") },
+        title = {
+          Text(
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_filename_template),
+          )
+        },
         text = {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
               value = templateDraft,
               onValueChange = { templateDraft = it },
-              label = { Text("Template") },
-              modifier = Modifier.fillMaxWidth()
+              label = {
+                Text(
+                  androidx.compose.ui.res
+                    .stringResource(app.gyrolet.mpvrx.R.string.ui_template),
+                )
+              },
+              modifier = Modifier.fillMaxWidth(),
             )
             Text(
-              text = "Use placeholders to customize the screenshot filename:\n" +
+              text =
+                androidx.compose.ui.res.stringResource(
+                  app.gyrolet.mpvrx.R.string.ui_use_placeholders_to_customize_the_screenshot_filename_n,
+                ) +
                   "• %f — Video title or filename\n" +
                   "• %p — Playback position (seconds)\n" +
                   "• %Y, %m, %d — Year, Month, Day\n" +
                   "• %H, %M, %S — Hour, Minute, Second\n" +
                   "• %wH, %wM, %wS, %wT — Wall-clock time (hour, min, sec, ms)",
               style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
         },
@@ -806,12 +1102,18 @@ object PlayerPreferencesScreen : Screen {
               showTemplateDialog = false
             },
           ) {
-            Text("Save")
+            Text(
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.ui_save),
+            )
           }
         },
         dismissButton = {
           TextButton(onClick = { showTemplateDialog = false }) {
-            Text("Cancel")
+            Text(
+              androidx.compose.ui.res
+                .stringResource(app.gyrolet.mpvrx.R.string.generic_cancel),
+            )
           }
         },
       )

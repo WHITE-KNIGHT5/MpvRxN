@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components
 
 import androidx.compose.animation.core.Animatable
@@ -7,15 +16,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import kotlinx.coroutines.isActive
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
+import kotlinx.coroutines.isActive
 
 /**
  * View that shows the arrows animation when double tapping to seek
@@ -56,22 +65,21 @@ fun DoubleTapSeekTriangles(
         modifier.scale(scaleX = -1f, scaleY = 1f)
       },
   ) {
-    DoubleTapArrow(alpha1.value)
-    DoubleTapArrow(alpha2.value)
-    DoubleTapArrow(alpha3.value)
+    DoubleTapArrow(alphaProvider = { alpha1.value })
+    DoubleTapArrow(alphaProvider = { alpha2.value })
+    DoubleTapArrow(alphaProvider = { alpha3.value })
   }
 }
 
 @Composable
-private fun DoubleTapArrow(alpha: Float) {
+private fun DoubleTapArrow(alphaProvider: () -> Float) {
   Icon(
-    imageVector = Icons.Default.PlayArrow,
+    imageVector = Icons.RoundedFilled.PlayArrow,
     contentDescription = null,
     modifier =
       Modifier
         .size(18.dp)
-        .alpha(alpha = alpha),
+        .graphicsLayer { alpha = alphaProvider() },
     tint = Color.White,
   )
 }
-

@@ -1,17 +1,23 @@
-package app.gyrolet.mpvrx.presentation.crash
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.presentation.crash
 
 import android.app.Activity
 import android.content.ClipData
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +66,8 @@ import app.gyrolet.mpvrx.MainActivity
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.preferences.AppearancePreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.DarkMode
 import app.gyrolet.mpvrx.ui.theme.MpvrxTheme
 import app.gyrolet.mpvrx.ui.theme.spacing
@@ -74,14 +82,17 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 
-class CrashActivity : ComponentActivity() {
+class CrashActivity : AppCompatActivity() {
   private var logcat: String = ""
   private val appearancePreferences: AppearancePreferences by inject()
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    lifecycle.coroutineScope.launch {
-      logcat = collectLogcat()
+    val debugLogsMode = intent.getBooleanExtra(EXTRA_DEBUG_LOGS_MODE, false)
+    if (!debugLogsMode) {
+      lifecycle.coroutineScope.launch {
+        logcat = collectLogcat()
+      }
     }
     setContent {
       val dark by appearancePreferences.darkMode.collectAsState()
@@ -94,7 +105,11 @@ class CrashActivity : ComponentActivity() {
         ) { isDarkMode },
       )
       MpvrxTheme {
-        CrashScreen(intent.getStringExtra("exception") ?: "")
+        if (debugLogsMode) {
+          DebugLogsScreen(onNavigateBack = ::finish)
+        } else {
+          CrashScreen(intent.getStringExtra("exception") ?: "")
+        }
       }
     }
   }
@@ -155,12 +170,26 @@ class CrashActivity : ComponentActivity() {
   }
 
   companion object {
+    private const val EXTRA_DEBUG_LOGS_MODE = "debug_logs_mode"
+
     suspend fun shareLogs(
       deviceInfo: String,
       exceptionString: String? = null,
       logcat: String,
       activity: Activity,
     ) {
+      // Advanced Settings calls this without an exception. In that case open the
+      // interactive log viewer instead of immediately throwing the user into a share sheet.
+      // Crash reports still use the original export/share flow below.
+      if (exceptionString == null) {
+        withContext(Dispatchers.Main) {
+          activity.startActivity(
+            Intent(activity, CrashActivity::class.java).putExtra(EXTRA_DEBUG_LOGS_MODE, true),
+          )
+        }
+        return
+      }
+
       withContext(NonCancellable) {
         val file = File(activity.cacheDir, "mpvrx_logs.txt")
         if (file.exists()) file.delete()
@@ -212,16 +241,10 @@ class CrashActivity : ComponentActivity() {
       Device brand: ${Build.BRAND}
       Device manufacturer: ${Build.MANUFACTURER}
       Device model: ${Build.MODEL} (${Build.DEVICE})
-      MPV version: ${Utils.VERSIONS.mpv.cleanBundledMpvVersion()}
+      MPV version: ${Utils.VERSIONS.mpv}
       ffmpeg version: ${Utils.VERSIONS.ffmpeg}
       libplacebo version: ${Utils.VERSIONS.libPlacebo}
       """.trimIndent()
-
-    private fun String.cleanBundledMpvVersion(): String =
-      replace("-UNKNOWN", "")
-        .replace("+UNKNOWN", "")
-        .replace("_UNKNOWN", "")
-        .trim()
   }
 
   @Composable
@@ -298,7 +321,7 @@ class CrashActivity : ComponentActivity() {
                 )
               },
             ) {
-              Icon(Icons.Default.ContentCopy, null)
+              Icon(Icons.RoundedFilled.ContentCopy, null)
             }
           }
           OutlinedButton(
@@ -323,7 +346,7 @@ class CrashActivity : ComponentActivity() {
       ) {
         Spacer(Modifier.height(paddingValues.calculateTopPadding()))
         Icon(
-          Icons.Outlined.BugReport,
+          Icons.RoundedFilled.BugReport,
           null,
           modifier = Modifier.size(48.dp),
           tint = MaterialTheme.colorScheme.primary,
@@ -351,7 +374,8 @@ class CrashActivity : ComponentActivity() {
         )
         LogsContainer(exceptionString)
         Text(
-          "Logcat:",
+          androidx.compose.ui.res
+            .stringResource(app.gyrolet.mpvrx.R.string.ui_logcat),
           style = MaterialTheme.typography.headlineSmall,
         )
         LogsContainer(logcat)
@@ -384,9 +408,3 @@ class CrashActivity : ComponentActivity() {
     }
   }
 }
-
-
-
-
-
-

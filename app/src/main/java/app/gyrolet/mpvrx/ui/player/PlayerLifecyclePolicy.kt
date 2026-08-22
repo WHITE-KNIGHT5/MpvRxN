@@ -1,45 +1,76 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 internal object PlayerLifecyclePolicy {
+  /** Auto-PiP owns Home/Back navigation whenever a playable video can enter it. */
+  fun shouldEnterPipOnNavigation(
+    autoPipEnabled: Boolean,
+    mediaReady: Boolean,
+    isAudioMedia: Boolean,
+    isActivityUnavailable: Boolean,
+    isAlreadyInPip: Boolean,
+  ): Boolean =
+    autoPipEnabled &&
+      mediaReady &&
+      !isAudioMedia &&
+      !isActivityUnavailable &&
+      !isAlreadyInPip
+
   fun shouldPauseOnPause(
-    automaticBackgroundPlayback: Boolean,
-    manualBackgroundPlayback: Boolean,
+    backgroundPlaybackEnabled: Boolean,
+    backgroundPlaybackSessionActive: Boolean,
     isUserFinishing: Boolean,
     isInPictureInPictureMode: Boolean,
+    isScreenOffOrLocked: Boolean,
   ): Boolean {
-    if (isInPictureInPictureMode) return false
+    if (isUserFinishing && !backgroundPlaybackSessionActive) return true
+    if (isInPictureInPictureMode && !isScreenOffOrLocked) return false
 
-    return (!automaticBackgroundPlayback && !manualBackgroundPlayback) ||
-      (isUserFinishing && !manualBackgroundPlayback)
+    return !backgroundPlaybackEnabled
   }
 
+  fun shouldStartBackgroundPlaybackOnBack(
+    backgroundPlaybackEnabled: Boolean,
+    mediaReady: Boolean,
+  ): Boolean = backgroundPlaybackEnabled && mediaReady
+
   fun shouldKeepBackgroundPlaybackAliveOnDestroy(
-    manualBackgroundPlayback: Boolean,
-    isUserFinishing: Boolean,
-    isFinishing: Boolean,
-  ): Boolean = manualBackgroundPlayback && (isUserFinishing || isFinishing)
+    backgroundPlaybackEnabled: Boolean,
+    backgroundPlaybackSessionActive: Boolean,
+  ): Boolean = backgroundPlaybackEnabled && backgroundPlaybackSessionActive
 
   fun shouldTreatStopAsPipDismissal(
     wasInPictureInPictureMode: Boolean,
+    isInPictureInPictureMode: Boolean,
     isChangingConfigurations: Boolean,
-    manualBackgroundPlayback: Boolean,
+    isScreenOffOrLocked: Boolean,
     alreadyHandled: Boolean,
   ): Boolean =
     wasInPictureInPictureMode &&
+      !isInPictureInPictureMode &&
       !isChangingConfigurations &&
-      !manualBackgroundPlayback &&
+      !isScreenOffOrLocked &&
       !alreadyHandled
 
-  fun shouldStartAutomaticBackgroundPlaybackOnStop(
-    automaticBackgroundPlayback: Boolean,
-    manualBackgroundPlayback: Boolean,
+  fun shouldStartBackgroundPlaybackOnStop(
+    backgroundPlaybackEnabled: Boolean,
+    backgroundPlaybackSessionActive: Boolean,
     isUserFinishing: Boolean,
     isFinishing: Boolean,
     isInPictureInPictureMode: Boolean,
+    isScreenOffOrLocked: Boolean,
   ): Boolean =
-    automaticBackgroundPlayback &&
-      !manualBackgroundPlayback &&
+    backgroundPlaybackEnabled &&
+      !backgroundPlaybackSessionActive &&
       !isUserFinishing &&
       !isFinishing &&
-      !isInPictureInPictureMode
+      (!isInPictureInPictureMode || isScreenOffOrLocked)
 }

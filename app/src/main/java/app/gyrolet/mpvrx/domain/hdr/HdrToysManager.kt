@@ -1,10 +1,30 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.domain.hdr
 
 import android.content.Context
 import android.util.Log
-import `is`.xyz.mpv.MPVLib
 import java.io.File
 import java.io.FileOutputStream
+
+/** Abstraction over the running player's shader pipeline so the domain layer stays UI-free. */
+interface MpvShaderRuntime {
+  fun command(vararg args: String)
+
+  fun getPropertyString(property: String): String?
+
+  fun setPropertyString(
+    property: String,
+    value: String,
+  )
+}
 
 /**
  * Manages the hdr-toys GLSL shader pipeline.
@@ -21,6 +41,7 @@ import java.io.FileOutputStream
  */
 class HdrToysManager(
   private val context: Context,
+  private val shaderRuntime: MpvShaderRuntime,
 ) {
   private var initialized = false
 
@@ -52,7 +73,7 @@ class HdrToysManager(
     }
     clear()
     profile.mpvShaderPaths.forEach { shaderPath ->
-      MPVLib.command("change-list", "glsl-shaders", "append", shaderPath)
+      shaderRuntime.command("change-list", "glsl-shaders", "append", shaderPath)
     }
     return true
   }
@@ -63,8 +84,23 @@ class HdrToysManager(
       .toList()
       .asReversed()
       .forEach { shaderPath ->
-        runCatching { MPVLib.command("change-list", "glsl-shaders", "remove", shaderPath) }
+        runCatching { shaderRuntime.command("change-list", "glsl-shaders", "remove", shaderPath) }
       }
+    HdrToysProfile.allShaderPaths.forEach { relPath ->
+      val absolutePath = File(context.filesDir, "shaders/$relPath").absolutePath
+      runCatching { shaderRuntime.command("change-list", "glsl-shaders", "remove", absolutePath) }
+    }
+    runCatching {
+      val activeShaders = shaderRuntime.getPropertyString("glsl-shaders")
+      if (!activeShaders.isNullOrEmpty()) {
+        val remaining =
+          activeShaders
+            .split(":")
+            .map { it.trim() }
+            .filter { path -> path.isNotEmpty() && !path.contains("hdr-toys") }
+        shaderRuntime.setPropertyString("glsl-shaders", remaining.joinToString(":"))
+      }
+    }
   }
 
   private fun requiredShadersExist(): Boolean =
@@ -73,7 +109,10 @@ class HdrToysManager(
       file.exists() && file.length() > 0L
     }
 
-  private fun copyAssetDirectory(assetPath: String, destination: File) {
+  private fun copyAssetDirectory(
+    assetPath: String,
+    destination: File,
+  ) {
     val children = context.assets.list(assetPath).orEmpty()
     destination.mkdirs()
     children.forEach { child ->
@@ -88,7 +127,10 @@ class HdrToysManager(
     }
   }
 
-  private fun copyAssetFile(assetPath: String, destination: File) {
+  private fun copyAssetFile(
+    assetPath: String,
+    destination: File,
+  ) {
     destination.parentFile?.mkdirs()
     context.assets.open(assetPath).use { input ->
       FileOutputStream(destination).use { output ->

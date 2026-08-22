@@ -1,20 +1,21 @@
-package app.gyrolet.mpvrx.ui.player.controls.components.panels
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,10 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.constraintlayout.compose.ConstraintLayout
 import app.gyrolet.mpvrx.R
-import app.gyrolet.mpvrx.ui.player.controls.CARDS_MAX_WIDTH
-import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.spacing
 
 @Composable
@@ -41,10 +41,11 @@ fun VideoSettingsPanel(
       Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = MaterialTheme.spacing.medium)
-          .padding(top = MaterialTheme.spacing.small),
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.spacing.medium)
+            .padding(top = MaterialTheme.spacing.small),
       ) {
         Text(
           stringResource(R.string.player_sheets_video_settings_title),
@@ -52,22 +53,18 @@ fun VideoSettingsPanel(
         )
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onDismissRequest) {
-          Icon(Icons.Default.Close, null, modifier = Modifier.size(32.dp))
+          Icon(Icons.RoundedFilled.Close, null, modifier = Modifier.size(32.dp))
         }
       }
-    }
+    },
   ) {
-      Column(
-        Modifier.padding(MaterialTheme.spacing.medium),
-        verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
-      ) {
-        VideoSettingsFilterPresetsCard()
-        VideoSettingsFiltersCard()
-        VideoSettingsDebandCard()
-      }
+    Column(
+      Modifier.padding(MaterialTheme.spacing.medium),
+      verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
+    ) {
+      VideoSettingsFilterPresetsCard()
+      VideoSettingsFiltersCard()
+      VideoSettingsDebandCard()
+    }
   }
 }
-
-
-
-

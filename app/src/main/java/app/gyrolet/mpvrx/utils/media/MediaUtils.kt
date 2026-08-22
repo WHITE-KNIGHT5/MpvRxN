@@ -1,16 +1,30 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.media
 
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import app.gyrolet.mpvrx.domain.media.model.Video
+import app.gyrolet.mpvrx.domain.torrent.isTorrentSource
 import app.gyrolet.mpvrx.ui.player.PlayerActivity
 import app.gyrolet.mpvrx.ui.player.PlayerLookupHints
-import app.gyrolet.mpvrx.utils.history.RecentlyPlayedOps
+import app.gyrolet.mpvrx.ui.torrent.TorrentSelectionActivity
+import app.gyrolet.mpvrx.utils.storage.FileTypeUtils
 import `is`.xyz.mpv.Utils
 import java.io.File
+import kotlin.math.pow
 
 data class PlaybackSubtitleTrack(
   val url: String,
@@ -63,25 +77,73 @@ object MediaUtils {
     enabledSubtitles: List<Uri> = emptyList(),
     subtitleTracks: List<PlaybackSubtitleTrack> = emptyList(),
     lookupHints: PlayerLookupHints = PlayerLookupHints(),
+    torrentFileIndex: Int? = null,
+    torrentPreparationId: String? = null,
+    mediaDescription: String? = null,
+    posterUrl: String? = null,
+    backdropUrl: String? = null,
+    playlist: List<Uri> = emptyList(),
+    playlistIndex: Int = 0,
+    playlistTitles: List<String> = emptyList(),
   ) {
     val uri =
       when (source) {
         is Video -> {
-          val intent = Intent(Intent.ACTION_VIEW, source.uri)
-          intent.setClass(context, PlayerActivity::class.java)
+          val localPath = source.path.takeIf { File(it).isFile }
+          // Recents stores a durable filesystem path, while normal library playback is usually
+          // launched with a MediaStore content:// URI. Playback state is keyed from the launch
+          // URI, so reopening the same file as file:// created a different key and restarted at 0.
+          // Resolve the path back to its MediaStore URI for history/quick-play launches so the
+          // existing playback-state key (and therefore the saved position) is reused.
+          val playbackUri =
+            if (launchSource.isHistoryResumeLaunch() && localPath != null) {
+              resolveMediaStoreUri(context, localPath, source.isAudio) ?: source.uri
+            } else {
+              source.uri
+            }
+          val intent = Intent(Intent.ACTION_VIEW, playbackUri)
+          val torrentSource = playbackUri.toString().takeIf { isTorrentSource(it, source.mimeType) }
+          intent.setClass(
+            context,
+            if (torrentSource != null && torrentFileIndex == null && torrentPreparationId == null) {
+              TorrentSelectionActivity::class.java
+            } else {
+              PlayerActivity::class.java
+            },
+          )
+          intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+          intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
           intent.putExtra("internal_launch", true) // Enables subtitle autoload
+          localPath?.let { intent.putExtra("local_media_path", it) }
+          intent.putExtra("is_audio", source.isAudio)
           applyPlaybackExtras(
             intent = intent,
             launchSource = launchSource,
-            title = title
-              ?: source.title.takeIf { shouldForwardVideoTitle(source) && it.isNotBlank() }
-              ?: source.displayName.takeIf { shouldForwardVideoTitle(source) && it.isNotBlank() }
-              ?: if (launchSource != null && (launchSource.contains("playlist") || launchSource == "m3u_playlist")) source.displayName else null,
+            title =
+              title
+                ?: source.title.takeIf { shouldForwardVideoTitle(source) && it.isNotBlank() }
+                ?: source.displayName.takeIf { shouldForwardVideoTitle(source) && it.isNotBlank() }
+                ?: if (launchSource != null &&
+                  (launchSource.contains("playlist") || launchSource == "m3u_playlist")
+                ) {
+                  source.displayName
+                } else {
+                  null
+                },
             headers = headers,
             subtitles = subtitles,
             enabledSubtitles = enabledSubtitles,
             subtitleTracks = subtitleTracks,
             lookupHints = lookupHints,
+            torrentFileIndex = torrentFileIndex,
+            torrentPreparationId = torrentPreparationId,
+            torrentSource = torrentSource,
+            mediaDescription = mediaDescription,
+            posterUrl = posterUrl,
+            backdropUrl = backdropUrl,
+            playlist = playlist,
+            playlistIndex = playlistIndex,
+            playlistTitles = playlistTitles,
           )
           context.startActivity(intent)
           return
@@ -92,11 +154,12 @@ object MediaUtils {
           // Handle file paths with # characters properly
           if (source.startsWith("/") || source.startsWith("file://")) {
             // It's a local file path - create URI safely
-            val filePath = if (source.startsWith("file://")) {
-              source.removePrefix("file://")
-            } else {
-              source
-            }
+            val filePath =
+              if (source.startsWith("file://")) {
+                source.removePrefix("file://")
+              } else {
+                source
+              }
             Uri.fromFile(java.io.File(filePath))
           } else {
             // It's likely a network URI - parse normally
@@ -112,10 +175,40 @@ object MediaUtils {
         }
       }
 
-    val intent = Intent(Intent.ACTION_VIEW, uri)
-    intent.setClass(context, PlayerActivity::class.java)
+    val localPath =
+      when {
+        source is String && source.startsWith("file://", ignoreCase = true) -> source.removePrefix("file://")
+        source is String && source.startsWith("/") -> source
+        uri.scheme.equals("file", ignoreCase = true) -> uri.path
+        else -> null
+      }?.takeIf { File(it).isFile }
+
+    val playbackUri =
+      if (launchSource.isHistoryResumeLaunch() && localPath != null) {
+        val isAudio = File(localPath).extension.lowercase() in FileTypeUtils.AUDIO_EXTENSIONS
+        resolveMediaStoreUri(context, localPath, isAudio) ?: uri
+      } else {
+        uri
+      }
+
+    val intent = Intent(Intent.ACTION_VIEW, playbackUri)
+    val torrentSource =
+      when (source) {
+        is String -> source.trim()
+        is Uri -> source.toString()
+        else -> playbackUri.toString()
+      }.takeIf { isTorrentSource(it) }
+    intent.setClass(
+      context,
+      if (torrentSource != null && torrentFileIndex == null && torrentPreparationId == null) {
+        TorrentSelectionActivity::class.java
+      } else {
+        PlayerActivity::class.java
+      },
+    )
     intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    localPath?.let { intent.putExtra("local_media_path", it) }
     applyPlaybackExtras(
       intent = intent,
       launchSource = launchSource,
@@ -125,8 +218,53 @@ object MediaUtils {
       enabledSubtitles = enabledSubtitles,
       subtitleTracks = subtitleTracks,
       lookupHints = lookupHints,
+      torrentFileIndex = torrentFileIndex,
+      torrentPreparationId = torrentPreparationId,
+      torrentSource = torrentSource,
+      mediaDescription = mediaDescription,
+      posterUrl = posterUrl,
+      backdropUrl = backdropUrl,
+      playlist = playlist,
+      playlistIndex = playlistIndex,
+      playlistTitles = playlistTitles,
     )
     context.startActivity(intent)
+  }
+
+  private fun String?.isHistoryResumeLaunch(): Boolean =
+    this == "recently_played" ||
+      this == "recently_played_button" ||
+      this == "quick_play_fab"
+
+  @Suppress("DEPRECATION")
+  private fun resolveMediaStoreUri(
+    context: Context,
+    filePath: String,
+    isAudio: Boolean,
+  ): Uri? {
+    if (filePath.isBlank()) return null
+    val collection =
+      if (isAudio) {
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+      } else {
+        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+      }
+
+    return runCatching {
+      context.contentResolver
+        .query(
+          collection,
+          arrayOf(MediaStore.MediaColumns._ID),
+          "${MediaStore.MediaColumns.DATA} = ?",
+          arrayOf(filePath),
+          null,
+        )?.use { cursor ->
+          if (!cursor.moveToFirst()) return@use null
+          val idColumn = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
+          if (idColumn < 0) return@use null
+          ContentUris.withAppendedId(collection, cursor.getLong(idColumn))
+        }
+    }.getOrNull()
   }
 
   private fun applyPlaybackExtras(
@@ -138,9 +276,36 @@ object MediaUtils {
     enabledSubtitles: List<Uri>,
     subtitleTracks: List<PlaybackSubtitleTrack>,
     lookupHints: PlayerLookupHints,
+    torrentFileIndex: Int?,
+    torrentPreparationId: String?,
+    torrentSource: String?,
+    mediaDescription: String?,
+    posterUrl: String?,
+    backdropUrl: String?,
+    playlist: List<Uri> = emptyList(),
+    playlistIndex: Int = 0,
+    playlistTitles: List<String> = emptyList(),
   ) {
+    if (playlist.isNotEmpty()) {
+      val playlistArrayList = if (playlist is ArrayList) playlist else ArrayList(playlist)
+      intent.putParcelableArrayListExtra("playlist", playlistArrayList)
+      intent.putExtra("playlistIndex", playlistIndex)
+      if (playlistTitles.isNotEmpty()) {
+        val titlesArrayList = if (playlistTitles is ArrayList) playlistTitles else ArrayList(playlistTitles)
+        intent.putStringArrayListExtra("playlist_titles", titlesArrayList)
+      }
+    }
     launchSource?.let { intent.putExtra("launch_source", it) }
-    title?.let { intent.putExtra("title", it) }
+    title?.let {
+      intent.putExtra("title", it)
+      intent.putExtra(EXTRA_MEDIA_TITLE, it)
+    }
+    torrentFileIndex?.takeIf { it >= 0 }?.let { intent.putExtra(EXTRA_TORRENT_FILE_INDEX, it) }
+    torrentPreparationId?.takeIf { it.isNotBlank() }?.let { intent.putExtra(EXTRA_TORRENT_PREPARATION_ID, it) }
+    torrentSource?.takeIf { it.isNotBlank() }?.let { intent.putExtra(EXTRA_TORRENT_SOURCE, it) }
+    mediaDescription?.takeIf { it.isNotBlank() }?.let { intent.putExtra(EXTRA_MEDIA_DESCRIPTION, it) }
+    posterUrl?.takeIf { it.isNotBlank() }?.let { intent.putExtra(EXTRA_MEDIA_POSTER_URL, it) }
+    backdropUrl?.takeIf { it.isNotBlank() }?.let { intent.putExtra(EXTRA_MEDIA_BACKDROP_URL, it) }
     lookupHints.canonicalTitle?.takeIf { it.isNotBlank() }?.let { intent.putExtra("introdb_title", it) }
     lookupHints.imdbId?.takeIf { it.isNotBlank() }?.let { intent.putExtra("introdb_imdb_id", it) }
     lookupHints.tmdbId?.let { intent.putExtra("introdb_tmdb_id", it) }
@@ -157,20 +322,28 @@ object MediaUtils {
     val effectiveSubtitleTracks =
       if (subtitleTracks.isNotEmpty()) {
         subtitleTracks.mapNotNull { track ->
-          track.url.takeIf { it.isNotBlank() }?.let(Uri::parse)?.let { uri -> uri to track }
+          track.url
+            .takeIf { it.isNotBlank() }
+            ?.let(Uri::parse)
+            ?.let { uri -> uri to track }
         }
       } else {
         subtitles.map { uri ->
-          uri to PlaybackSubtitleTrack(
-            url = uri.toString(),
-            label = "",
-            languageCode = null,
-          )
+          uri to
+            PlaybackSubtitleTrack(
+              url = uri.toString(),
+              label = "",
+              languageCode = null,
+            )
         }
       }
 
     if (effectiveSubtitleTracks.isNotEmpty()) {
       intent.putExtra("subs", effectiveSubtitleTracks.map { it.first }.toTypedArray())
+      intent.putExtra(
+        "subs.name",
+        effectiveSubtitleTracks.map { (_, track) -> track.label.ifBlank { "" } }.toTypedArray(),
+      )
       intent.putExtra(
         "subs.titles",
         effectiveSubtitleTracks.map { (_, track) -> track.label.ifBlank { "" } }.toTypedArray(),
@@ -189,9 +362,18 @@ object MediaUtils {
   }
 
   private fun shouldForwardVideoTitle(source: Video): Boolean {
+    if (source.isAudio) return true
     val scheme = source.uri.scheme?.lowercase() ?: return false
     return scheme !in setOf("file", "content", "android.resource")
   }
+
+  const val EXTRA_TORRENT_SOURCE = "torrent_source"
+  const val EXTRA_TORRENT_FILE_INDEX = "torrent_file_index"
+  const val EXTRA_TORRENT_PREPARATION_ID = "torrent_preparation_id"
+  const val EXTRA_MEDIA_TITLE = "torrent_media_title"
+  const val EXTRA_MEDIA_DESCRIPTION = "torrent_media_description"
+  const val EXTRA_MEDIA_POSTER_URL = "torrent_media_poster_url"
+  const val EXTRA_MEDIA_BACKDROP_URL = "torrent_media_backdrop_url"
 
   /**
    * Validate URL structure and protocol support.
@@ -199,11 +381,12 @@ object MediaUtils {
    * Network errors are detected when MPV attempts to open the stream.
    */
   fun isURLValid(url: String): Boolean =
-    url.toUri().let { uri ->
-      val structureOk =
-        uri.isHierarchical && !uri.isRelative && (!uri.host.isNullOrBlank() || !uri.path.isNullOrBlank())
-      structureOk && Utils.PROTOCOLS.contains(uri.scheme)
-    }
+    isTorrentSource(url) ||
+      url.toUri().let { uri ->
+        val structureOk =
+          uri.isHierarchical && !uri.isRelative && (!uri.host.isNullOrBlank() || !uri.path.isNullOrBlank())
+        structureOk && Utils.PROTOCOLS.contains(uri.scheme)
+      }
 
   /**
    * Share videos via system share sheet.
@@ -273,4 +456,47 @@ object MediaUtils {
     )
   }
 
+  fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    val digitGroups = (kotlin.math.ln(bytes.toDouble()) / kotlin.math.ln(1024.0)).toInt().coerceIn(0, units.size - 1)
+    return "${java.text.DecimalFormat("#,##0.#").format(bytes / 1024.0.pow(digitGroups))} ${units[digitGroups]}"
+  }
+
+  fun formatRelativeTime(epochMillis: Long): String {
+    if (epochMillis <= 0L) return ""
+    val now = System.currentTimeMillis()
+    val diff = (now - epochMillis).coerceAtLeast(0L)
+    val seconds = diff / 1000L
+    val minutes = seconds / 60L
+    val hours = minutes / 60L
+    val days = hours / 24L
+
+    return when {
+      seconds < 60 -> "Just now"
+      minutes < 60 -> "${minutes}m ago"
+      hours < 24 -> "${hours}h ago"
+      days == 1L -> "Yesterday"
+      days < 7L -> "${days}d ago"
+      else -> {
+        val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(epochMillis))
+      }
+    }
+  }
+
+  fun formatIsoRelativeTime(isoString: String?): String {
+    if (isoString.isNullOrBlank()) return ""
+    return runCatching {
+      val cleanIso = isoString.trim()
+      val date =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+          java.time.Instant.parse(cleanIso).toEpochMilli()
+        } else {
+          val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+          sdf.parse(cleanIso)?.time ?: return ""
+        }
+      formatRelativeTime(date)
+    }.getOrDefault("")
+  }
 }

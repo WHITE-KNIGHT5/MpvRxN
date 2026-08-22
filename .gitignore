@@ -21,6 +21,8 @@ local.properties
 *.aab
 *.aar
 !app/libs/mpvlib.aar
+!app/libs/mpvlib-no-vulkun.aar
+!app/libs/mpvlib-fongmi.aar
 
 # Release folders
 app/release/
@@ -153,3 +155,6 @@ lint/tmp/
 # Profiling
 # =========================
 *.hprof
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.components.expressive
 
 import androidx.compose.animation.AnimatedVisibility
@@ -48,10 +57,11 @@ fun AnimatedSection(
 
   Column(modifier = modifier) {
     Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .clickable { isExpanded = !isExpanded }
-        .padding(horizontal = 16.dp, vertical = 12.dp),
+      modifier =
+        Modifier
+          .fillMaxWidth()
+          .clickable { isExpanded = !isExpanded }
+          .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       if (headerContent != null) {
@@ -64,7 +74,7 @@ fun AnimatedSection(
         )
       }
       Icon(
-        imageVector = Icons.Default.KeyboardArrowDown,
+        imageVector = Icons.RoundedFilled.KeyboardArrowDown,
         contentDescription = if (isExpanded) "Collapse" else "Expand",
         modifier = Modifier.rotate(iconRotation),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -73,18 +83,22 @@ fun AnimatedSection(
 
     AnimatedVisibility(
       visible = isExpanded,
-      enter = expandVertically(
-        animationSpec = AppMotion.spatial(
-          AppMotion.IntSizeSpring,
-          AppMotion.ReducedIntSize,
-        ),
-      ) + fadeIn(animationSpec = AppMotion.Effect.Alpha),
-      exit = shrinkVertically(
-        animationSpec = AppMotion.spatial(
-          AppMotion.IntSizeSpring,
-          AppMotion.ReducedIntSize,
-        ),
-      ) + fadeOut(animationSpec = AppMotion.Effect.Alpha),
+      enter =
+        expandVertically(
+          animationSpec =
+            AppMotion.spatial(
+              AppMotion.IntSizeSpring,
+              AppMotion.ReducedIntSize,
+            ),
+        ) + fadeIn(animationSpec = AppMotion.Effect.Alpha),
+      exit =
+        shrinkVertically(
+          animationSpec =
+            AppMotion.spatial(
+              AppMotion.IntSizeSpring,
+              AppMotion.ReducedIntSize,
+            ),
+        ) + fadeOut(animationSpec = AppMotion.Effect.Alpha),
     ) {
       Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         content()
@@ -112,10 +126,11 @@ fun AnimatedSection(
 
   Column(modifier = modifier) {
     Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .clickable { onExpandedChange(!isExpanded) }
-        .padding(horizontal = 16.dp, vertical = 12.dp),
+      modifier =
+        Modifier
+          .fillMaxWidth()
+          .clickable { onExpandedChange(!isExpanded) }
+          .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
@@ -124,7 +139,7 @@ fun AnimatedSection(
         modifier = Modifier.weight(1f),
       )
       Icon(
-        imageVector = Icons.Default.KeyboardArrowDown,
+        imageVector = Icons.RoundedFilled.KeyboardArrowDown,
         contentDescription = if (isExpanded) "Collapse" else "Expand",
         modifier = Modifier.rotate(iconRotation),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -133,18 +148,22 @@ fun AnimatedSection(
 
     AnimatedVisibility(
       visible = isExpanded,
-      enter = expandVertically(
-        animationSpec = AppMotion.spatial(
-          AppMotion.IntSizeSpring,
-          AppMotion.ReducedIntSize,
-        ),
-      ) + fadeIn(animationSpec = AppMotion.Effect.Alpha),
-      exit = shrinkVertically(
-        animationSpec = AppMotion.spatial(
-          AppMotion.IntSizeSpring,
-          AppMotion.ReducedIntSize,
-        ),
-      ) + fadeOut(animationSpec = AppMotion.Effect.Alpha),
+      enter =
+        expandVertically(
+          animationSpec =
+            AppMotion.spatial(
+              AppMotion.IntSizeSpring,
+              AppMotion.ReducedIntSize,
+            ),
+        ) + fadeIn(animationSpec = AppMotion.Effect.Alpha),
+      exit =
+        shrinkVertically(
+          animationSpec =
+            AppMotion.spatial(
+              AppMotion.IntSizeSpring,
+              AppMotion.ReducedIntSize,
+            ),
+        ) + fadeOut(animationSpec = AppMotion.Effect.Alpha),
     ) {
       Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         content()

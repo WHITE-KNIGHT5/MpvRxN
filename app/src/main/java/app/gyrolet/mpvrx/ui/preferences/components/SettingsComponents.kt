@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.preferences.components
 
 import androidx.compose.foundation.clickable
@@ -24,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.ui.components.IconSwitch
 import app.gyrolet.mpvrx.ui.icons.AppIcon
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
@@ -40,29 +50,32 @@ fun SettingsClickableItem(
   isLastItem: Boolean = false,
   trailing: @Composable (() -> Unit)? = null,
 ) {
-  val shape = RoundedCornerShape(
-    topStart = if (isFirstItem) 16.dp else 0.dp,
-    topEnd = if (isFirstItem) 16.dp else 0.dp,
-    bottomStart = if (isLastItem) 16.dp else 0.dp,
-    bottomEnd = if (isLastItem) 16.dp else 0.dp,
-  )
+  val shape =
+    RoundedCornerShape(
+      topStart = if (isFirstItem) 16.dp else 0.dp,
+      topEnd = if (isFirstItem) 16.dp else 0.dp,
+      bottomStart = if (isLastItem) 16.dp else 0.dp,
+      bottomEnd = if (isLastItem) 16.dp else 0.dp,
+    )
 
   Surface(
-    modifier = modifier
-      .fillMaxWidth()
-      .clickable(
-        enabled = enabled,
-        onClick = onClick,
-        interactionSource = remember { MutableInteractionSource() },
-        indication = null,
-      ),
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .clickable(
+          enabled = enabled,
+          onClick = onClick,
+          interactionSource = remember { MutableInteractionSource() },
+          indication = null,
+        ),
     shape = shape,
     color = MaterialTheme.colorScheme.surfaceContainerLow,
   ) {
     Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 14.dp),
+      modifier =
+        Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 14.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       if (icon != null) {
@@ -122,8 +135,8 @@ fun SettingsSwitchItem(
   modifier: Modifier = Modifier,
   description: String? = null,
   icon: AppIcon? = null,
-  enabled: Boolean = true,
   isChecked: Boolean,
+  enabled: Boolean = true,
   onClick: () -> Unit,
   isFirstItem: Boolean = false,
   isLastItem: Boolean = false,
@@ -138,20 +151,10 @@ fun SettingsSwitchItem(
     isLastItem = isLastItem,
     modifier = modifier,
     trailing = {
-      Switch(
+      IconSwitch(
         checked = isChecked,
         onCheckedChange = null,
         enabled = enabled,
-        thumbContent = {
-          if (isChecked) {
-            Icon(
-              imageVector = Icons.Filled.Check,
-              contentDescription = null,
-              modifier = Modifier.size(SwitchDefaults.IconSize),
-              tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-          }
-        },
       )
     },
   )

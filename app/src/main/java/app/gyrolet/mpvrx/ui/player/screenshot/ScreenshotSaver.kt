@@ -1,4 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.screenshot
+
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import android.content.ContentValues
 import android.content.Context
@@ -10,7 +21,6 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import app.gyrolet.mpvrx.preferences.PlayerPreferences
-import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -68,18 +78,20 @@ object ScreenshotSaver {
     withContext(Dispatchers.IO) {
       runCatching {
         applyMpvScreenshotOptions(settings)
-        val displayName = ScreenshotTemplate.buildFileName(
-          template = settings.template,
-          extension = settings.format.extension,
-          mediaTitle = MPVLib.getPropertyString("media-title")
-            ?: MPVLib.getPropertyString("filename/no-ext")
-            ?: MPVLib.getPropertyString("filename"),
-          path = MPVLib.getPropertyString("path"),
-          positionSeconds = MPVLib.getPropertyDouble("time-pos")?.toLong() ?: 0L,
-        )
-        val tempFile = captureNative(context, settings, includeSubtitles)
-          ?: captureWithAndroidFallback(context, settings, includeSubtitles)
-          ?: error("mpv does not support ${settings.format.title} format on this device")
+        val displayName =
+          ScreenshotTemplate.buildFileName(
+            template = settings.template,
+            extension = settings.format.extension,
+            filename = PlaybackSession.getPropertyString("filename"),
+            filenameNoExt = PlaybackSession.getPropertyString("filename/no-ext"),
+            mediaTitle = PlaybackSession.getPropertyString("media-title"),
+            path = PlaybackSession.getPropertyString("path"),
+            positionSeconds = PlaybackSession.getPropertyDouble("time-pos") ?: 0.0,
+          )
+        val tempFile =
+          captureNative(context, settings, includeSubtitles)
+            ?: captureWithAndroidFallback(context, settings, includeSubtitles)
+            ?: error("mpv does not support ${settings.format.title} format on this device")
 
         saveToPictures(context, tempFile, displayName, settings.format).also {
           tempFile.delete()
@@ -88,12 +100,12 @@ object ScreenshotSaver {
     }
 
   fun applyMpvScreenshotOptions(settings: ScreenshotSettings) {
-    MPVLib.setOptionString("screenshot-format", settings.format.mpvValue)
-    MPVLib.setOptionString("screenshot-template", settings.template)
-    MPVLib.setOptionString("screenshot-jpeg-quality", settings.quality.coerceIn(0, 100).toString())
-    MPVLib.setOptionString("screenshot-webp-quality", settings.quality.coerceIn(0, 100).toString())
-    MPVLib.setOptionString("screenshot-png-compression", settings.pngCompression.coerceIn(0, 9).toString())
-    MPVLib.setOptionString("screenshot-webp-lossless", if (settings.webpLossless) "yes" else "no")
+    PlaybackSession.setOptionString("screenshot-format", settings.format.mpvValue)
+    PlaybackSession.setOptionString("screenshot-template", settings.template)
+    PlaybackSession.setOptionString("screenshot-jpeg-quality", settings.quality.coerceIn(0, 100).toString())
+    PlaybackSession.setOptionString("screenshot-webp-quality", settings.quality.coerceIn(0, 100).toString())
+    PlaybackSession.setOptionString("screenshot-png-compression", settings.pngCompression.coerceIn(0, 9).toString())
+    PlaybackSession.setOptionString("screenshot-webp-lossless", if (settings.webpLossless) "yes" else "no")
   }
 
   private suspend fun captureNative(
@@ -103,7 +115,7 @@ object ScreenshotSaver {
   ): File? {
     val tempFile = File(context.cacheDir, "mpvrx_snapshot_native.${settings.format.extension}")
     tempFile.delete()
-    MPVLib.command("screenshot-to-file", tempFile.absolutePath, if (includeSubtitles) "subtitles" else "video")
+    PlaybackSession.command("screenshot-to-file", tempFile.absolutePath, if (includeSubtitles) "subtitles" else "video")
     delay(250)
     return tempFile.takeIf { it.exists() && it.length() > 0L }
   }
@@ -117,8 +129,8 @@ object ScreenshotSaver {
 
     val sourcePng = File(context.cacheDir, "mpvrx_snapshot_fallback_source.png")
     sourcePng.delete()
-    MPVLib.setOptionString("screenshot-format", "png")
-    MPVLib.command("screenshot-to-file", sourcePng.absolutePath, if (includeSubtitles) "subtitles" else "video")
+    PlaybackSession.setOptionString("screenshot-format", "png")
+    PlaybackSession.command("screenshot-to-file", sourcePng.absolutePath, if (includeSubtitles) "subtitles" else "video")
     delay(250)
     if (!sourcePng.exists() || sourcePng.length() == 0L) return null
 
@@ -144,7 +156,8 @@ object ScreenshotSaver {
   private fun ScreenshotSettings.compressFormat(): Bitmap.CompressFormat =
     when (format) {
       ScreenshotFormat.JPG,
-      ScreenshotFormat.JPEG -> Bitmap.CompressFormat.JPEG
+      ScreenshotFormat.JPEG,
+      -> Bitmap.CompressFormat.JPEG
       ScreenshotFormat.WEBP ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && webpLossless) {
           Bitmap.CompressFormat.WEBP_LOSSLESS
@@ -159,7 +172,14 @@ object ScreenshotSaver {
   private fun ScreenshotSettings.compressQuality(): Int =
     when (format) {
       ScreenshotFormat.PNG -> (100 - pngCompression.coerceIn(0, 9) * 10).coerceIn(0, 100)
-      ScreenshotFormat.WEBP -> if (webpLossless && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) 100 else quality.coerceIn(0, 100)
+      ScreenshotFormat.WEBP ->
+        if (webpLossless &&
+          Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+        ) {
+          100
+        } else {
+          quality.coerceIn(0, 100)
+        }
       else -> quality.coerceIn(0, 100)
     }
 
@@ -170,15 +190,17 @@ object ScreenshotSaver {
     format: ScreenshotFormat,
   ): ScreenshotSaveResult {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      val values = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
-        put(MediaStore.Images.Media.MIME_TYPE, format.mimeType)
-        put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$SNAPSHOT_FOLDER")
-        put(MediaStore.Images.Media.IS_PENDING, 1)
-      }
+      val values =
+        ContentValues().apply {
+          put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+          put(MediaStore.Images.Media.MIME_TYPE, format.mimeType)
+          put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$SNAPSHOT_FOLDER")
+          put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
       val resolver = context.contentResolver
-      val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-        ?: error("Failed to create MediaStore entry")
+      val uri =
+        resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+          ?: error("Failed to create MediaStore entry")
       resolver.openOutputStream(uri)?.use { output ->
         tempFile.inputStream().use { input -> input.copyTo(output) }
       } ?: error("Failed to open MediaStore output")
@@ -189,9 +211,10 @@ object ScreenshotSaver {
     }
 
     val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-    val snapshotsDir = File(picturesDir, SNAPSHOT_FOLDER).apply {
-      if (!exists()) mkdirs()
-    }
+    val snapshotsDir =
+      File(picturesDir, SNAPSHOT_FOLDER).apply {
+        if (!exists()) mkdirs()
+      }
     val destFile = uniqueFile(snapshotsDir, displayName)
     tempFile.copyTo(destFile, overwrite = false)
     MediaScannerConnection.scanFile(
@@ -203,7 +226,10 @@ object ScreenshotSaver {
     return ScreenshotSaveResult(displayName = destFile.name, uri = null, file = destFile)
   }
 
-  private fun uniqueFile(directory: File, displayName: String): File {
+  private fun uniqueFile(
+    directory: File,
+    displayName: String,
+  ): File {
     val baseName = displayName.substringBeforeLast('.', displayName)
     val extension = displayName.substringAfterLast('.', "")
     var candidate = File(directory, displayName)
@@ -225,36 +251,62 @@ object ScreenshotTemplate {
     template: String,
     extension: String,
     now: LocalDateTime = LocalDateTime.now(),
+    filename: String? = null,
+    filenameNoExt: String? = null,
     mediaTitle: String? = null,
     path: String? = null,
-    positionSeconds: Long = 0L,
+    positionSeconds: Double = 0.0,
   ): String {
-    val baseTitle = mediaTitle?.ifBlank { null }
-      ?: path?.substringAfterLast('/')?.substringBeforeLast('.')?.ifBlank { null }
-      ?: "video"
-    val rendered = template.ifBlank { "mpv_snapshot_%Y%m%d_%H%M%S" }
-      .replace("%wH", now.format(DateTimeFormatter.ofPattern("HH")))
-      .replace("%wM", now.format(DateTimeFormatter.ofPattern("mm")))
-      .replace("%wS", now.format(DateTimeFormatter.ofPattern("ss")))
-      .replace("%wT", now.format(DateTimeFormatter.ofPattern("SSS")))
-      .replace("%Y", now.format(DateTimeFormatter.ofPattern("yyyy")))
-      .replace("%m", now.format(DateTimeFormatter.ofPattern("MM")))
-      .replace("%d", now.format(DateTimeFormatter.ofPattern("dd")))
-      .replace("%H", now.format(DateTimeFormatter.ofPattern("HH")))
-      .replace("%M", now.format(DateTimeFormatter.ofPattern("mm")))
-      .replace("%S", now.format(DateTimeFormatter.ofPattern("ss")))
-      .replace("%f", baseTitle)
-      .replace("%p", positionSeconds.coerceAtLeast(0).toString())
+    val resolvedFilename =
+      filename?.ifBlank { null }
+        ?: path?.substringAfterLast('/')?.ifBlank { null }
+        ?: mediaTitle?.ifBlank { null }
+        ?: "video"
 
-    val sanitized = rendered
-      .replace(invalidFileChars, "_")
-      .replace(whitespace, " ")
-      .trim()
-      .trim('.', ' ')
-      .ifBlank { "mpv_snapshot" }
-      .take(120)
-      .trimEnd('.', ' ', '_')
-      .ifBlank { "mpv_snapshot" }
+    val resolvedFilenameNoExt =
+      filenameNoExt?.ifBlank { null }
+        ?: resolvedFilename.substringBeforeLast('.')
+
+    val posSec = positionSeconds.coerceAtLeast(0.0)
+    val totalMs = (posSec * 1000.0).toLong()
+    val hours = totalMs / 3600000
+    val minutes = (totalMs % 3600000) / 60000
+    val seconds = (totalMs % 60000) / 1000
+    val milliseconds = totalMs % 1000
+
+    val wHStr = String.format(Locale.US, "%02d", hours)
+    val wMStr = String.format(Locale.US, "%02d", minutes)
+    val wSStr = String.format(Locale.US, "%02d", seconds)
+    val wTStr = String.format(Locale.US, "%03d", milliseconds)
+
+    val rendered =
+      template
+        .ifBlank { "mpv_snapshot_%Y%m%d_%H%M%S" }
+        .replace("%wH", wHStr)
+        .replace("%wM", wMStr)
+        .replace("%wS", wSStr)
+        .replace("%wT", wTStr)
+        .replace("%Y", now.format(DateTimeFormatter.ofPattern("yyyy")))
+        .replace("%m", now.format(DateTimeFormatter.ofPattern("MM")))
+        .replace("%d", now.format(DateTimeFormatter.ofPattern("dd")))
+        .replace("%H", now.format(DateTimeFormatter.ofPattern("HH")))
+        .replace("%M", now.format(DateTimeFormatter.ofPattern("mm")))
+        .replace("%S", now.format(DateTimeFormatter.ofPattern("ss")))
+        .replace("%f", resolvedFilename)
+        .replace("%F", resolvedFilenameNoExt)
+        .replace("%P", "$wHStr:$wMStr:$wSStr.$wTStr")
+        .replace("%p", "$wHStr:$wMStr:$wSStr")
+
+    val sanitized =
+      rendered
+        .replace(invalidFileChars, "_")
+        .replace(whitespace, " ")
+        .trim()
+        .trim('.', ' ')
+        .ifBlank { "mpv_snapshot" }
+        .take(120)
+        .trimEnd('.', ' ', '_')
+        .ifBlank { "mpv_snapshot" }
     return "${sanitized.lowercaseExtension(extension)}.${extension.lowercase(Locale.US)}"
   }
 

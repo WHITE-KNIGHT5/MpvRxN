@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.storage
 
 import java.io.File
@@ -6,33 +15,7 @@ import java.util.Locale
 internal fun shouldRunFilesystemVideoCheck(
   forceFileSystemCheck: Boolean,
   mediaStoreResultCount: Int,
-  folder: File,
-  includeAudioFiles: Boolean,
-): Boolean {
-  if (forceFileSystemCheck || mediaStoreResultCount == 0) {
-    return true
-  }
-
-  // MediaStore indexes files asynchronously in the background. A non-zero
-  // result count doesn't mean MediaStore has finished scanning this folder —
-  // e.g. right after copying 140 new files in, MediaStore might have only
-  // indexed 1 of them so far. Comparing against the real on-disk count
-  // (cheap — just a directory listing, no metadata extraction) catches
-  // that case instead of trusting any non-zero count as "complete".
-  val actualFileCount =
-    runCatching {
-      folder.listFiles { file ->
-        file.isFile &&
-          !file.name.startsWith(".") &&
-          (
-            FileTypeUtils.VIDEO_EXTENSIONS.contains(file.extension.lowercase()) ||
-              (includeAudioFiles && FileTypeUtils.AUDIO_EXTENSIONS.contains(file.extension.lowercase()))
-          )
-      }?.size ?: 0
-    }.getOrDefault(0)
-
-  return actualFileCount > mediaStoreResultCount
-}
+): Boolean = forceFileSystemCheck || mediaStoreResultCount == 0
 
 internal fun shouldIncludePrimaryStorageInFilesystemFolderScan(
   options: MediaScanOptions,
@@ -81,8 +64,13 @@ internal fun normalizeStoragePath(path: String?): String? {
   return normalized.ifBlank { "/" }
 }
 
-internal fun storagePathKey(path: String?): String? =
-  normalizeStoragePath(path)?.lowercase(Locale.ROOT)
+internal fun storagePathKey(path: String?): String? = normalizeStoragePath(path)?.lowercase(Locale.ROOT)
+
+internal fun mediaPathKey(path: String?): String? {
+  val normalizedPath = normalizeStoragePath(path) ?: return null
+  val canonicalPath = runCatching { File(normalizedPath).canonicalPath }.getOrNull()
+  return storagePathKey(canonicalPath ?: normalizedPath)
+}
 
 internal fun areEquivalentStoragePaths(
   first: String?,
@@ -162,4 +150,3 @@ private fun storageDisplayScore(path: String): Int {
       .count { preferredName -> path.contains("/$preferredName") || path.endsWith(preferredName) }
   return uppercaseScore + mediaFolderBonus
 }
-

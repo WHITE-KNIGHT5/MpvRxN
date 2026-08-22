@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.components.expressive
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -11,9 +20,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.ui.icons.AppIcon
 import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.AppMotion
@@ -25,7 +34,7 @@ import app.gyrolet.mpvrx.ui.theme.AppMotion
 fun SectionHeader(
   title: String,
   modifier: Modifier = Modifier,
-  leadingIcon: ImageVector? = null,
+  leadingIcon: AppIcon? = null,
   count: Int? = null,
   isExpanded: Boolean = false,
   onClick: (() -> Unit)? = null,
@@ -37,13 +46,14 @@ fun SectionHeader(
   )
 
   Row(
-    modifier = modifier
-      .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-      .padding(horizontal = 16.dp, vertical = 8.dp),
+    modifier =
+      modifier
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = 16.dp, vertical = 8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     leadingIcon?.let { icon ->
-      androidx.compose.material3.Icon(
+      Icon(
         imageVector = icon,
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -69,7 +79,7 @@ fun SectionHeader(
 
     if (onClick != null) {
       Icon(
-        imageVector = Icons.Default.KeyboardArrowDown,
+        imageVector = Icons.RoundedFilled.KeyboardArrowDown,
         contentDescription = null,
         modifier = Modifier.rotate(iconRotation),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,

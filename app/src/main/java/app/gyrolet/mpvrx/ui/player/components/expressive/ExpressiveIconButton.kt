@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.components.expressive
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -13,8 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import app.gyrolet.mpvrx.ui.icons.AppIcon
+import app.gyrolet.mpvrx.ui.icons.Icon
 import app.gyrolet.mpvrx.ui.theme.AppMotion
 
 /**
@@ -53,7 +63,7 @@ fun CompactExpressiveIconButton(
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
   enabled: Boolean = true,
-  imageVector: ImageVector,
+  imageVector: AppIcon,
   contentDescription: String? = null,
 ) {
   var isPressed by remember { mutableStateOf(false) }
@@ -70,7 +80,7 @@ fun CompactExpressiveIconButton(
     enabled = enabled,
     colors = IconButtonDefaults.iconButtonColors(),
   ) {
-    androidx.compose.material3.Icon(
+    Icon(
       imageVector = imageVector,
       contentDescription = contentDescription,
       modifier = Modifier.size(20.dp),

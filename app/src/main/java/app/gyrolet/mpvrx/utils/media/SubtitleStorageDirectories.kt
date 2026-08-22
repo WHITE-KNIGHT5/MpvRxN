@@ -1,7 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.media
 
 import android.content.Context
-import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 
 private const val SUBTITLES_DIRECTORY_NAME = "Subtitles"
@@ -37,13 +45,14 @@ fun resolveSubtitleLookupDirectories(
     return listOf(root)
   }
 
-  val directories = buildList {
-    runCatching { root.findFile(SUBTITLES_DIRECTORY_NAME) }
-      .getOrNull()
-      ?.takeIf { it.exists() && it.isDirectory }
-      ?.let(::add)
-    add(root)
-  }
+  val directories =
+    buildList {
+      runCatching { root.findFile(SUBTITLES_DIRECTORY_NAME) }
+        .getOrNull()
+        ?.takeIf { it.exists() && it.isDirectory }
+        ?.let(::add)
+      add(root)
+    }
 
   return directories.distinctBy { it.uri.toString() }
 }

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import android.content.ContentResolver
@@ -29,10 +38,33 @@ interface PlayerHost {
   val hostWindowManager: WindowManager
   val hostContentResolver: ContentResolver
   var hostRequestedOrientation: Int
-  
+
   fun requestAudioFocus(): Boolean
+
   fun abandonAudioFocus()
+
   fun currentMediaLookupHint(): String? = null
+
   fun currentPlayerLookupHints(): PlayerLookupHints = PlayerLookupHints()
+
   fun currentThumbnailSource(): String? = null
+
+  fun isCurrentMediaKnownAudio(): Boolean = false
+
+  fun playQueueItem(index: Int)
+
+  fun reorderQueueItem(
+    from: Int,
+    to: Int,
+  )
+
+  fun hasNextQueueItem(): Boolean
+
+  fun hasPreviousQueueItem(): Boolean
+
+  fun playNextQueueItem()
+
+  fun playPreviousQueueItem()
+
+  fun onQueueShuffleChanged(enabled: Boolean)
 }

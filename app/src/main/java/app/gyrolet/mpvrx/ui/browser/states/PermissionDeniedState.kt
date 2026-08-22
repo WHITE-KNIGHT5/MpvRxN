@@ -1,25 +1,37 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 @file:Suppress("DEPRECATION")
 
 package app.gyrolet.mpvrx.ui.browser.states
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
-
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,10 +39,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -39,14 +55,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -56,178 +76,331 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import app.gyrolet.mpvrx.BuildConfig
 import app.gyrolet.mpvrx.R
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.theme.AppShapeScale
+import app.gyrolet.mpvrx.utils.permission.PermissionUtils
+
+private fun checkFilePermission(context: Context): Boolean {
+  val isPlayStoreBuild = BuildConfig.SCOPED_STORAGE_ONLY
+  return if (!isPlayStoreBuild && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+    Environment.isExternalStorageManager()
+  } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+    true
+  } else {
+    ContextCompat.checkSelfPermission(
+      context,
+      PermissionUtils.getStoragePermission(),
+    ) == PackageManager.PERMISSION_GRANTED
+  }
+}
+
+private fun checkNotificationPermission(context: Context): Boolean {
+  return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    ContextCompat.checkSelfPermission(
+      context,
+      android.Manifest.permission.POST_NOTIFICATIONS,
+    ) == PackageManager.PERMISSION_GRANTED
+  } else {
+    true
+  }
+}
+
+private fun checkAudioPermission(context: Context): Boolean {
+  return ContextCompat.checkSelfPermission(
+    context,
+    android.Manifest.permission.RECORD_AUDIO,
+  ) == PackageManager.PERMISSION_GRANTED
+}
 
 @SuppressLint("UseKtx")
 @Composable
 fun PermissionDeniedState(
   onRequestPermission: () -> Unit,
   modifier: Modifier = Modifier,
+  onNext: (() -> Unit)? = null,
 ) {
   val context = LocalContext.current
+  val lifecycleOwner = LocalLifecycleOwner.current
   var showExplanationDialog by remember { mutableStateOf(false) }
 
-  // Determine if we're using MANAGE_EXTERNAL_STORAGE or scoped storage permissions
   val isPlayStoreBuild = remember { BuildConfig.SCOPED_STORAGE_ONLY }
 
-  // Animated scale for the icon
-  val infiniteTransition = rememberInfiniteTransition(label = "permission_icon")
-  val scale by infiniteTransition.animateFloat(
-    initialValue = 1f,
-    targetValue = 1.1f,
-    animationSpec =
-      infiniteRepeatable(
-        animation = tween(2000, easing = FastOutSlowInEasing),
-        repeatMode = RepeatMode.Reverse,
-      ),
-    label = "icon_scale",
-  )
+  var isFileGranted by remember { mutableStateOf(checkFilePermission(context)) }
+  var isNotificationGranted by remember { mutableStateOf(checkNotificationPermission(context)) }
+  var isAudioGranted by remember { mutableStateOf(checkAudioPermission(context)) }
+
+  // Initial check on composition
+  LaunchedEffect(Unit) {
+    isFileGranted = checkFilePermission(context)
+    isNotificationGranted = checkNotificationPermission(context)
+    isAudioGranted = checkAudioPermission(context)
+  }
+
+  // Re-check permissions whenever activity resumes from system settings or permission dialogs
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        isFileGranted = checkFilePermission(context)
+        isNotificationGranted = checkNotificationPermission(context)
+        isAudioGranted = checkAudioPermission(context)
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose {
+      lifecycleOwner.lifecycle.removeObserver(observer)
+    }
+  }
+
+  // Launcher for notification permission prompt
+  val notificationLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission(),
+  ) { granted ->
+    isNotificationGranted = granted || checkNotificationPermission(context)
+    if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val activity = context as? Activity
+      if (activity != null && !activity.shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS)) {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+          putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+        runCatching { context.startActivity(intent) }
+      }
+    }
+  }
+
+  // Launcher for audio permission prompt
+  val audioLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission(),
+  ) { granted ->
+    isAudioGranted = granted || checkAudioPermission(context)
+    if (!granted) {
+      val activity = context as? Activity
+      if (activity != null && !activity.shouldShowRequestPermissionRationale(android.Manifest.permission.RECORD_AUDIO)) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+          data = Uri.parse("package:${context.packageName}")
+        }
+        runCatching { context.startActivity(intent) }
+      }
+    }
+  }
 
   Box(
     modifier = modifier
       .fillMaxSize()
-      .padding(top = 40.dp, bottom = 100.dp) // Added top padding for icon, reduced bottom padding
+      .padding(top = 16.dp, bottom = 48.dp),
   ) {
     Surface(
       modifier = Modifier.fillMaxSize(),
       color = MaterialTheme.colorScheme.background,
     ) {
-      Column(
-        modifier =
-          Modifier
-            .fillMaxSize()
-            .padding(32.dp) // Increased padding to prevent icon cutoff
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+      Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
       ) {
-
-        // Animated Icon with Surface
-        Surface(
-          modifier =
-            Modifier
-              .size(152.dp)
-              .padding(16.dp)
-              .scale(scale),
-          shape = AppShapeScale.extraLargeIncreased,
-          color = MaterialTheme.colorScheme.errorContainer,
-          tonalElevation = 3.dp,
-        ) {
-          Icon(
-            imageVector = Icons.Outlined.Warning,
-            contentDescription = null,
-            modifier =
-              Modifier
-                .padding(28.dp)
-                .fillMaxSize(),
-            tint = MaterialTheme.colorScheme.onErrorContainer,
-          )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Title
-        Text(
-          text = "Storage Access Required",
-          style = MaterialTheme.typography.headlineMedium,
-          fontWeight = FontWeight.Bold,
-          textAlign = TextAlign.Center,
-          color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Description Card
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          colors =
-            CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ),
-          shape = AppShapeScale.largeIncreased,
+        Column(
+          modifier = Modifier
+            .widthIn(max = 560.dp)
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .verticalScroll(rememberScrollState()),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.SpaceBetween,
         ) {
           Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth(),
           ) {
-            Text(
-              text = if (isPlayStoreBuild) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                  "MpvRx requires \"Photos and videos\" permission to access and play your video files stored on your device."
-                } else {
-                  "MpvRx requires \"Storage\" permission to access and play your media files stored on your device."
-                }
-              } else {
-                "MpvRx requires \"All file access\" permission to discover media and subtitles on your device due to a change in security policy in Android 11 and later versions."
-              },
-              style = MaterialTheme.typography.bodyLarge,
-              color = MaterialTheme.colorScheme.onSurface,
-              textAlign = TextAlign.Center,
-            )
-          }
-        }
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Allow Access Button
-        FilledTonalButton(
-          onClick = {
-            if (isPlayStoreBuild) {
-              // Play Store build: Use regular permission request
-              onRequestPermission()
-            } else {
-              // Standard build: Open All Files Access settings for Android 11+
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                try {
-                  val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                  intent.data = Uri.parse("package:${context.packageName}")
-                  context.startActivity(intent)
-                } catch (_: Exception) {
-                  // Fallback to general All Files Access settings
-                  val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                  context.startActivity(intent)
-                }
-              } else {
-                // For older Android versions, use the regular permission request
-                onRequestPermission()
+            // Header Icon
+            Surface(
+              modifier = Modifier.size(72.dp),
+              shape = AppShapeScale.extraLarge,
+              color = MaterialTheme.colorScheme.primaryContainer,
+              tonalElevation = 2.dp,
+            ) {
+              Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize(),
+              ) {
+                Icon(
+                  imageVector = Icons.RoundedFilled.Security,
+                  contentDescription = null,
+                  modifier = Modifier.size(36.dp),
+                  tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
               }
             }
-          },
-          modifier =
-            Modifier
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Title
+            Text(
+              text = stringResource(R.string.ui_app_permissions),
+              style = MaterialTheme.typography.headlineMedium,
+              fontWeight = FontWeight.Bold,
+              textAlign = TextAlign.Center,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Subtitle
+            Text(
+              text = stringResource(R.string.ui_permissions_setup_subtitle),
+              style = MaterialTheme.typography.bodyMedium,
+              textAlign = TextAlign.Center,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Section 1: File & Storage Access
+            PermissionSectionCard(
+              title = stringResource(R.string.ui_file_permission_title),
+              description = if (isPlayStoreBuild) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                  stringResource(R.string.ui_file_permission_desc_playstore_tiramisu)
+                } else {
+                  stringResource(R.string.ui_file_permission_desc_playstore)
+                }
+              } else {
+                stringResource(R.string.ui_file_permission_desc_all_files)
+              },
+              isGranted = isFileGranted,
+              icon = Icons.RoundedFilled.Folder,
+              onClick = {
+                if (!isFileGranted) {
+                  if (isPlayStoreBuild) {
+                    onRequestPermission()
+                  } else {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      try {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        intent.data = Uri.parse("package:${context.packageName}")
+                        context.startActivity(intent)
+                      } catch (_: Exception) {
+                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        context.startActivity(intent)
+                      }
+                    } else {
+                      onRequestPermission()
+                    }
+                  }
+                }
+              },
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Section 2: Notifications
+            PermissionSectionCard(
+              title = stringResource(R.string.ui_notification_permission_title),
+              description = stringResource(R.string.ui_notification_permission_desc),
+              isGranted = isNotificationGranted,
+              icon = Icons.RoundedFilled.Notifications,
+              onClick = {
+                if (!isNotificationGranted) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                  }
+                }
+              },
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Section 3: Record Audio for Visualizers
+            PermissionSectionCard(
+              title = stringResource(R.string.ui_audio_record_permission_title),
+              description = stringResource(R.string.ui_audio_record_permission_desc),
+              isGranted = isAudioGranted,
+              icon = Icons.RoundedFilled.Mic,
+              onClick = {
+                if (!isAudioGranted) {
+                  audioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                }
+              },
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+          }
+
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
               .fillMaxWidth()
-              .height(56.dp),
-          shape = AppShapeScale.large,
-        ) {
-          Text(
-            text = "ALLOW ACCESS",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-          )
+              .padding(top = 24.dp),
+          ) {
+            // Next Button - Disabled until file permission is granted
+            Button(
+              onClick = {
+                if (isFileGranted) {
+                  if (onNext != null) {
+                    onNext()
+                  } else {
+                    onRequestPermission()
+                  }
+                }
+              },
+              enabled = isFileGranted,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+                .alpha(if (isFileGranted) 1f else 0.45f),
+              shape = AppShapeScale.large,
+              colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+              ),
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+              ) {
+                Text(
+                  text = stringResource(R.string.ui_next),
+                  style = MaterialTheme.typography.titleMedium,
+                  fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                  imageVector = Icons.RoundedFilled.ArrowForward,
+                  contentDescription = null,
+                  modifier = Modifier.size(20.dp),
+                )
+              }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // "Why do I see this?" link
+            TextButton(
+              onClick = { showExplanationDialog = true },
+            ) {
+              Icon(
+                imageVector = Icons.RoundedFilled.Info,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = stringResource(R.string.ui_why_do_i_see_this),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+              )
+            }
+          }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Why do I see this? link
-        TextButton(
-          onClick = { showExplanationDialog = true },
-        ) {
-          Icon(
-            imageVector = Icons.Outlined.Info,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = "Why do I see this?",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-          )
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
       }
     }
   }
@@ -241,34 +414,31 @@ fun PermissionDeniedState(
       onDismissRequest = { showExplanationDialog = false },
       icon = {
         Icon(
-          imageVector = Icons.Outlined.Info,
+          imageVector = Icons.RoundedFilled.Info,
           contentDescription = null,
           tint = MaterialTheme.colorScheme.primary,
         )
       },
       title = {
         Text(
-          text = "Why this permission is needed",
+          text = stringResource(R.string.ui_why_this_permission_is_needed),
           style = MaterialTheme.typography.headlineSmall,
           fontWeight = FontWeight.Bold,
         )
       },
       text = {
         Column(
-          modifier =
-            Modifier
-              .heightIn(max = 400.dp)
-              .verticalScroll(rememberScrollState()),
+          modifier = Modifier
+            .heightIn(max = 400.dp)
+            .verticalScroll(rememberScrollState()),
           verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           if (isPlayStoreBuild) {
-            // Play Store build explanation
             Text(
-              text = "MpvRx needs access to your video files to provide its core functionality as a media player.",
+              text = stringResource(R.string.ui_mpvrx_needs_access_to_your_video_files_to_provide_its_core_funct),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
             Text(
               text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 "On Android 13 and above, this permission allows the app to read video files from your device's storage, including Downloads, Movies, and DCIM folders."
@@ -278,84 +448,71 @@ fun PermissionDeniedState(
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
             Text(
-              text = "The permission is used exclusively for:",
+              text = stringResource(R.string.ui_the_permission_is_used_exclusively_for),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               fontWeight = FontWeight.Medium,
             )
-
             Text(
-              text = "• Discovering and displaying your video files\n• Playing media content\n• Loading subtitle files",
+              text = stringResource(R.string.ui_discovering_and_displaying_your_video_files_n_playing_media_cont),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           } else {
-            // Standard build explanation
             Text(
-              text = "MpvRx has always required storage access permission as it's essential for the app to find all media and subtitle files on your device, including the ones that are not supported by the system.",
+              text = stringResource(R.string.ui_mpvrx_has_always_required_storage_access_permission_as_it_s_esse),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
             Text(
-              text = "However, due to a change in security policy, apps built for Android 11 and above now require additional permission to continue accessing the same.",
+              text = stringResource(R.string.ui_however_due_to_a_change_in_security_policy_apps_built_for_androi),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
             Text(
-              text = "Please know that this permission is only used for the auto-discovery of media/subtitle files on your device and will not allow us to access the private data files stored by other apps in any way.",
+              text = stringResource(R.string.ui_please_know_that_this_permission_is_only_used_for_the_auto_disco),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
 
           Text(
-            text = "MpvRx is an open source project. You can review the source code and verify how permissions are used by visiting our GitHub repository at:",
+            text = stringResource(R.string.ui_mpvrx_is_an_open_source_project_you_can_review_the_source_code_a),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
 
-          // Clickable GitHub link
-          val annotatedString =
-            buildAnnotatedString {
-              pushStringAnnotation(
-                tag = "URL",
-                annotation = githubUrl,
-              )
-              withStyle(
-                style =
-                  SpanStyle(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                    textDecoration = TextDecoration.Underline,
-                  ),
-              ) {
-                append(githubUrl)
-              }
-              pop()
+          val annotatedString = buildAnnotatedString {
+            pushStringAnnotation(
+              tag = "URL",
+              annotation = githubUrl,
+            )
+            withStyle(
+              style = SpanStyle(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                textDecoration = TextDecoration.Underline,
+              ),
+            ) {
+              append(githubUrl)
             }
+            pop()
+          }
 
           ClickableText(
             text = annotatedString,
             style = MaterialTheme.typography.bodyMedium,
             onClick = { offset ->
               annotatedString
-                .getStringAnnotations(
-                  tag = "URL",
-                  start = offset,
-                  end = offset,
-                ).firstOrNull()
-                ?.let {
-                  uriHandler.openUri(it.item)
-                }
+                .getStringAnnotations(tag = "URL", start = offset, end = offset)
+                .firstOrNull()
+                ?.let { uriHandler.openUri(it.item) }
             },
           )
 
           Text(
-            text = "Be rest assured, your privacy is our utmost priority, and we neither access your files for other purposes nor transfer or store them to our servers. They remain safe on your device.",
+            text = stringResource(R.string.ui_be_rest_assured_your_privacy_is_our_utmost_priority_and_we_neith),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium,
@@ -375,6 +532,158 @@ fun PermissionDeniedState(
   }
 }
 
+@Composable
+private fun PermissionSectionCard(
+  title: String,
+  description: String,
+  isGranted: Boolean,
+  icon: app.gyrolet.mpvrx.ui.icons.AppIcon,
+  onClick: () -> Unit,
+) {
+  val cardBgColor by animateColorAsState(
+    targetValue = if (isGranted) {
+      MaterialTheme.colorScheme.surfaceContainerLowest
+    } else {
+      MaterialTheme.colorScheme.surfaceContainer
+    },
+    label = "card_bg",
+  )
 
+  val borderModifier = if (!isGranted) {
+    Modifier.border(
+      width = 1.dp,
+      color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+      shape = AppShapeScale.largeIncreased,
+    )
+  } else {
+    Modifier
+  }
 
+  Card(
+    modifier = Modifier
+      .fillMaxWidth()
+      .alpha(if (isGranted) 0.65f else 1f)
+      .then(borderModifier)
+      .clip(AppShapeScale.largeIncreased)
+      .clickable(enabled = !isGranted, onClick = onClick),
+    colors = CardDefaults.cardColors(containerColor = cardBgColor),
+    shape = AppShapeScale.largeIncreased,
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(18.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      // Left Icon Container
+      Surface(
+        modifier = Modifier.size(44.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = if (isGranted) {
+          MaterialTheme.colorScheme.surfaceVariant
+        } else {
+          MaterialTheme.colorScheme.primaryContainer
+        },
+      ) {
+        Box(
+          contentAlignment = Alignment.Center,
+          modifier = Modifier.fillMaxSize(),
+        ) {
+          Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = if (isGranted) {
+              MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+              MaterialTheme.colorScheme.onPrimaryContainer
+            },
+          )
+        }
+      }
 
+      Spacer(modifier = Modifier.width(14.dp))
+
+      // Middle Title & Description
+      Column(
+        modifier = Modifier.weight(1f),
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (isGranted) {
+              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            } else {
+              MaterialTheme.colorScheme.onSurface
+            },
+          )
+
+          if (isGranted) {
+            Spacer(modifier = Modifier.width(8.dp))
+            PillBadge(text = stringResource(R.string.ui_permission_granted))
+          }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+          text = description,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (!isGranted) {
+          Spacer(modifier = Modifier.height(4.dp))
+          Text(
+            text = stringResource(R.string.ui_grant_permission_hint),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.width(8.dp))
+
+      // Right Status Indicator
+      if (isGranted) {
+        Icon(
+          imageVector = Icons.RoundedFilled.CheckCircle,
+          contentDescription = null,
+          modifier = Modifier.size(24.dp),
+          tint = MaterialTheme.colorScheme.primary,
+        )
+      } else {
+        Icon(
+          imageVector = Icons.RoundedFilled.ChevronRight,
+          contentDescription = null,
+          modifier = Modifier.size(24.dp),
+          tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun PillBadge(text: String) {
+  Box(
+    modifier = Modifier
+      .background(
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(50),
+      )
+      .padding(horizontal = 8.dp, vertical = 2.dp),
+  ) {
+    Text(
+      text = text,
+      style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+      fontWeight = FontWeight.Bold,
+      color = MaterialTheme.colorScheme.onPrimaryContainer,
+    )
+  }
+}

@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player
 
 import dev.vivvvek.seeker.Segment
@@ -20,7 +29,7 @@ data class TrackNode(
   val title: String? = null,
   val lang: String? = null,
   val image: Boolean? = null,
-  @SerialName("albumArt") val albumArt: Boolean? = null,
+  @SerialName("albumart") val albumArt: Boolean? = null,
   val default: Boolean? = null,
   val forced: Boolean? = null,
   val dependent: Boolean? = null,
@@ -62,7 +71,19 @@ data class TrackNode(
   val metadata: Map<String, String?>? = null,
 ) {
   val isAudio = type == "audio"
+  val isVideo = type == "video"
+  val isAlbumArtwork = albumArt == true || image == true
   val isSubtitle = type == "sub"
   val isSelected = selected == true
-}
 
+  val effectiveTitle: String?
+    get() =
+      title?.takeIf { it.isNotBlank() }
+        ?: metadata?.entries?.firstOrNull { it.key.equals("title", ignoreCase = true) }?.value?.takeIf { it.isNotBlank() }
+        ?: metadata?.entries?.firstOrNull { it.key.equals("handler_name", ignoreCase = true) }?.value?.takeIf { it.isNotBlank() && !it.contains("handler", ignoreCase = true) }
+
+  val effectiveLang: String?
+    get() =
+      lang?.takeIf { it.isNotBlank() }
+        ?: metadata?.entries?.firstOrNull { it.key.equals("language", ignoreCase = true) || it.key.equals("lang", ignoreCase = true) }?.value?.takeIf { it.isNotBlank() }
+}

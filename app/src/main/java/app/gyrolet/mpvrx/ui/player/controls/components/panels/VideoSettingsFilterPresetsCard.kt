@@ -1,7 +1,15 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.ui.player.controls.components.panels
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+import app.gyrolet.mpvrx.ui.player.PlaybackSession
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,21 +29,27 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.preferences.DecoderPreferences
 import app.gyrolet.mpvrx.preferences.preference.collectAsState
 import app.gyrolet.mpvrx.presentation.components.ExpandableCard
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 import app.gyrolet.mpvrx.ui.player.FilterPreset
 import app.gyrolet.mpvrx.ui.player.controls.CARDS_MAX_WIDTH
 import app.gyrolet.mpvrx.ui.player.controls.panelCardsColors
 import app.gyrolet.mpvrx.ui.theme.spacing
-import `is`.xyz.mpv.MPVLib
+import app.gyrolet.mpvrx.ui.utils.currentMpvConfigOverrideOptions
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
   val decoderPreferences = koinInject<DecoderPreferences>()
+  val configOwnedOptions = currentMpvConfigOverrideOptions()
+  val presetOptions = setOf("brightness", "saturation", "contrast", "gamma", "hue", "sharpen")
+  val presetsEnabled = presetOptions.none(configOwnedOptions::contains)
   var isExpanded by remember { mutableStateOf(true) }
 
   // Collect current filter values
@@ -47,16 +61,17 @@ fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
   val sharpness by decoderPreferences.sharpnessFilter.collectAsState()
 
   // Find matching preset based on current filter values
-  val currentPreset = FilterPreset.entries.find { preset ->
-    preset.brightness == brightness &&
-      preset.saturation == saturation &&
-      preset.contrast == contrast &&
-      preset.gamma == gamma &&
-      preset.hue == hue &&
-      preset.sharpness == sharpness
-  } ?: FilterPreset.NONE.takeIf {
-    brightness == 0 && saturation == 0 && contrast == 0 && gamma == 0 && hue == 0 && sharpness == 0
-  }
+  val currentPreset =
+    FilterPreset.entries.find { preset ->
+      preset.brightness == brightness &&
+        preset.saturation == saturation &&
+        preset.contrast == contrast &&
+        preset.gamma == gamma &&
+        preset.hue == hue &&
+        preset.sharpness == sharpness
+    } ?: FilterPreset.NONE.takeIf {
+      brightness == 0 && saturation == 0 && contrast == 0 && gamma == 0 && hue == 0 && sharpness == 0
+    }
 
   ExpandableCard(
     isExpanded = isExpanded,
@@ -65,8 +80,11 @@ fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
       Row(
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium),
       ) {
-        Icon(Icons.Default.AutoAwesome, null)
-        Text("Filter Presets")
+        Icon(Icons.RoundedFilled.AutoAwesome, null)
+        Text(
+          androidx.compose.ui.res
+            .stringResource(app.gyrolet.mpvrx.R.string.ui_filter_presets),
+        )
       }
     },
     colors = panelCardsColors(),
@@ -84,6 +102,7 @@ fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
         FilterPreset.entries.forEach { preset ->
           FilterChip(
             selected = currentPreset == preset,
+            enabled = presetsEnabled,
             onClick = {
               // Apply preset values to all filters
               decoderPreferences.brightnessFilter.set(preset.brightness)
@@ -94,14 +113,14 @@ fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
               decoderPreferences.sharpnessFilter.set(preset.sharpness)
 
               // Apply to MPV
-              MPVLib.setPropertyInt("brightness", preset.brightness)
-              MPVLib.setPropertyInt("saturation", preset.saturation)
-              MPVLib.setPropertyInt("contrast", preset.contrast)
-              MPVLib.setPropertyInt("gamma", preset.gamma)
-              MPVLib.setPropertyInt("hue", preset.hue)
-              MPVLib.setPropertyInt("sharpen", preset.sharpness)
+              PlaybackSession.setPropertyInt("brightness", preset.brightness)
+              PlaybackSession.setPropertyInt("saturation", preset.saturation)
+              PlaybackSession.setPropertyInt("contrast", preset.contrast)
+              PlaybackSession.setPropertyInt("gamma", preset.gamma)
+              PlaybackSession.setPropertyInt("hue", preset.hue)
+              PlaybackSession.setPropertyInt("sharpen", preset.sharpness)
             },
-            label = { Text(preset.displayName) },
+            label = { Text(stringResource(preset.displayNameRes)) },
             leadingIcon = null,
           )
         }
@@ -109,9 +128,9 @@ fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
 
       // Show description for selected preset
       currentPreset?.let { preset ->
-        if (preset.description.isNotEmpty()) {
+        if (preset.descriptionRes != 0) {
           Text(
-            text = preset.description,
+            text = stringResource(preset.descriptionRes),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -121,7 +140,3 @@ fun VideoSettingsFilterPresetsCard(modifier: Modifier = Modifier) {
     }
   }
 }
-
-
-
-

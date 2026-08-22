@@ -1,33 +1,31 @@
-package app.gyrolet.mpvrx.ui.player.controls.components
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.player.controls.components
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.ui.theme.spacing
 
 private val tabularFigures = "tnum"
@@ -39,19 +37,26 @@ fun PlayerUpdate(
 ) {
   Surface(
     shape = CircleShape,
-    color = Color.Transparent,
-    contentColor = Color.White,
+    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
+    contentColor = MaterialTheme.colorScheme.onSurface,
     tonalElevation = 0.dp,
     shadowElevation = 0.dp,
-    modifier = modifier
-      .height(45.dp)
-      .animateContentSize(),
+    border =
+      BorderStroke(
+        1.dp,
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+      ),
+    modifier =
+      modifier
+        .height(45.dp)
+        .animateContentSize(),
   ) {
     Box(
-      modifier = Modifier.padding(
-        vertical = MaterialTheme.spacing.small,
-        horizontal = MaterialTheme.spacing.medium,
-      ),
+      modifier =
+        Modifier.padding(
+          vertical = MaterialTheme.spacing.small,
+          horizontal = MaterialTheme.spacing.medium,
+        ),
       contentAlignment = Alignment.Center,
     ) {
       content()
@@ -70,7 +75,7 @@ fun TextPlayerUpdate(
       text = text,
       fontWeight = FontWeight.Bold,
       textAlign = TextAlign.Center,
-      color = Color.White,
+      color = MaterialTheme.colorScheme.onSurface,
       style = stableTextStyle,
     )
   }
@@ -81,7 +86,7 @@ fun MultipleSpeedPlayerUpdate(
   currentSpeed: Float,
   modifier: Modifier = Modifier,
 ) {
-  CompactSpeedIndicator(currentSpeed = currentSpeed, modifier = modifier)
+  TextPlayerUpdate(text = "${currentSpeed.formatSpeed()}x", modifier = modifier)
 }
 
 @Composable
@@ -89,6 +94,13 @@ fun MultipleSpeedPlayerUpdate(
 private fun PreviewMultipleSpeedPlayerUpdate() {
   MultipleSpeedPlayerUpdate(currentSpeed = 2f)
 }
+
+private fun Float.formatSpeed(): String =
+  if (this % 1.0f == 0.0f) {
+    this.toInt().toString()
+  } else {
+    String.format("%.1f", this)
+  }
 
 @Composable
 fun SeekPlayerUpdate(
@@ -105,7 +117,7 @@ fun SeekPlayerUpdate(
         text = currentTime,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onSurface,
         style = stableTextStyle,
       )
 
@@ -114,7 +126,7 @@ fun SeekPlayerUpdate(
         fontWeight = FontWeight.Normal,
         textAlign = TextAlign.Center,
         style = stableTextStyle,
-        color = Color.White.copy(alpha = 0.7f),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
       )
     }
   }

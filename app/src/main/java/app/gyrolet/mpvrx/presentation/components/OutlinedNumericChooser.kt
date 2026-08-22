@@ -1,9 +1,17 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.presentation.components
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -18,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.R
 import app.gyrolet.mpvrx.ui.icons.AppIcon
 import app.gyrolet.mpvrx.ui.icons.Icon
@@ -34,9 +43,10 @@ fun OutlinedNumericChooser(
   min: Int = 0,
   suffix: (@Composable () -> Unit)? = null,
   label: (@Composable () -> Unit)? = null,
-  decreaseIcon: AppIcon = Icons.Filled.Remove,
-  increaseIcon: AppIcon = Icons.Filled.Add,
+  decreaseIcon: AppIcon = Icons.RoundedFilled.Remove,
+  increaseIcon: AppIcon = Icons.RoundedFilled.Add,
   valueFormatter: ((Int) -> String)? = null,
+  enabled: Boolean = true,
 ) {
   assert(max > min) { "min can't be larger than max ($min > $max)" }
   Row(
@@ -46,7 +56,8 @@ fun OutlinedNumericChooser(
   ) {
     RepeatingIconButton(
       onClick = { onChange(value - step) },
-      modifier = Modifier.size(48.dp)
+      enabled = enabled,
+      modifier = Modifier.size(48.dp),
     ) {
       Icon(decreaseIcon, null)
     }
@@ -57,6 +68,7 @@ fun OutlinedNumericChooser(
     }
     OutlinedTextField(
       label = label,
+      enabled = enabled,
       value = valueString,
       onValueChange = { newValue ->
         if (newValue.isBlank()) {
@@ -80,7 +92,8 @@ fun OutlinedNumericChooser(
     )
     RepeatingIconButton(
       onClick = { onChange(value + step) },
-      modifier = Modifier.size(48.dp)
+      enabled = enabled,
+      modifier = Modifier.size(48.dp),
     ) {
       Icon(increaseIcon, null)
     }
@@ -97,9 +110,10 @@ fun OutlinedNumericChooser(
   min: Float = 0f,
   suffix: (@Composable () -> Unit)? = null,
   label: (@Composable () -> Unit)? = null,
-  decreaseIcon: AppIcon = Icons.Filled.Remove,
-  increaseIcon: AppIcon = Icons.Filled.Add,
+  decreaseIcon: AppIcon = Icons.RoundedFilled.Remove,
+  increaseIcon: AppIcon = Icons.RoundedFilled.Add,
   valueFormatter: ((Float) -> String)? = null,
+  enabled: Boolean = true,
 ) {
   assert(max > min) { "min can't be larger than max ($min > $max)" }
   Row(
@@ -109,17 +123,20 @@ fun OutlinedNumericChooser(
   ) {
     RepeatingIconButton(
       onClick = { onChange(value - step) },
-      modifier = Modifier.size(48.dp)
+      enabled = enabled,
+      modifier = Modifier.size(48.dp),
     ) {
       Icon(decreaseIcon, null)
     }
     var valueString by remember { mutableStateOf("$value") }
     LaunchedEffect(value) {
       if (valueString.isBlank() && value == 0f) return@LaunchedEffect
-      valueString = valueFormatter?.invoke(value) ?: value.toString().dropLastWhile { it == '0' }.dropLastWhile { it == '.' }
+      valueString =
+        valueFormatter?.invoke(value) ?: value.toString().dropLastWhile { it == '0' }.dropLastWhile { it == '.' }
     }
     OutlinedTextField(
       value = valueString,
+      enabled = enabled,
       label = label,
       onValueChange = { newValue ->
         if (newValue.isBlank()) {
@@ -145,10 +162,10 @@ fun OutlinedNumericChooser(
     )
     RepeatingIconButton(
       onClick = { onChange(value + step) },
-      modifier = Modifier.size(48.dp)
+      enabled = enabled,
+      modifier = Modifier.size(48.dp),
     ) {
       Icon(increaseIcon, null)
     }
   }
 }
-

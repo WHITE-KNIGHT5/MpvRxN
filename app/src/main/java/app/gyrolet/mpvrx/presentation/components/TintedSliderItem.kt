@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.presentation.components
 
 import androidx.annotation.IntRange
@@ -21,6 +30,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import app.gyrolet.mpvrx.ui.theme.spacing
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 @Composable
 fun TintedSliderItem(
@@ -32,6 +42,7 @@ fun TintedSliderItem(
   tint: Color,
   modifier: Modifier = Modifier,
   min: Int = 0,
+  enabled: Boolean = true,
   icon: @Composable () -> Unit = {},
 ) {
   val haptic = LocalHapticFeedback.current
@@ -70,7 +81,7 @@ fun TintedSliderItem(
       TintedSlider(
         value = value.toFloat(),
         onValueChange = {
-          val newValue = it.toInt()
+          val newValue = it.roundToInt()
           if (newValue != value) {
             onChange(newValue)
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -80,6 +91,7 @@ fun TintedSliderItem(
         valueRange = min.toFloat()..max.toFloat(),
         steps = (max - min - 1).coerceAtLeast(0),
         tint = tint,
+        enabled = enabled,
       )
     }
   }
@@ -169,4 +181,3 @@ fun generateSliderColors(baseColor: Color): SliderColors {
     disabledInactiveTickColor = darken(baseColor, 0.4f).copy(alpha = 0.5f),
   )
 }
-

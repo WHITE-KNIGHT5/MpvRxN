@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.repository.subtitle
 
 import android.content.Context
@@ -32,19 +41,21 @@ class OnlineSubtitleFileStore(
       )
     if (extracted == null && SubtitleArchiveExtractor.isZipArchive(bytes)) {
       val selectedEpisodeMessage = selectedEpisode?.let { " for episode $it" }.orEmpty()
-      throw IllegalStateException("Downloaded subtitle archive did not contain a supported subtitle file$selectedEpisodeMessage")
+      throw IllegalStateException(
+        "Downloaded subtitle archive did not contain a supported subtitle file$selectedEpisodeMessage",
+      )
     }
-    val payload = extracted?.bytes ?: bytes
-    if (SubtitleArchiveExtractor.looksLikeHtml(payload)) {
-      throw IllegalStateException("Downloaded file is HTML, not a subtitle")
-    }
-
     val extension =
       extracted?.extension
         ?: subtitle.format?.lowercase()?.takeIf { it in STANDARD_SUBTITLE_EXTENSIONS }
         ?: SubtitleArchiveExtractor.extensionFromName(subtitle.fileName)?.takeIf { it in STANDARD_SUBTITLE_EXTENSIONS }
         ?: SubtitleArchiveExtractor.extensionFromName(subtitle.url)?.takeIf { it in STANDARD_SUBTITLE_EXTENSIONS }
         ?: "srt"
+
+    val payload = extracted?.bytes ?: bytes
+    if (SubtitleArchiveExtractor.looksLikeHtml(payload)) {
+      throw IllegalStateException("Downloaded file is HTML, not a subtitle")
+    }
 
     val saveFolderUri = preferences.subtitleSaveFolder.get()
     val folderName = ChecksumUtils.getCRC32(mediaTitle)
@@ -168,11 +179,9 @@ class OnlineSubtitleFileStore(
     return true
   }
 
-  private fun isGenericSubtitleName(value: String): Boolean =
-    value.normalizedFilePart() in GENERIC_SUBTITLE_NAMES
+  private fun isGenericSubtitleName(value: String): Boolean = value.normalizedFilePart() in GENERIC_SUBTITLE_NAMES
 
-  private fun String.normalizedFilePart(): String =
-    lowercase(Locale.ROOT).replace(Regex("""[^a-z0-9]+"""), "")
+  private fun String.normalizedFilePart(): String = lowercase(Locale.ROOT).replace(Regex("""[^a-z0-9]+"""), "")
 
   private fun mimeForSubtitle(extension: String): String =
     when (extension) {
@@ -184,7 +193,8 @@ class OnlineSubtitleFileStore(
   private companion object {
     val STANDARD_SUBTITLE_EXTENSIONS = setOf("srt", "ass", "ssa", "vtt", "sub")
     val STRIPPED_FILE_EXTENSIONS =
-      STANDARD_SUBTITLE_EXTENSIONS + setOf("zip", "rar", "7z", "txt", "mkv", "mp4", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts")
+      STANDARD_SUBTITLE_EXTENSIONS +
+        setOf("zip", "rar", "7z", "txt", "mkv", "mp4", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts")
     val GENERIC_SUBTITLE_NAMES =
       setOf(
         "sub",

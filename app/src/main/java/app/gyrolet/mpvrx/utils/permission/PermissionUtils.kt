@@ -1,16 +1,23 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.permission
 
 import android.app.Activity
-import android.content.Context
 import android.content.ContentValues
+import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,7 +48,7 @@ import java.io.File
  */
 object PermissionUtils {
   private const val FILE_ACCESS_TAG = "FileAccessRequest"
-  
+
   private var mediaRequestLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
   private var resultOkCallback: () -> Unit = {}
   private var resultCancelledCallback: () -> Unit = {}
@@ -81,14 +88,15 @@ object PermissionUtils {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || uris.isEmpty()) return true
     return withContext(Dispatchers.Main) {
       suspendCancellableCoroutine { continuation ->
-        val launcher = mediaRequestLauncher ?: run {
-          continuation.resumeWith(Result.success(false))
-          return@suspendCancellableCoroutine
-        }
+        val launcher =
+          mediaRequestLauncher ?: run {
+            continuation.resumeWith(Result.success(false))
+            return@suspendCancellableCoroutine
+          }
 
         resultOkCallback = { continuation.resumeWith(Result.success(true)) }
         resultCancelledCallback = { continuation.resumeWith(Result.success(false)) }
-        
+
         val pendingIntent = MediaStore.createWriteRequest(context.contentResolver, uris)
         launcher.launch(IntentSenderRequest.Builder(pendingIntent).build())
       }
@@ -102,24 +110,26 @@ object PermissionUtils {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || uris.isEmpty()) return true
     return withContext(Dispatchers.Main) {
       suspendCancellableCoroutine { continuation ->
-        val launcher = mediaRequestLauncher ?: run {
-          continuation.resumeWith(Result.success(false))
-          return@suspendCancellableCoroutine
-        }
+        val launcher =
+          mediaRequestLauncher ?: run {
+            continuation.resumeWith(Result.success(false))
+            return@suspendCancellableCoroutine
+          }
 
         resultOkCallback = { continuation.resumeWith(Result.success(true)) }
         resultCancelledCallback = { continuation.resumeWith(Result.success(false)) }
-        
+
         val pendingIntent = MediaStore.createDeleteRequest(context.contentResolver, uris)
         launcher.launch(IntentSenderRequest.Builder(pendingIntent).build())
       }
     }
   }
+
   /**
    * Returns READ_EXTERNAL_STORAGE permission for all Android versions.
    * On Android 11+, MANAGE_EXTERNAL_STORAGE provides full file access.
    */
-  fun getStoragePermission(): String =
+  fun getStoragePermission(audioOnly: Boolean = false): String =
     when {
       Build.VERSION.SDK_INT <= Build.VERSION_CODES.P -> {
         // Android 9 and below need WRITE permission to create folders/files (e.g., mpvsnaps)
@@ -127,8 +137,14 @@ object PermissionUtils {
       }
 
       Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
-        // Android 13+: request media-specific permission
-        android.Manifest.permission.READ_MEDIA_VIDEO
+        // Android 13+: request media-specific permission.
+        // Audio-only browsers (e.g. Music > Folders) need READ_MEDIA_AUDIO, not READ_MEDIA_VIDEO,
+        // or MediaStore audio queries return nothing even though the user "granted" access.
+        if (audioOnly) {
+          android.Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+          android.Manifest.permission.READ_MEDIA_VIDEO
+        }
       }
 
       else -> android.Manifest.permission.READ_EXTERNAL_STORAGE
@@ -139,16 +155,23 @@ object PermissionUtils {
    */
   @OptIn(ExperimentalPermissionsApi::class)
   @Composable
-  fun rememberStoragePermissionState(): PermissionState = rememberPermissionState(getStoragePermission())
+  fun rememberStoragePermissionState(audioOnly: Boolean = false): PermissionState =
+    rememberPermissionState(getStoragePermission(audioOnly))
 
   /**
    * Handles storage permission and invokes [onPermissionGranted] when granted.
    * On Android 11+, also checks MANAGE_EXTERNAL_STORAGE permission.
+   *
+   * @param audioOnly When true, requests READ_MEDIA_AUDIO instead of READ_MEDIA_VIDEO on Android 13+,
+   * for screens that only browse the audio library (e.g. Music > Folders).
    */
   @OptIn(ExperimentalPermissionsApi::class)
   @Composable
-  fun handleStoragePermission(onPermissionGranted: () -> Unit): PermissionState {
-    val permissionState = rememberStoragePermissionState()
+  fun handleStoragePermission(
+    audioOnly: Boolean = false,
+    onPermissionGranted: () -> Unit,
+  ): PermissionState {
+    val permissionState = rememberStoragePermissionState(audioOnly)
     val context = LocalContext.current
     var lifecycleTrigger by remember { mutableIntStateOf(0) }
 
@@ -464,4 +487,3 @@ object PermissionUtils {
       }
   }
 }
-

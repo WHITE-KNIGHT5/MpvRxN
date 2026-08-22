@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.browser.filesystem
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.browser.filesystem
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.domain.browser.PathComponent
+import app.gyrolet.mpvrx.ui.icons.Icon
+import app.gyrolet.mpvrx.ui.icons.Icons
 
 @Composable
 fun BreadcrumbNavigation(
@@ -44,8 +52,10 @@ fun BreadcrumbNavigation(
     breadcrumbs.forEachIndexed { index, component ->
       if (index > 0) {
         Icon(
-          imageVector = Icons.Filled.ChevronRight,
-          contentDescription = "Separator",
+          imageVector = Icons.RoundedFilled.ChevronRight,
+          contentDescription =
+            androidx.compose.ui.res
+              .stringResource(app.gyrolet.mpvrx.R.string.ui_separator),
           tint = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.padding(horizontal = 4.dp),
         )
@@ -71,7 +81,3 @@ fun BreadcrumbNavigation(
     }
   }
 }
-
-
-
-

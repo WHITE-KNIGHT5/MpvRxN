@@ -1,7 +1,13 @@
-package app.gyrolet.mpvrx.ui.player.controls.components
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-import app.gyrolet.mpvrx.ui.icons.Icon
-import app.gyrolet.mpvrx.ui.icons.Icons
+package app.gyrolet.mpvrx.ui.player.controls.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -17,28 +23,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import app.gyrolet.mpvrx.ui.theme.AppShapeScale
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.gyrolet.mpvrx.preferences.AppearancePreferences
-import app.gyrolet.mpvrx.preferences.preference.collectAsState
-import app.gyrolet.mpvrx.ui.theme.controlColor
+import app.gyrolet.mpvrx.ui.theme.AppShapeScale
 import app.gyrolet.mpvrx.ui.theme.spacing
 import dev.vivvvek.seeker.Segment
 import `is`.xyz.mpv.Utils
@@ -50,8 +50,6 @@ fun CurrentChapter(
   modifier: Modifier = Modifier,
   onClick: () -> Unit = {},
 ) {
-  val appearancePreferences = koinInject<AppearancePreferences>()
-
   Surface(
     modifier =
       modifier
@@ -60,9 +58,17 @@ fun CurrentChapter(
         .clip(AppShapeScale.full)
         .clickable(onClick = onClick),
     shape = AppShapeScale.full,
-    color = Color.Transparent,
-    contentColor = Color.White,
+    color =
+      MaterialTheme.colorScheme.surfaceContainer.copy(
+        alpha = 0.55f,
+      ),
+    contentColor = MaterialTheme.colorScheme.onSurface,
     tonalElevation = 0.dp,
+    border =
+      BorderStroke(
+        1.dp,
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+      ),
   ) {
     AnimatedContent(
       targetState = chapter,
@@ -80,12 +86,14 @@ fun CurrentChapter(
       },
       label = "Chapter",
     ) { currentChapter ->
+      val startTimeSec = currentChapter.start.toInt()
+      val timeText = remember(startTimeSec) { Utils.prettyTime(startTimeSec) }
       Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
       ) {
         Text(
-          text = Utils.prettyTime(currentChapter.start.toInt()),
+          text = timeText,
           fontWeight = FontWeight.Bold,
           style = MaterialTheme.typography.bodyMedium,
           maxLines = 1,
@@ -98,7 +106,7 @@ fun CurrentChapter(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             overflow = TextOverflow.Clip,
           )
           Text(
@@ -108,7 +116,7 @@ fun CurrentChapter(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.basicMarquee(),
           )
         }
@@ -116,7 +124,3 @@ fun CurrentChapter(
     }
   }
 }
-
-
-
-

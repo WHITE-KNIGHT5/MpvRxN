@@ -1,8 +1,19 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.domain.thumbnail
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Build
 import java.io.File
 
@@ -13,9 +24,13 @@ object EmbeddedArtworkCandidates {
   fun forVideoPath(path: String): List<String> {
     if (path.isBlank() || path.isRemoteOrOpaqueUri()) return emptyList()
     val normalizedPath = path.replace('\\', '/')
-    val parent = normalizedPath.substringBeforeLast('/', missingDelimiterValue = "").takeIf { it.isNotBlank() } ?: return emptyList()
+    val parent =
+      normalizedPath.substringBeforeLast('/', missingDelimiterValue = "").takeIf { it.isNotBlank() }
+        ?: return emptyList()
     val fileName = normalizedPath.substringAfterLast('/')
-    val baseName = fileName.substringBeforeLast('.', missingDelimiterValue = fileName).takeIf { it.isNotBlank() } ?: return emptyList()
+    val baseName =
+      fileName.substringBeforeLast('.', missingDelimiterValue = fileName).takeIf { it.isNotBlank() }
+        ?: return emptyList()
 
     return buildList {
       artworkExtensions.forEach { extension ->
@@ -45,6 +60,23 @@ object EmbeddedArtworkCandidates {
 }
 
 internal object EmbeddedArtworkResolver {
+  fun decodeArtworkUri(
+    context: Context,
+    artworkUri: String?,
+  ): Bitmap? {
+    if (artworkUri.isNullOrBlank()) return null
+    val uri = Uri.parse(artworkUri)
+    return runCatching {
+      when (uri.scheme?.lowercase()) {
+        null, "" -> BitmapFactory.decodeFile(artworkUri)
+        "file" -> BitmapFactory.decodeFile(uri.path)
+        "content", "android.resource" ->
+          context.contentResolver.openInputStream(uri)?.use { input -> BitmapFactory.decodeStream(input) }
+        else -> null
+      }
+    }.getOrNull()
+  }
+
   fun decodeEmbeddedArtwork(
     videoPath: String?,
     retriever: MediaMetadataRetriever,

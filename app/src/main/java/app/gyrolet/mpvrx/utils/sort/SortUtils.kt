@@ -1,3 +1,12 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
 package app.gyrolet.mpvrx.utils.sort
 
 import app.gyrolet.mpvrx.domain.browser.FileSystemItem
@@ -19,7 +28,13 @@ object SortUtils {
   ): List<Video> {
     val sorted =
       when (sortType) {
-        VideoSortType.Title -> videos.sortedWith { t1, t2 -> NaturalOrderComparator.DEFAULT.compare(t1.displayName, t2.displayName) }
+        VideoSortType.Title ->
+          videos.sortedWith {
+            t1,
+            t2,
+            ->
+            NaturalOrderComparator.DEFAULT.compare(t1.displayName, t2.displayName)
+          }
         VideoSortType.Duration -> videos.sortedBy { it.duration }
         VideoSortType.Date -> videos.sortedBy { it.dateModified }
         VideoSortType.Size -> videos.sortedBy { it.size }
@@ -90,15 +105,18 @@ object SortUtils {
     private val ignoreCase: Boolean,
     private val shouldSkip: (Char) -> Boolean,
   ) : Comparator<String> {
-
     companion object {
-      val DEFAULT = NaturalOrderComparator(
-        ignoreCase = true,
-        shouldSkip = { it.isWhitespace() },
-      )
+      val DEFAULT =
+        NaturalOrderComparator(
+          ignoreCase = true,
+          shouldSkip = { it.isWhitespace() },
+        )
     }
 
-    override fun compare(a: String, b: String): Int {
+    override fun compare(
+      a: String,
+      b: String,
+    ): Int {
       var ia = 0
       var ib = 0
 
@@ -141,9 +159,15 @@ object SortUtils {
       }
     }
 
-    private data class ParsedNumber(val value: Int, val exclusiveEndIndex: Int)
+    private data class ParsedNumber(
+      val value: Int,
+      val exclusiveEndIndex: Int,
+    )
 
-    private fun parseNumber(s: String, start: Int): ParsedNumber? {
+    private fun parseNumber(
+      s: String,
+      start: Int,
+    ): ParsedNumber? {
       var i = start
 
       var hasDigit = false
@@ -210,4 +234,3 @@ object SortUtils {
     second: FileSystemItem.Folder,
   ): Int = compareFoldersByTitle(first, second, FileSystemItem.Folder::name, FileSystemItem.Folder::path)
 }
-
