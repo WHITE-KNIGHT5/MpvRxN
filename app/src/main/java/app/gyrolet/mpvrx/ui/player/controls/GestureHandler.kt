@@ -95,11 +95,6 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-private val holdSpeedPresets = listOf(0.5f, 1f, 1.5f, 2f, 2.5f, 3f, 3.5f, 4f)
-
-private fun nearestHoldSpeedPreset(speed: Float): Float =
-  holdSpeedPresets.minByOrNull { abs(it - speed) } ?: holdSpeedPresets.first()
-
 @Suppress("CyclomaticComplexMethod", "MultipleEmitters")
 @Composable
 fun GestureHandler(
@@ -527,7 +522,8 @@ fun GestureHandler(
                       originalSpeed = playbackSpeed ?: 1f
                       // Ramp speed up incrementally to avoid audio filter stutter
                       val startSpeed = originalSpeed
-                      val targetSpeed = nearestHoldSpeedPreset(multipleSpeedGesture)
+                      // Use the exact hold-speed value from Settings, no preset snapping
+                      val targetSpeed = multipleSpeedGesture
                       val steps = 5
                       val stepDelay = 16L // ~one frame per step
                       for (i in 1..steps) {
@@ -654,8 +650,9 @@ fun GestureHandler(
                         if (isLongPressing && isDynamicSpeedControlActive && paused == false) {
                           change.consume()
 
-                          val speedPresets = holdSpeedPresets
                           val screenWidth = size.width.toFloat()
+                          val minSpeed = 0.25f
+                          val maxSpeed = 4f
 
                           val deltaX = currentPosition.x - dynamicSpeedStartX
                           val swipeDetectionThreshold = 10.dp.toPx()
@@ -666,20 +663,13 @@ fun GestureHandler(
                           }
 
                           if (hasSwipedEnough) {
-                            val presetsRange = speedPresets.size - 1
-                            val indexDelta = (deltaX / screenWidth) * presetsRange * 3.5f
+                            // Continuous free-value speed change (no preset snapping) —
+                            // swiping the full screen width covers roughly minSpeed..maxSpeed.
+                            val speedRange = maxSpeed - minSpeed
+                            val speedDelta = (deltaX / screenWidth) * speedRange * 1.75f
 
-                            val startIndex =
-                              speedPresets
-                                .indexOfFirst {
-                                  abs(it - dynamicSpeedStartValue) < 0.01f
-                                }.takeIf { it >= 0 } ?: speedPresets
-                                .indexOfFirst {
-                                  it >= dynamicSpeedStartValue
-                                }.takeIf { it >= 0 } ?: speedPresets.lastIndex
-
-                            val newIndex = (startIndex + indexDelta.toInt()).coerceIn(0, speedPresets.size - 1)
-                            val newSpeed = speedPresets[newIndex]
+                            val newSpeed =
+                              ((dynamicSpeedStartValue + speedDelta).coerceIn(minSpeed, maxSpeed) * 100).roundToInt() / 100f
 
                             if (abs(lastAppliedSpeed - newSpeed) > 0.01f) {
                               haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
