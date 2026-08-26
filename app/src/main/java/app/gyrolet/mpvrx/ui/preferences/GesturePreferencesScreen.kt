@@ -229,25 +229,24 @@ object GesturePreferencesScreen : Screen {
               PreferenceDivider()
 
               val holdForMultipleSpeed by playerPreferences.holdForMultipleSpeed.collectAsState()
-              val holdSpeedSliderValue = snapHoldSpeedBoost(holdForMultipleSpeed)
               SliderPreference(
                 modifier = Modifier.settingsSearchTarget(R.string.pref_player_gestures_hold_for_multiple_speed),
-                value = holdSpeedSliderValue,
-                onValueChange = { playerPreferences.holdForMultipleSpeed.set(snapHoldSpeedBoost(it).toFixed(2)) },
+                value = holdForMultipleSpeed,
+                onValueChange = { playerPreferences.holdForMultipleSpeed.set(it.toFixed(2)) },
                 title = { Text(stringResource(R.string.pref_player_gestures_hold_for_multiple_speed)) },
                 valueRange = 0f..4f,
                 summary = {
                   Text(
-                    if (holdSpeedSliderValue == 0f) {
+                    if (holdForMultipleSpeed == 0f) {
                       stringResource(R.string.generic_disabled)
                     } else {
-                      stringResource(R.string.pref_hold_speed_summary_format, holdSpeedSliderValue)
+                      stringResource(R.string.pref_hold_speed_summary_format, holdForMultipleSpeed)
                     },
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },
-                onSliderValueChange = { playerPreferences.holdForMultipleSpeed.set(snapHoldSpeedBoost(it).toFixed(2)) },
-                sliderValue = holdSpeedSliderValue,
+                onSliderValueChange = { playerPreferences.holdForMultipleSpeed.set(it.toFixed(2)) },
+                sliderValue = holdForMultipleSpeed,
               )
             }
           }
@@ -598,12 +597,3 @@ object GesturePreferencesScreen : Screen {
     }
   }
 }
-
-private val holdSpeedBoostValues = listOf(0.5f, 1f, 1.5f, 2f, 2.5f, 3f, 3.5f, 4f)
-
-private fun snapHoldSpeedBoost(value: Float): Float =
-  if (value < 0.25f) {
-    0f
-  } else {
-    holdSpeedBoostValues.minByOrNull { kotlin.math.abs(it - value) } ?: holdSpeedBoostValues.first()
-  }
