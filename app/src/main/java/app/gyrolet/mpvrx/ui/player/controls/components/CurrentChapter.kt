@@ -16,7 +16,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,17 +58,9 @@ fun CurrentChapter(
         .clip(AppShapeScale.full)
         .clickable(onClick = onClick),
     shape = AppShapeScale.full,
-    color =
-      MaterialTheme.colorScheme.surfaceContainer.copy(
-        alpha = 0.55f,
-      ),
-    contentColor = MaterialTheme.colorScheme.onSurface,
+    color = Color.Transparent,
+    contentColor = Color.White,
     tonalElevation = 0.dp,
-    border =
-      BorderStroke(
-        1.dp,
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-      ),
   ) {
     AnimatedContent(
       targetState = chapter,
@@ -98,7 +90,7 @@ fun CurrentChapter(
           style = MaterialTheme.typography.bodyMedium,
           maxLines = 1,
           overflow = TextOverflow.Clip,
-          color = MaterialTheme.colorScheme.primary,
+          color = Color.White,
         )
         currentChapter.name.let {
           Text(
@@ -106,7 +98,7 @@ fun CurrentChapter(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color.White,
             overflow = TextOverflow.Clip,
           )
           Text(
@@ -116,7 +108,7 @@ fun CurrentChapter(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color.White,
             modifier = Modifier.basicMarquee(),
           )
         }
