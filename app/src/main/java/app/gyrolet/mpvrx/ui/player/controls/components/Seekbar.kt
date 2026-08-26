@@ -1761,31 +1761,8 @@ fun StandardSeekbar(
   val isDragged by interactionSource.collectIsDraggedAsState()
   val isThumbInteracting = isPressed || isDragged || isScrubbing
 
-  // Animation state (same as SquigglySeekbar)
-  var heightFraction by remember { mutableFloatStateOf(1f) }
-
-  // Animate height fraction based on paused state and scrubbing state (same as SquigglySeekbar)
-  LaunchedEffect(isPaused, isScrubbing) {
-    val shouldFlatten = isPaused || isScrubbing
-    val targetHeight = if (shouldFlatten) 0.7f else 1f // Slightly less dramatic for standard seekbar
-    val startDelay = if (shouldFlatten) 0L else 60L
-
-    if (startDelay > 0L) {
-      kotlinx.coroutines.delay(startDelay)
-    }
-
-    val animator = Animatable(heightFraction)
-    animator.animateTo(
-      targetValue = targetHeight,
-      animationSpec =
-        spring(
-          dampingRatio = AppMotion.Spatial.Expressive.dampingRatio,
-          stiffness = AppMotion.Spatial.Expressive.stiffness,
-        ),
-    ) {
-      heightFraction = value
-    }
-  }
+  // Track height is fixed thin regardless of paused/scrubbing state (old MpvRxN behavior)
+  val heightFraction = 0.8f
 
   val isThick = seekbarStyle == SeekbarStyle.Thick
   val baseTrackHeight = if (isThick) 16.dp else 8.dp
@@ -1800,7 +1777,7 @@ fun StandardSeekbar(
     animationSpec = spring(stiffness = 900f, dampingRatio = 0.9f),
     label = "standard_seekbar_thumb_width",
   )
-  val thumbHeight = if (isThick) 16.dp else 24.dp
+  val thumbHeight = if (isThick) 16.dp else 19.dp
   val chapterGapHalfDp by animateDpAsState(
     targetValue = if (isThumbInteracting) 2.dp else 1.5.dp,
     animationSpec =
