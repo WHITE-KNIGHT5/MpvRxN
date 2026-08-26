@@ -3,7 +3,7 @@
 </p>
 <h1 align="center">MpvRxN</h1>
 <p align="center">
-  <img src="assets/demo.gif" width="100%">
+  <img src="assets/demo.giif" width="100%">
 </p>
 
 MpvRxN by [WHITE-KNIGHT5](https://github.com/WHITE-KNIGHT5)
