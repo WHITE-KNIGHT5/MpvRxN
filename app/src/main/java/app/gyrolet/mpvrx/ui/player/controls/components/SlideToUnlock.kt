@@ -12,6 +12,7 @@ package app.gyrolet.mpvrx.ui.player.controls.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,6 +59,7 @@ fun SlideToUnlock(
   onUnlock: () -> Unit,
   modifier: Modifier = Modifier,
   onDraggingChanged: (Boolean) -> Unit = {},
+  easyUnlock: Boolean = true,
 ) {
   val coroutineScope = rememberCoroutineScope()
   val sliderSize = 56.dp
@@ -70,7 +73,17 @@ fun SlideToUnlock(
         .height(64.dp)
         .clip(RoundedCornerShape(32.dp))
         .background(Color.Black.copy(alpha = 0.6f))
-        .padding(4.dp),
+        .then(
+          if (easyUnlock) {
+            Modifier.clickable(
+              indication = null,
+              interactionSource = remember { MutableInteractionSource() },
+              onClick = onUnlock,
+            )
+          } else {
+            Modifier
+          },
+        ).padding(4.dp),
   ) {
     BoxWithConstraints(
       modifier = Modifier.fillMaxSize(),
