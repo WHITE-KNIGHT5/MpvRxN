@@ -199,6 +199,7 @@ fun PlayerControls(
   val audioPreferences = koinInject<AudioPreferences>()
   val showSystemStatusBar by playerPreferences.showSystemStatusBar.collectAsState()
   val showSystemNavigationBar by playerPreferences.showSystemNavigationBar.collectAsState()
+  val easyUnlock by playerPreferences.easyUnlock.collectAsState()
   val interactionSource = remember { MutableInteractionSource() }
   val controlsShown by viewModel.controlsShown.collectAsState()
   val statisticsPage by advancedPreferences.enabledStatisticsPage.collectAsState()
@@ -1135,6 +1136,7 @@ fun PlayerControls(
             SlideToUnlock(
               onUnlock = { viewModel.unlockControls() },
               onDraggingChanged = { isDragging -> isUnlockSliderDragging = isDragging },
+              easyUnlock = easyUnlock,
             )
           }
 
