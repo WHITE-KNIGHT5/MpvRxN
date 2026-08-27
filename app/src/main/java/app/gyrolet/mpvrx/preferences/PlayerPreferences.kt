@@ -76,8 +76,11 @@ class PlayerPreferences(
 
   val closeAfterReachingEndOfVideo = preferenceStore.getBoolean("close_after_eof", true)
 
-  val rememberBrightness = preferenceStore.getBoolean("remember_brightness")
+  val rememberBrightness = preferenceStore.getBoolean("remember_brightness", true)
   val defaultBrightness = preferenceStore.getFloat("default_brightness", -1f)
+
+  // Easy Unlock: single tap OR slide both unlock the controls (in addition to each other)
+  val easyUnlock = preferenceStore.getBoolean("easy_unlock", true)
 
   val allowGesturesInPanels = preferenceStore.getBoolean("allow_gestures_in_panels")
   val showSystemStatusBar = preferenceStore.getBoolean("show_system_status_bar")

@@ -46,11 +46,11 @@ class AppearancePreferences(
   val amoledMode = preferenceStore.getBoolean("amoled_mode", false)
   val useSystemFont = preferenceStore.getBoolean("use_system_font", false)
   val unlimitedNameLines = preferenceStore.getBoolean("unlimited_name_lines", false)
-  val hidePlayerButtonsBackground = preferenceStore.getBoolean("hide_player_buttons_background", false)
+  val hidePlayerButtonsBackground = preferenceStore.getBoolean("hide_player_buttons_background", true)
   val showUnplayedOldVideoLabel = preferenceStore.getBoolean("show_unplayed_old_video_label", true)
   val unplayedOldVideoDays = preferenceStore.getInt("unplayed_old_video_days", 7)
   val showNetworkThumbnails = preferenceStore.getBoolean("show_network_thumbnails", false)
-  val seekbarStyle = preferenceStore.getEnum("seekbar_style", SeekbarStyle.Thick)
+  val seekbarStyle = preferenceStore.getEnum("seekbar_style", SeekbarStyle.Standard)
   val portraitPlaybackControlsPosition =
     preferenceStore.getEnum("portrait_playback_controls_position", PortraitPlaybackControlsPosition.Center)
   val showHomeTab = preferenceStore.getBoolean("show_home_tab", true)
